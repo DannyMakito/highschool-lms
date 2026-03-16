@@ -1,6 +1,6 @@
 LMS Instruction Guide
 
-# Log in as the principal by using its login credential. principal@school.com PIN is 123456. Once you log in, create a subject by clicking on the subject tab. Cre fields required. Once the subject is created, it should pop up on the subject tab. 
+# Log in as the principal by using its login credential. principal@school.com PIN is 123456. Once you log in, create a subject by clicking on the subject tab. Fill in the  fields required. Once the subject is created, it should pop up on the subject tab. 
 - create a teacher by cliking on the Staff Management tab on the sidebar: create and assign a teacher a subject, and also the login credential. which is email and the pin. 							 After the teacher is created, the teacher will appear on the table and click on the eye icon to see teacher details
 -  Go to the registration tab and click on  register class to  create a new register class that the teacher will have, and specify the details of this class. 
 	After a register class is created, go to the subject classes tab on the sidebar and create a subject class.
