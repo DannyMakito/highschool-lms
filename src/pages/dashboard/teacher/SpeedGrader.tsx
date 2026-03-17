@@ -1,5 +1,5 @@
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAssignments } from "@/hooks/useAssignments";
 import type { Annotation } from "@/types";
@@ -171,7 +171,7 @@ export default function SpeedGrader() {
         if (!annotations || annotations.length === 0) return <>{text}</>;
 
         const sorted = [...annotations].sort((a, b) => a.range.start - b.range.start);
-        const segments: (string | JSX.Element)[] = [];
+        const segments: (string | React.JSX.Element)[] = [];
         let lastIndex = 0;
 
         sorted.forEach((note) => {

@@ -41,8 +41,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Pre-load from cache so sidebar renders instantly on refresh
     const [user, setUser] = useState<User | null>(getCachedUser);
     const [loading, setLoading] = useState(true);
-    // Track whether we have completed the initial server-side check
-    const initialCheckDone = useRef(false);
 
     const fetchProfile = async (uid: string, email: string): Promise<User | null> => {
         try {

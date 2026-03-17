@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
-import type { Assignment, Rubric, AssignmentSubmission, Annotation } from '../types';
+import type { Assignment, Rubric, AssignmentSubmission } from '../types';
 import supabase from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 
@@ -72,7 +72,7 @@ export function useAssignments() {
                         overallFeedback: s.overall_feedback,
                         totalGrade: s.total_grade,
                         isReleased: s.is_released,
-                        annotations: (s.annotations || []).map(an => ({
+                        annotations: (s.annotations || []).map((an: any) => ({
                             ...an,
                             authorName: an.author_id, // Map ID to name if necessary, or fetch profile
                             createdAt: an.created_at
@@ -282,7 +282,7 @@ export function useAssignments() {
         return data.rubrics.find(r => r.id === id) || null;
     }, [data.rubrics]);
 
-    const notifyNonSubmitters = (assignmentId: string) => {
+    const notifyNonSubmitters = () => {
         return true;
     };
 

@@ -187,8 +187,8 @@ export function useSchoolData() {
             id: created.id,
             name: `${student.firstName} ${student.lastName}`,
             pin: created.pin,
-            grade: grades.find(g => g.id === student.gradeId)?.name || '',
-            studentClass: registerClasses.find(rc => rc.id === student.registerClassId)?.name || '',
+            grade: student.grade, // Use the grade name passed in
+            studentClass: student.studentClass, // Use the class name passed in
             createdAt: created.created_at || new Date().toISOString()
         };
         setStudents(prev => [...prev, newStudent]);
