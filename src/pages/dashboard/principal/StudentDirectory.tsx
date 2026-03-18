@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { Student } from "@/types";
 import { useRegistrationData } from "@/hooks/useRegistrationData";
 import { useSubjects } from "@/hooks/useSubjects";
 import { useSchoolData } from "@/hooks/useSchoolData";
@@ -29,7 +30,7 @@ export default function StudentDirectory() {
     const { subjects } = useSubjects();
     const { teachers } = useSchoolData();
 
-    const [selectedStudent, setSelectedStudent] = useState<any>(null);
+    const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterGrade, setFilterGrade] = useState("all");
@@ -44,7 +45,7 @@ export default function StudentDirectory() {
         return matchesSearch && matchesGrade && matchesClass;
     });
 
-    const openProfile = (student: any) => {
+    const openProfile = (student: Student) => {
         setSelectedStudent(student);
         setIsProfileOpen(true);
     };
@@ -130,7 +131,7 @@ export default function StudentDirectory() {
                         {filteredStudents.map(student => {
                             const grade = grades.find(g => g.id === student.gradeId);
                             const regClass = registerClasses.find(rc => rc.id === student.registerClassId);
-                            const subjectCount = getStudentSubjects(student.id).length;
+                            const subjectCount = student.subjects?.length ?? getStudentSubjects(student.id).length;
                             return (
                                 <TableRow key={student.id} className="group hover:bg-muted/30 transition-colors">
                                     <TableCell>
@@ -199,7 +200,7 @@ export default function StudentDirectory() {
                     {selectedStudent && (() => {
                         const grade = grades.find(g => g.id === selectedStudent.gradeId);
                         const regClass = registerClasses.find(rc => rc.id === selectedStudent.registerClassId);
-                        const stuSubjects = getStudentSubjects(selectedStudent.id);
+                        const stuSubjects = selectedStudent.subjects ?? getStudentSubjects(selectedStudent.id);
                         const stuSubjectClasses = getStudentSubjectClasses(selectedStudent.id);
 
                         return (

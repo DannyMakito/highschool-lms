@@ -225,6 +225,12 @@ export interface SubjectClass {
     createdAt: string;
 }
 
+export interface StudentAssignedSubject {
+    subject_id: string;
+    subject_name: string;
+    grade_tier: string;
+}
+
 export interface Student {
     id: string;
     firstName: string;
@@ -241,6 +247,7 @@ export interface Student {
     status: "active" | "inactive" | "transferred";
     pin: string;
     createdAt: string;
+    subjects?: StudentAssignedSubject[];
 }
 
 export interface StudentSubject {
