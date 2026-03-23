@@ -218,7 +218,7 @@ export function useRegistrationData() {
     };
 
     // === Student CRUD ===
-    const addStudent = async (student: Omit<Student, 'id' | 'createdAt' | 'name' | 'pin'>) => {
+    const addStudent = async (student: Omit<Student, 'id' | 'createdAt' | 'name' | 'pin'>, options?: { subjectIds?: string[] }) => {
         const { data: { session } } = await supabase.auth.getSession();
         const { data, error } = await supabase.functions.invoke("create-user", {
             body: {
@@ -231,7 +231,8 @@ export function useRegistrationData() {
                 gender: student.gender,
                 gradeId: student.gradeId,
                 registerClassId: student.registerClassId,
-                status: student.status || 'active'
+                status: student.status || 'active',
+                subjectIds: options?.subjectIds ?? [],
             },
             headers: {
                 Authorization: `Bearer ${session?.access_token}`
@@ -242,6 +243,7 @@ export function useRegistrationData() {
 
         const created = data as { id: string; created_at?: string; pin: string };
 
+        const subjectIds = options?.subjectIds ?? [];
         const mappedStudent: Student = {
             ...student,
             id: created.id,
@@ -249,10 +251,18 @@ export function useRegistrationData() {
             pin: created.pin,
             grade: grades.find(g => g.id === student.gradeId)?.name || '',
             studentClass: registerClasses.find(rc => rc.id === student.registerClassId)?.name || '',
-            createdAt: created.created_at || new Date().toISOString()
+            createdAt: created.created_at || new Date().toISOString(),
+            subjects: subjectIds.map(subjectId => ({ subject_id: subjectId, subjectId, subject_name: '', grade_tier: '' })),
         };
 
         setStudents(prev => [...prev, mappedStudent]);
+        if (subjectIds.length > 0) {
+            setStudentSubjects(prev => [...prev, ...subjectIds.map(subjectId => ({
+                id: `temp-${created.id}-${subjectId}`,
+                studentId: created.id,
+                subjectId,
+            }))]);
+        }
         return mappedStudent;
     };
 

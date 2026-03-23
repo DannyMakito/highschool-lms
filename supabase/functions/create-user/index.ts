@@ -15,6 +15,7 @@ type UserBody = {
   gradeId?: string;
   registerClassId?: string;
   status?: string;
+  subjectIds?: string[];
 };
 
 Deno.serve(async (req) => {
@@ -188,6 +189,25 @@ Deno.serve(async (req) => {
           status: 400,
           headers: { ...corsHeaders, "content-type": "application/json" },
         });
+      }
+
+      // Insert student_subjects (principal assigns subjects during registration)
+      const subjectIds = body.subjectIds || [];
+      if (subjectIds.length > 0) {
+        const { error: ssErr } = await admin.from("student_subjects").insert(
+          subjectIds.map((subjectId) => ({ student_id: userId, subject_id: subjectId })),
+        );
+        if (ssErr) {
+          console.error("Student Subjects Insert Error:", ssErr);
+          // Rollback student record (auth + profile already created; student_subjects is additive, so we log but don't rollback auth)
+          await admin.from("students").delete().eq("id", userId);
+          await admin.auth.admin.deleteUser(userId);
+          await admin.from("profiles").delete().eq("id", userId);
+          return new Response(JSON.stringify({ error: "Student subjects assignment failed", details: ssErr.message }), {
+            status: 400,
+            headers: { ...corsHeaders, "content-type": "application/json" },
+          });
+        }
       }
     }
 

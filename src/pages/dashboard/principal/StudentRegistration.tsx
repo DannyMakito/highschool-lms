@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 export default function StudentRegistration() {
     const {
         grades, registerClasses,
-        students, addStudent, assignSubjectsToStudent,
+        students, addStudent,
         autoAssignSubjectClasses, getRegisterClassStudents,
     } = useRegistrationData();
     const { subjects } = useSubjects();
@@ -92,12 +92,15 @@ export default function StudentRegistration() {
             registerClassId: form.registerClassId,
             studentClass: regClass?.name || "",
             status: "active",
-        });
+        }, { subjectIds });
 
-        assignSubjectsToStudent(newStudent.id, subjectIds);
-        const placements = autoAssignSubjectClasses(newStudent.id, subjectIds, form.gradeId);
-
-        toast.success(`${form.firstName} ${form.lastName} registered successfully! Placed into ${placements.length} subject class(es).`);
+        try {
+            const placements = await autoAssignSubjectClasses(newStudent.id, subjectIds, form.gradeId);
+            toast.success(`${form.firstName} ${form.lastName} registered successfully! Placed into ${placements.length} subject class(es).`);
+        } catch (err) {
+            toast.warning(`${form.firstName} ${form.lastName} registered, but subject class placement failed. You can add them manually in Classes.`);
+            console.error("Subject class placement error:", err);
+        }
         resetForm();
     };
 
