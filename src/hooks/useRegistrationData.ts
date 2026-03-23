@@ -409,6 +409,17 @@ export function useRegistrationData() {
         const targetClass = subjectClasses.find(sc => sc.id === subjectClassId);
         if (!targetClass) return;
 
+        // Ensure student has the subject in student_subjects (for student dashboard visibility)
+        const hasSubject = studentSubjects.some(ss => ss.studentId === studentId && ss.subjectId === targetClass.subjectId);
+        if (!hasSubject) {
+            const { error: ssErr } = await supabase
+                .from('student_subjects')
+                .insert({ student_id: studentId, subject_id: targetClass.subjectId });
+            if (!ssErr) {
+                setStudentSubjects(prev => [...prev, { id: `temp-${studentId}-${targetClass.subjectId}`, studentId, subjectId: targetClass.subjectId }]);
+            }
+        }
+
         // Find existing for same subject to replace
         const existingPlacements = studentSubjectClasses.filter(ssc => {
             const sc = subjectClasses.find(c => c.id === ssc.subjectClassId);
@@ -449,6 +460,20 @@ export function useRegistrationData() {
         return students.filter(s => studentIds.includes(s.id));
     };
 
+    const removeStudentFromSubjectClass = async (studentId: string, subjectClassId: string) => {
+        const { error } = await supabase
+            .from('student_subject_classes')
+            .delete()
+            .eq('student_id', studentId)
+            .eq('subject_class_id', subjectClassId);
+
+        if (error) throw error;
+
+        setStudentSubjectClasses(prev =>
+            prev.filter(ssc => !(ssc.studentId === studentId && ssc.subjectClassId === subjectClassId))
+        );
+    };
+
     const getRegisterClassStudents = (registerClassId: string) => {
         return students.filter(s => s.registerClassId === registerClassId);
     };
@@ -475,6 +500,7 @@ export function useRegistrationData() {
         getStudentSubjects,
         autoAssignSubjectClasses,
         manualAssignSubjectClass,
+        removeStudentFromSubjectClass,
         getStudentSubjectClasses,
         getSubjectClassStudents,
         getRegisterClassStudents,

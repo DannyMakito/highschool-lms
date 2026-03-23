@@ -279,22 +279,30 @@ export default function StudentRegistration() {
                     {step === 3 && (
                         <div className="space-y-8">
                             <div className="p-6 bg-primary/5 border-2 border-primary/10 rounded-2xl">
-                                <h3 className="text-lg font-black mb-1">Grade {selectedGrade?.level} Academic Profile</h3>
-                                <p className="text-sm font-medium text-muted-foreground">Subjects are automatically assigned based on the grade tier. Select electives where applicable.</p>
+                                <h3 className="text-lg font-black mb-1">Grade {selectedGrade?.level ?? selectedGrade?.name} Academic Profile</h3>
+                                <p className="text-sm font-medium text-muted-foreground">Select or deselect subjects for this learner. At least one subject is required.</p>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
                                         <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Core Curriculum</h4>
-                                        <Badge className="bg-green-500">Auto-Mandatory</Badge>
+                                        <Badge variant="outline" className="border-green-500 text-green-600">Select/Deselect</Badge>
                                     </div>
-                                    <div className="space-y-2">
+                                    <div className="grid grid-cols-1 gap-2">
                                         {coreSubjects.map(s => (
-                                            <div key={s.id} className="p-4 rounded-xl bg-muted/40 border-2 flex items-center gap-4">
-                                                <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center shadow-sm"><CheckCircle2 className="h-4 w-4 text-green-500" /></div>
-                                                <span className="text-sm font-black">{s.name}</span>
-                                            </div>
+                                            <button key={s.id} type="button"
+                                                onClick={() => toggleSubject(s.id)}
+                                                className={cn(
+                                                    "p-4 rounded-xl border-2 text-left font-black transition-all flex items-center justify-between group",
+                                                    form.selectedSubjects.includes(s.id) ? "border-primary bg-primary/5 text-primary shadow-sm" : "border-muted hover:border-primary/20"
+                                                )}>
+                                                <span className="text-sm">{s.name}</span>
+                                                <div className={cn("h-6 w-6 rounded-lg border-2 flex items-center justify-center transition-all",
+                                                    form.selectedSubjects.includes(s.id) ? "bg-primary border-primary text-white" : "border-muted group-hover:border-primary/40")}>
+                                                    {form.selectedSubjects.includes(s.id) && <CheckCircle2 className="h-4 w-4" />}
+                                                </div>
+                                            </button>
                                         ))}
                                         {coreSubjects.length === 0 && <p className="text-xs italic text-muted-foreground">No defined core subjects.</p>}
                                     </div>
@@ -303,7 +311,7 @@ export default function StudentRegistration() {
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
                                         <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Elective Choices</h4>
-                                        <Badge variant="outline" className="border-primary text-primary">Select Required</Badge>
+                                        <Badge variant="outline" className="border-primary text-primary">Select/Deselect</Badge>
                                     </div>
                                     <div className="grid grid-cols-1 gap-2">
                                         {electiveSubjects.map(s => (
@@ -322,7 +330,7 @@ export default function StudentRegistration() {
                                         ))}
                                         {electiveSubjects.length === 0 && (
                                             <div className="p-8 text-center rounded-xl bg-muted/20 border-2 border-dashed">
-                                                <p className="text-xs font-bold text-muted-foreground">No elective options for this grade status.</p>
+                                                <p className="text-xs font-bold text-muted-foreground">No elective options for this grade.</p>
                                             </div>
                                         )}
                                     </div>
@@ -349,10 +357,19 @@ export default function StudentRegistration() {
                                 if (!form.gradeId || !form.registerClassId) {
                                     toast.error("Grade and Class assignment required"); return;
                                 }
-                                if (isUpperGrade) { setStep(3); } else { handleRegister(); }
+                                if (isUpperGrade) {
+                                    setForm(prev => ({
+                                        ...prev,
+                                        selectedSubjects: coreSubjects.map(s => s.id),
+                                    }));
+                                    setStep(3);
+                                } else { handleRegister(); }
                             } else {
-                                const allSubjectIds = [...coreSubjects.map(s => s.id), ...form.selectedSubjects];
-                                handleRegister(allSubjectIds);
+                                if (form.selectedSubjects.length === 0) {
+                                    toast.error("Select at least one subject for this learner.");
+                                    return;
+                                }
+                                handleRegister(form.selectedSubjects);
                             }
                         }}
                         className={cn("h-14 px-10 font-black rounded-xl gap-2 text-lg shadow-lg transition-all",
