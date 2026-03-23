@@ -53,7 +53,7 @@ export default function SubjectClassManagement() {
         const grade = grades.find(g => g.id === form.gradeId);
         if (subject && grade) {
             const prefix = subject.name.substring(0, 3).toUpperCase();
-            const level = grade.level ?? grade.sort_order ?? parseInt(String(grade.name || '').replace(/\D/g, ''), 10) || 0;
+            const level = grade.level ?? grade.sort_order ?? (parseInt(String(grade.name || '').replace(/\D/g, ''), 10) || 0);
             const existingCount = subjectClasses.filter(sc => sc.subjectId === form.subjectId && sc.gradeId === form.gradeId).length;
             const letter = String.fromCharCode(65 + existingCount); // A, B, C...
             return `${prefix}${level}-${letter}`;
