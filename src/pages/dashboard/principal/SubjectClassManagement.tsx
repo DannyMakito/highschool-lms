@@ -24,9 +24,12 @@ export default function SubjectClassManagement() {
     const {
         grades, subjectClasses, addSubjectClass, deleteSubjectClass,
         getSubjectClassStudents, getSubjectClassEnrollment,
+        loading: registrationLoading,
     } = useRegistrationData();
-    const { subjects } = useSubjects();
-    const { teachers } = useSchoolData();
+    const { subjects, loading: subjectsLoading } = useSubjects();
+    const { teachers, loading: schoolLoading } = useSchoolData();
+
+    const isLoading = registrationLoading || subjectsLoading || schoolLoading;
 
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [selectedClass, setSelectedClass] = useState<any>(null);
@@ -50,12 +53,21 @@ export default function SubjectClassManagement() {
         const grade = grades.find(g => g.id === form.gradeId);
         if (subject && grade) {
             const prefix = subject.name.substring(0, 3).toUpperCase();
+            const level = grade.level ?? grade.sort_order ?? parseInt(String(grade.name || '').replace(/\D/g, ''), 10) || 0;
             const existingCount = subjectClasses.filter(sc => sc.subjectId === form.subjectId && sc.gradeId === form.gradeId).length;
             const letter = String.fromCharCode(65 + existingCount); // A, B, C...
-            return `${prefix}${grade.level}-${letter}`;
+            return `${prefix}${level}-${letter}`;
         }
         return "";
     };
+
+    // Filtered subjects for the selected grade (matches grade level/tier)
+    const subjectsForGrade = subjects.filter(s => {
+        if (!form.gradeId) return true;
+        const grade = grades.find(g => g.id === form.gradeId);
+        const level = grade?.level ?? grade?.sort_order ?? parseInt(String(grade?.name || '').replace(/\D/g, ''), 10);
+        return s.gradeTier === String(level);
+    });
 
     const handleCreate = () => {
         if (!form.subjectId || !form.gradeId) {
@@ -103,8 +115,8 @@ export default function SubjectClassManagement() {
                         <div className="grid gap-5 py-4">
                             <div className="grid gap-2">
                                 <Label>Grade *</Label>
-                                <Select value={form.gradeId} onValueChange={(v) => setForm({ ...form, gradeId: v })}>
-                                    <SelectTrigger><SelectValue placeholder="Select grade" /></SelectTrigger>
+                                <Select value={form.gradeId} onValueChange={(v) => setForm({ ...form, gradeId: v, subjectId: "" })} disabled={isLoading}>
+                                    <SelectTrigger><SelectValue placeholder={isLoading ? "Loading..." : grades.length === 0 ? "No grades — run seed" : "Select grade"} /></SelectTrigger>
                                     <SelectContent>
                                         {grades.map(g => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
                                     </SelectContent>
@@ -112,12 +124,10 @@ export default function SubjectClassManagement() {
                             </div>
                             <div className="grid gap-2">
                                 <Label>Subject *</Label>
-                                <Select value={form.subjectId} onValueChange={(v) => setForm({ ...form, subjectId: v })}>
-                                    <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
+                                <Select value={form.subjectId} onValueChange={(v) => setForm({ ...form, subjectId: v })} disabled={isLoading}>
+                                    <SelectTrigger><SelectValue placeholder={isLoading ? "Loading..." : subjectsForGrade.length === 0 ? "Select grade first or no subjects" : "Select subject"} /></SelectTrigger>
                                     <SelectContent>
-                                        {subjects
-                                            .filter(s => !form.gradeId || s.gradeTier === grades.find(g => g.id === form.gradeId)?.level.toString())
-                                            .map(s => <SelectItem key={s.id} value={s.id}>{s.name} (G{s.gradeTier})</SelectItem>)}
+                                        {subjectsForGrade.map(s => <SelectItem key={s.id} value={s.id}>{s.name} (G{s.gradeTier})</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -129,8 +139,8 @@ export default function SubjectClassManagement() {
                             </div>
                             <div className="grid gap-2">
                                 <Label>Teacher</Label>
-                                <Select value={form.teacherId} onValueChange={(v) => setForm({ ...form, teacherId: v })}>
-                                    <SelectTrigger><SelectValue placeholder="Assign teacher" /></SelectTrigger>
+                                <Select value={form.teacherId} onValueChange={(v) => setForm({ ...form, teacherId: v })} disabled={isLoading}>
+                                    <SelectTrigger><SelectValue placeholder={isLoading ? "Loading..." : teachers.length === 0 ? "No teachers yet" : "Assign teacher"} /></SelectTrigger>
                                     <SelectContent>
                                         {teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                                     </SelectContent>

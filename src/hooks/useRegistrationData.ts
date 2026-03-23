@@ -60,7 +60,11 @@ export function useRegistrationData() {
                 const ssData = ssRes.data;
                 const sscData = sscRes.data;
 
-                setGrades(gradesData || []);
+                // Normalize grades: ensure `level` exists (from level, sort_order, or derived from name)
+                setGrades((gradesData || []).map((g: { level?: number; sort_order?: number; name?: string }) => ({
+                    ...g,
+                    level: g.level ?? g.sort_order ?? (parseInt(String(g.name || '').replace(/\D/g, ''), 10) || 0),
+                })));
                 setRegisterClasses((rcData || []).map(rc => ({
                     ...rc,
                     gradeId: rc.grade_id,
