@@ -1,5 +1,5 @@
 
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import RoleLayout from "@/layouts/RoleLayout";
 import StudentLayout from "@/layouts/StudentLayout";
@@ -44,7 +44,7 @@ import { Toaster } from "@/components/ui/sonner";
 
 export function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <AuthProvider>
         <Toaster position="top-right" richColors />
         <Routes>
@@ -112,7 +112,7 @@ export function App() {
 
         </Routes>
       </AuthProvider>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 
