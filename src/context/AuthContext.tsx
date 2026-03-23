@@ -98,11 +98,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
         };
 
+        // Immediately check for existing session (doesn't wait for event)
+        const initSession = async () => {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (mounted) {
+                    await handleSession(session);
+                }
+            } catch (error) {
+                console.error("Failed to get initial session:", error);
+                if (mounted) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        // Start checking for session immediately
+        initSession();
+
+        // Also listen for auth state changes (login, logout, token refresh)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event, session) => {
                 if (!mounted) return;
 
-                if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+                // Skip INITIAL_SESSION since we already handled it above
+                if (event === "SIGNED_IN") {
                     await handleSession(session);
                 } else if (event === "SIGNED_OUT") {
                     setUser(null);
