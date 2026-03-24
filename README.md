@@ -18,10 +18,10 @@ You should also be able to see all your subjects, your assigned class
 #Thing that need to be fixed :		
 **Principle portal **
 
--# when you create a subject and you select to upload an image, you will get a error that says "bucket not created". Subject creation only works when a url image is used
--# There is currently no way to add a learner to a subject class
--# When registering a learner  the registraion does not complete when you press enroll. for G10-12 learner after you select subjects you the enrol button doesnt work so no leaner is created 
--# after page refresh  users are not able to view their data thatis stored in supabase
+- when you create a subject and you select to upload an image, you will get a error that says "bucket not created". Subject creation only works when a url image is used
+ There is currently no way to add a learner to a subject class
+- When registering a learner  the registraion does not complete when you press enroll. for G10-12 learner after you select subjects you the enrol button doesnt work so no leaner is created 
+  - after page refresh  users are not able to view their data thatis stored in supabase
 - In the learner directory, the  learner profile does not show learner name and surname , status , pin ,contact
 
 *teacher portal *
