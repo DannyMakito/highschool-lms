@@ -16,10 +16,12 @@ on the assessment sidebar tab  you can create an essays  assessment or  view all
 You should also be able to see all your subjects, your assigned class
 
 #Thing that need to be fixed :
-- when you create a subject and you select to upload an image, you will get a error that says "bucket not created". Subject creation only works when a url image is used
-- There is currently no way to add a learner to a subject class
-- When registering a learner the system automatically assigns all available subjects for grades 10 to 12 . it does not give us the option to select or deselect a specific subject for learner
-- In the learner directory, the assigned subjects that were assigned to the learner  while doing registration does not show on the table.
+principle portal
+-# when you create a subject and you select to upload an image, you will get a error that says "bucket not created". Subject creation only works when a url image is used
+-# There is currently no way to add a learner to a subject class
+-# When registering a learner  the registraion does not complete when you press enroll. for G10-12 learner after you select subjects you the enrol button doesnt work so no leaner is created 
+-# after page refresh  users are not able to view their data thatis stored in supabase
+- In the learner directory, the  learner profile does not show learner name and surname , status , pin ,contact
 - Teachers are not able to see learners in their register class and also subject class dont apear on the table
 - when learner login there are not able to see their data, such as subjects, class and anything that is related to them.
 - there is an issue with the login  . You need to login twice before you can access your respective dashboard 
