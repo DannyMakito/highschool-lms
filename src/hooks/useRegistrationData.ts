@@ -47,10 +47,10 @@ export function useRegistrationData() {
                 const studentsViewRes = await supabase.from<StudentsWithSubjectsRow>('students_with_subjects').select('*');
 
                 // Fallback path: fetch directly from students + profile relations (for environments where RPC/View may be missing or incomplete)
+                // Avoid relying on implicit FK relationship to student_subjects from students, as some schemas may not have it configured.
                 const studentsDirectRes = await supabase.from('students').select(`
                     *,
-                    profiles(*),
-                    student_subjects(*)
+                    profiles(*)
                 `);
 
                 const ssRes = await supabase.from('student_subjects').select('*');
@@ -97,6 +97,17 @@ export function useRegistrationData() {
                     gradeId: sc.grade_id,
                     createdAt: sc.created_at
                 })));
+                const studentSubjectsByStudentId = (ssData || []).reduce<Record<string, StudentAssignedSubject[]>>((acc, item) => {
+                    if (!item.student_id) return acc;
+                    if (!acc[item.student_id]) acc[item.student_id] = [];
+                    acc[item.student_id].push({
+                        subject_id: item.subject_id,
+                        subject_name: item.subject_name || '',
+                        grade_tier: item.grade_tier || ''
+                    });
+                    return acc;
+                }, {});
+
                 setStudents((studentsData || []).map(s => ({
                     ...s,
                     firstName: (s.profiles?.full_name || s.full_name || "").split(' ')[0] || '',
@@ -114,11 +125,7 @@ export function useRegistrationData() {
                     createdAt: s.profiles?.created_at || s.created_at,
                     subjects: (s.subjects && s.subjects.length > 0)
                         ? s.subjects
-                        : (s.student_subjects?.map(ss => ({
-                            subject_id: ss.subject_id,
-                            subject_name: '',
-                            grade_tier: ''
-                        })) || [])
+                        : (studentSubjectsByStudentId[s.id] || [])
                 })));
                 setStudentSubjects((ssData || []).map(ss => ({
                     ...ss,
