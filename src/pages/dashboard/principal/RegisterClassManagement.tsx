@@ -250,7 +250,7 @@ export default function RegisterClassManagement() {
             </Card>
 
             <Dialog open={isDetailOpen} onOpenChange={(open) => { setIsDetailOpen(open); if (!open) setSelectedClassId(null); }}>
-                <DialogContent className="sm:max-w-[760px]">
+                <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[760px]">
                     {selectedClass && (() => {
                         const grade = grades.find(g => g.id === selectedClass.gradeId);
                         const teacher = teachers.find(t => t.id === selectedClass.classTeacherId);

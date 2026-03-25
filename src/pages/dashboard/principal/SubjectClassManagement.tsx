@@ -328,7 +328,7 @@ export default function SubjectClassManagement() {
             </Card>
 
             <Dialog open={isDetailOpen} onOpenChange={(open) => { setIsDetailOpen(open); if (!open) { setAddStudentId(""); setSelectedClassId(null); } }}>
-                <DialogContent className="sm:max-w-[620px]">
+                <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[620px]">
                     {selectedClass && (() => {
                         const subject = subjects.find(s => s.id === detailForm.subjectId);
                         const grade = grades.find(g => g.id === detailForm.gradeId);
