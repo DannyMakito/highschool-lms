@@ -15,7 +15,7 @@ import {
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Plus, School, Users, Trash2 } from "lucide-react";
+import { Plus, School, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function RegisterClassManagement() {

@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -19,7 +18,7 @@ import { cn } from "@/lib/utils";
 
 export default function StudentRegistration() {
     const {
-        grades, registerClasses, subjectClasses,
+        grades, registerClasses,
         students, addStudent, assignSubjectsToStudent,
         autoAssignSubjectClasses, getRegisterClassStudents,
     } = useRegistrationData();
@@ -56,7 +55,7 @@ export default function StudentRegistration() {
         setStep(1);
     };
 
-    const handleRegister = (overrideSubjects?: string[]) => {
+    const handleRegister = async (overrideSubjects?: string[]) => {
         if (!form.firstName || !form.lastName || !form.gender || !form.gradeId || !form.registerClassId) {
             toast.error("Please fill in all required fields");
             return;
@@ -81,7 +80,7 @@ export default function StudentRegistration() {
             return;
         }
 
-        const newStudent = addStudent({
+        const newStudent = await addStudent({
             firstName: form.firstName,
             lastName: form.lastName,
             gender: form.gender,
