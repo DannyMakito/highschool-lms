@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import supabase from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useSubjects } from './useSubjects';
 
 type StudentsWithSubjectsRow = Student & {
     full_name?: string;
@@ -18,6 +19,7 @@ type StudentsWithSubjectsRow = Student & {
 
 export function useRegistrationData() {
     const { user } = useAuth();
+    const { subjects } = useSubjects();
     const [grades, setGrades] = useState<Grade[]>([]);
     const [registerClasses, setRegisterClasses] = useState<RegisterClass[]>([]);
     const [subjectClasses, setSubjectClasses] = useState<SubjectClass[]>([]);
@@ -53,7 +55,10 @@ export function useRegistrationData() {
                     profiles(*)
                 `);
 
-                const ssRes = await supabase.from('student_subjects').select('*');
+                const ssRes = await supabase.from('student_subjects').select(`
+                    *,
+                    subjects(name)
+                `);
                 const sscRes = await supabase.from('student_subject_classes').select('*');
 
                 if (gradesRes.error) console.error("Grades Error:", gradesRes.error);
@@ -102,7 +107,7 @@ export function useRegistrationData() {
                     if (!acc[item.student_id]) acc[item.student_id] = [];
                     acc[item.student_id].push({
                         subject_id: item.subject_id,
-                        subject_name: item.subject_name || '',
+                        subject_name: item.subjects?.name || item.subject_name || '',
                         grade_tier: item.grade_tier || ''
                     });
                     return acc;
@@ -288,7 +293,15 @@ export function useRegistrationData() {
             grade: grades.find(g => g.id === student.gradeId)?.name || '',
             studentClass: registerClasses.find(rc => rc.id === student.registerClassId)?.name || '',
             createdAt: created.created_at || new Date().toISOString(),
-            subjects: subjectIds.map(subjectId => ({ subject_id: subjectId, subjectId, subject_name: '', grade_tier: '' })),
+            subjects: subjectIds.map(subjectId => {
+                const subject = subjects.find(s => s.id === subjectId);
+                return {
+                    subject_id: subjectId,
+                    subjectId,
+                    subject_name: subject?.name || '',
+                    grade_tier: subject?.gradeTier || ''
+                };
+            }),
         };
 
         setStudents(prev => [...prev, mappedStudent]);
