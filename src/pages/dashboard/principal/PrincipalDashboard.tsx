@@ -12,16 +12,23 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
+import { useRegistrationData } from "@/hooks/useRegistrationData";
+import { useSchoolData } from "@/hooks/useSchoolData";
+import { useSubjects } from "@/hooks/useSubjects";
 
 export default function PrincipalDashboard() {
     const navigate = useNavigate();
     const { announcements } = useAnnouncements();
+    const { students, registerClasses, subjectClasses, loading: registrationLoading } = useRegistrationData();
+    const { teachers, loading: schoolLoading } = useSchoolData();
+    const { subjects, loading: subjectsLoading } = useSubjects();
+    const isLoading = registrationLoading || schoolLoading || subjectsLoading;
 
     const stats = [
-        { title: "School Performance", value: "B+", desc: "Average school grade", icon: TrendingUp, color: "text-green-500", bg: "bg-green-500/10" },
-        { title: "Active Teachers", value: "42", desc: "Currently online", icon: Users, color: "text-blue-500", bg: "bg-blue-500/10" },
-        { title: "Total Students", value: "856", desc: "Enrolled this term", icon: GraduationCap, color: "text-purple-500", bg: "bg-purple-500/10" },
-        { title: "Curriculum", value: "12", desc: "Active subjects", icon: BookOpen, color: "text-orange-500", bg: "bg-orange-500/10" },
+        { title: "Teachers", value: teachers.length, desc: "Staff accounts", icon: Users, color: "text-blue-500", bg: "bg-blue-500/10" },
+        { title: "Students", value: students.length, desc: "Enrolled learners", icon: GraduationCap, color: "text-purple-500", bg: "bg-purple-500/10" },
+        { title: "Register Classes", value: registerClasses.length, desc: "Homeroom groups", icon: TrendingUp, color: "text-green-500", bg: "bg-green-500/10" },
+        { title: "Subject Classes", value: subjectClasses.length || subjects.length, desc: subjectClasses.length > 0 ? "Teaching groups" : "Active subjects", icon: BookOpen, color: "text-orange-500", bg: "bg-orange-500/10" },
     ];
 
     return (
@@ -41,7 +48,7 @@ export default function PrincipalDashboard() {
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-3xl font-bold">{stat.value}</div>
+                            <div className="text-3xl font-bold">{isLoading ? "..." : stat.value}</div>
                             <p className="text-xs text-muted-foreground mt-1">{stat.desc}</p>
                         </CardContent>
                     </Card>

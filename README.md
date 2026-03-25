@@ -23,6 +23,11 @@ You should also be able to see all your subjects, your assigned class
 - Teachers are not able to see learners in their register class and also subject class dont apear on the table
 - when learner login there are not able to see their data, such as subjects, class and anything that is related to them.
 - there is an issue with the login  . You need to login twice before you can access your respective dashboard 
+- The logout button in the principal dashboard is not functioning correctly.
+- The principal dashboard overview page does not render the actual number of teachers and students.
+- Register classes need an eye icon in the table that opens a full register class details view with the enrolled students list.
+- Register classes need full CRUD support for the principal, including viewing, editing, and deleting existing classes.
+- The subject classes page needs to be upgraded into a full subject class details workflow with complete CRUD functionality.
 
 
 

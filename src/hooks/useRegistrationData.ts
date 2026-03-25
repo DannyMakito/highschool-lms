@@ -201,10 +201,10 @@ export function useRegistrationData() {
 
     const updateRegisterClass = async (id: string, updates: Partial<RegisterClass>) => {
         const dbUpdates: Record<string, unknown> = {};
-        if (updates.name) dbUpdates['name'] = updates.name;
-        if (updates.gradeId) dbUpdates['grade_id'] = updates.gradeId;
-        if (updates.classTeacherId) dbUpdates['class_teacher_id'] = updates.classTeacherId;
-        if (updates.maxStudents) dbUpdates['max_students'] = updates.maxStudents;
+        if (updates.name !== undefined) dbUpdates['name'] = updates.name;
+        if (updates.gradeId !== undefined) dbUpdates['grade_id'] = updates.gradeId;
+        if (updates.classTeacherId !== undefined) dbUpdates['class_teacher_id'] = updates.classTeacherId || null;
+        if (updates.maxStudents !== undefined) dbUpdates['max_students'] = updates.maxStudents;
 
         const { error } = await supabase
             .from('register_classes')
@@ -247,9 +247,11 @@ export function useRegistrationData() {
 
     const updateSubjectClass = async (id: string, updates: Partial<SubjectClass>) => {
         const dbUpdates: Record<string, unknown> = {};
-        if (updates.name) dbUpdates['name'] = updates.name;
-        if (updates.teacherId) dbUpdates['teacher_id'] = updates.teacherId;
-        if (updates.capacity) dbUpdates['capacity'] = updates.capacity;
+        if (updates.name !== undefined) dbUpdates['name'] = updates.name;
+        if (updates.subjectId !== undefined) dbUpdates['subject_id'] = updates.subjectId;
+        if (updates.gradeId !== undefined) dbUpdates['grade_id'] = updates.gradeId;
+        if (updates.teacherId !== undefined) dbUpdates['teacher_id'] = updates.teacherId || null;
+        if (updates.capacity !== undefined) dbUpdates['capacity'] = updates.capacity;
 
         const { error } = await supabase
             .from('subject_classes')
