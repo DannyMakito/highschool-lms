@@ -158,14 +158,19 @@ export default function StudentDirectory() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant="outline" className={cn(
-                                            "capitalize text-[10px] font-black px-2 py-0 border-2",
-                                            student.status === "active" ? "text-green-600 bg-green-50 border-green-200" :
-                                                student.status === "transferred" ? "text-orange-600 bg-orange-50 border-orange-200" :
-                                                    "text-red-600 bg-red-50 border-red-200"
-                                        )}>
-                                            {student.status}
-                                        </Badge>
+                                        {(() => {
+                                            const status = student.status || 'inactive';
+                                            return (
+                                                <Badge variant="outline" className={cn(
+                                                    "capitalize text-[10px] font-black px-2 py-0 border-2",
+                                                    status === "active" ? "text-green-600 bg-green-50 border-green-200" :
+                                                        status === "transferred" ? "text-orange-600 bg-orange-50 border-orange-200" :
+                                                            "text-red-600 bg-red-50 border-red-200"
+                                                )}>
+                                                    {status}
+                                                </Badge>
+                                            );
+                                        })()}
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex gap-2 justify-end">

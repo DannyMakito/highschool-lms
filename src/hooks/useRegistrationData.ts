@@ -13,6 +13,7 @@ type StudentsWithSubjectsRow = Student & {
     pin?: string;
     created_at?: string;
     subjects?: StudentAssignedSubject[];
+    student_subjects?: Array<{ id: string; student_id: string; subject_id: string }>;
 };
 
 export function useRegistrationData() {
@@ -44,6 +45,14 @@ export function useRegistrationData() {
                 // This reduces client-side joins & ensures we rely on the DB to enforce RLS.
                 const { data: studentsRpc, error: studentsRpcErr } = await supabase.rpc<StudentsWithSubjectsRow[]>('get_students_with_subjects');
                 const studentsViewRes = await supabase.from<StudentsWithSubjectsRow>('students_with_subjects').select('*');
+
+                // Fallback path: fetch directly from students + profile relations (for environments where RPC/View may be missing or incomplete)
+                const studentsDirectRes = await supabase.from('students').select(`
+                    *,
+                    profiles(*),
+                    student_subjects(*)
+                `);
+
                 const ssRes = await supabase.from('student_subjects').select('*');
                 const sscRes = await supabase.from('student_subject_classes').select('*');
 
@@ -56,7 +65,16 @@ export function useRegistrationData() {
                 const gradesData = gradesRes.data;
                 const rcData = rcRes.data;
                 const scData = scRes.data;
-                const studentsData = studentsRpc ?? studentsViewRes.data ?? [];
+
+                const studentsRpcData = Array.isArray(studentsRpc) ? studentsRpc : [];
+                const studentsViewData = Array.isArray(studentsViewRes.data) ? studentsViewRes.data : [];
+                const studentsDirectData = Array.isArray(studentsDirectRes.data) ? studentsDirectRes.data : [];
+
+                // Prioritize direct joined student data to avoid view/RPC mismatch in deployed env.
+                // Fall back to RPC/view only when direct results are unavailable.
+                const studentsData = studentsDirectData.length > 0 ? studentsDirectData :
+                    (studentsRpcData.length > 0 ? studentsRpcData : studentsViewData);
+
                 const ssData = ssRes.data;
                 const sscData = sscRes.data;
 
@@ -92,8 +110,15 @@ export function useRegistrationData() {
                     registerClassId: s.register_class_id,
                     grade: gradesData?.find(g => g.id === s.grade_id)?.name || '',
                     studentClass: rcData?.find(rc => rc.id === s.register_class_id)?.name || '',
+                    status: s.status || 'inactive',
                     createdAt: s.profiles?.created_at || s.created_at,
-                    subjects: s.subjects || []
+                    subjects: (s.subjects && s.subjects.length > 0)
+                        ? s.subjects
+                        : (s.student_subjects?.map(ss => ({
+                            subject_id: ss.subject_id,
+                            subject_name: '',
+                            grade_tier: ''
+                        })) || [])
                 })));
                 setStudentSubjects((ssData || []).map(ss => ({
                     ...ss,
