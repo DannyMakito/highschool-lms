@@ -10,16 +10,26 @@ import { useMemo } from "react";
 
 export default function StudentQuizzes() {
     const { user } = useAuth();
-    const { studentSubjects } = useRegistrationData();
+    const { studentSubjects, studentSubjectClasses, subjectClasses } = useRegistrationData();
     const { quizzes: allQuizzes, subjects } = useSubjects();
     const navigate = useNavigate();
 
     const quizzes = useMemo(() => {
-        const assignedIds = studentSubjects
+        const directAssignedIds = studentSubjects
             .filter(ss => ss.studentId === user?.id)
             .map(ss => ss.subjectId);
+            
+        const classAssignedIds = studentSubjectClasses
+            .filter(ssc => ssc.studentId === user?.id)
+            .map(ssc => {
+                const sc = subjectClasses.find(c => c.id === ssc.subjectClassId);
+                return sc?.subjectId;
+            })
+            .filter(Boolean) as string[];
+
+        const assignedIds = Array.from(new Set([...directAssignedIds, ...classAssignedIds]));
         return allQuizzes.filter(q => assignedIds.includes(q.subjectId));
-    }, [allQuizzes, studentSubjects, user?.id]);
+    }, [allQuizzes, studentSubjects, studentSubjectClasses, subjectClasses, user?.id]);
 
     // Only show published quizzes, sorted by creation date (newest first)
     const publishedQuizzes = quizzes

@@ -12,30 +12,36 @@ import { useNavigate } from "react-router-dom";
 
 export default function StudentSubjects() {
     const { user } = useAuth();
-    const { studentSubjects } = useRegistrationData();
+    const { studentSubjects, studentSubjectClasses, subjectClasses } = useRegistrationData();
     const { subjects, getSubjectProgress, getSubjectLessonsCount, getSubjectCompletedLessonsCount, getSubjectTopics } = useSubjects();
     const [searchTerm, setSearchTerm] = useState("");
     const navigate = useNavigate();
 
     const filteredSubjects = useMemo(() => {
-        // 1. Find subject IDs assigned to this student
-        const assignedSubjectIds = studentSubjects
+        // 1. Find subject IDs assigned to this student directly and via classes
+        const directAssignedIds = studentSubjects
             .filter(ss => ss.studentId === user?.id)
             .map(ss => ss.subjectId);
+            
+        const classAssignedIds = studentSubjectClasses
+            .filter(ssc => ssc.studentId === user?.id)
+            .map(ssc => {
+                const sc = subjectClasses.find(c => c.id === ssc.subjectClassId);
+                return sc?.subjectId;
+            })
+            .filter(Boolean) as string[];
+
+        const assignedSubjectIds = Array.from(new Set([...directAssignedIds, ...classAssignedIds]));
 
         // 2. Filter the master subjects list
         return subjects
             .filter(s => assignedSubjectIds.includes(s.id))
             .filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()))
             .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-    }, [subjects, studentSubjects, user?.id, searchTerm]);
+    }, [subjects, studentSubjects, studentSubjectClasses, subjectClasses, user?.id, searchTerm]);
 
     const handleSubjectClick = (subjectId: string) => {
-        // Redirect to first lesson or course outline
-        const topics = getSubjectTopics(subjectId);
-        if (topics.length > 0) {
-            navigate(`/student/subjects/${subjectId}/outline`);
-        }
+        navigate(`/student/subjects/${subjectId}/outline`);
     };
 
     return (
@@ -55,7 +61,7 @@ export default function StudentSubjects() {
                 />
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                 {filteredSubjects.map((subject) => {
                     const progress = getSubjectProgress(subject.id);
                     const totalLessons = getSubjectLessonsCount(subject.id);
@@ -64,7 +70,7 @@ export default function StudentSubjects() {
                     return (
                         <Card
                             key={subject.id}
-                            className="bg-card/40 backdrop-blur-md border-muted/20 overflow-hidden group cursor-pointer hover:border-primary/50 transition-all duration-300"
+                            className="bg-card/40 backdrop-blur-md border-muted/20 overflow-hidden group cursor-pointer hover:border-primary/50 transition-all duration-300 flex flex-col"
                             onClick={() => handleSubjectClick(subject.id)}
                         >
                             <div className="relative aspect-video">
@@ -73,32 +79,32 @@ export default function StudentSubjects() {
                                     alt={subject.name}
                                     className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
                                 />
-                                <Badge className="absolute top-2 right-2 bg-green-500/80 backdrop-blur-md text-white border-none uppercase text-[10px] font-black tracking-widest px-2 py-0.5">
+                                <Badge className="absolute top-2 right-2 bg-green-500/80 backdrop-blur-md text-white border-none uppercase text-[9px] font-black tracking-widest px-1.5 py-0.5">
                                     {subject.accessType}
                                 </Badge>
                             </div>
-                            <CardContent className="p-5 space-y-3">
-                                <h3 className="text-xl font-bold leading-tight group-hover:text-primary transition-colors">{subject.name}</h3>
-                                <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+                            <CardContent className="p-4 space-y-2 flex-grow">
+                                <h3 className="text-lg font-bold leading-tight group-hover:text-primary transition-colors line-clamp-1">{subject.name}</h3>
+                                <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
                                     {subject.description}
                                 </p>
-                                <div className="flex gap-4 text-xs font-bold uppercase tracking-wider text-muted-foreground/80">
-                                    <div className="flex items-center gap-1.5">
-                                        <Layers className="w-3.5 h-3.5" />
-                                        <span>{subject.modulesCount} modules</span>
+                                <div className="flex gap-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 mt-2">
+                                    <div className="flex items-center gap-1">
+                                        <Layers className="w-3 h-3" />
+                                        <span>{subject.modulesCount} mods</span>
                                     </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <BookOpen className="w-3.5 h-3.5" />
-                                        <span>{subject.lessonsCount} lessons</span>
+                                    <div className="flex items-center gap-1">
+                                        <BookOpen className="w-3 h-3" />
+                                        <span>{subject.lessonsCount} less</span>
                                     </div>
                                 </div>
                             </CardContent>
-                            <CardFooter className="p-5 pt-0 flex flex-col gap-3">
-                                <div className="w-full flex justify-between text-[11px] font-black uppercase tracking-widest">
-                                    <span className="text-muted-foreground">{completedLessons}/{totalLessons} lessons</span>
+                            <CardFooter className="p-4 pt-0 flex flex-col gap-2">
+                                <div className="w-full flex justify-between text-[10px] font-black uppercase tracking-widest">
+                                    <span className="text-muted-foreground">{completedLessons}/{totalLessons} done</span>
                                     <span className="text-primary">{progress}%</span>
                                 </div>
-                                <Progress value={progress} className="h-2 bg-muted/20" />
+                                <Progress value={progress} className="h-1.5 bg-muted/20" />
                             </CardFooter>
                         </Card>
                     );

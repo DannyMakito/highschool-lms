@@ -18,7 +18,7 @@ interface LMSData {
 }
 
 export function useSubjects() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [data, setData] = useState<LMSData>({
         subjects: [],
         topics: [],
@@ -30,6 +30,8 @@ export function useSubjects() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (authLoading) return;
+        
         if (!user) {
             setLoading(false);
             return;
@@ -82,7 +84,7 @@ export function useSubjects() {
         fetchData();
 
         return () => { cancelled = true; };
-    }, [user?.id]);
+    }, [user?.id, authLoading]);
 
     const addSubject = async (subject: Omit<Subject, 'id' | 'modulesCount' | 'lessonsCount' | 'createdAt'>) => {
         const { data: newSubject, error } = await supabase

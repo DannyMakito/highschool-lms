@@ -11,7 +11,7 @@ interface AssignmentData {
 }
 
 export function useAssignments() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [data, setData] = useState<AssignmentData>({
         assignments: [],
         rubrics: [],
@@ -21,6 +21,8 @@ export function useAssignments() {
 
     // Initial Fetch
     useEffect(() => {
+        if (authLoading) return;
+        
         if (!user) {
             setLoading(false);
             return;
@@ -87,7 +89,7 @@ export function useAssignments() {
         };
 
         fetchAssignmentsData();
-    }, [user?.id]);
+    }, [user?.id, authLoading]);
 
     const addAssignment = async (assignment: Omit<Assignment, 'id' | 'createdAt'>) => {
         const { data: newAssignment, error } = await supabase

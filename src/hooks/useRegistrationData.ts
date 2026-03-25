@@ -8,7 +8,7 @@ import supabase from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 
 export function useRegistrationData() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [grades, setGrades] = useState<Grade[]>([]);
     const [registerClasses, setRegisterClasses] = useState<RegisterClass[]>([]);
     const [subjectClasses, setSubjectClasses] = useState<SubjectClass[]>([]);
@@ -18,6 +18,8 @@ export function useRegistrationData() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (authLoading) return;
+        
         if (!user) {
             setLoading(false);
             return;
@@ -98,7 +100,7 @@ export function useRegistrationData() {
         fetchRegistrationData();
 
         return () => { cancelled = true; };
-    }, [user?.id]);
+    }, [user?.id, authLoading]);
 
     // === Grade CRUD ===
     const addGrade = async (grade: Omit<Grade, 'id'>) => {
