@@ -226,6 +226,8 @@ export interface SubjectClass {
 }
 
 export interface StudentAssignedSubject {
+    id?: string;
+    subjectId?: string;
     subject_id: string;
     subject_name: string;
     grade_tier: string;

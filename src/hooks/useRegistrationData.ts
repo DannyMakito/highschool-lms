@@ -17,6 +17,23 @@ type StudentsWithSubjectsRow = Student & {
     student_subjects?: Array<{ id: string; student_id: string; subject_id: string }>;
 };
 
+const normalizeAssignedSubject = (
+    item: Partial<StudentAssignedSubject> & {
+        id?: string;
+        subject_id?: string;
+        subjectId?: string;
+        subject_name?: string;
+        grade_tier?: string;
+        subjects?: { name?: string | null } | null;
+    }
+): StudentAssignedSubject => ({
+    id: item.id,
+    subjectId: item.subjectId ?? item.subject_id ?? '',
+    subject_id: item.subject_id ?? item.subjectId ?? '',
+    subject_name: item.subject_name ?? item.subjects?.name ?? '',
+    grade_tier: item.grade_tier ?? '',
+});
+
 export function useRegistrationData() {
     const { user } = useAuth();
     const { subjects } = useSubjects();
@@ -105,11 +122,7 @@ export function useRegistrationData() {
                 const studentSubjectsByStudentId = (ssData || []).reduce<Record<string, StudentAssignedSubject[]>>((acc, item) => {
                     if (!item.student_id) return acc;
                     if (!acc[item.student_id]) acc[item.student_id] = [];
-                    acc[item.student_id].push({
-                        subject_id: item.subject_id,
-                        subject_name: item.subjects?.name || item.subject_name || '',
-                        grade_tier: item.grade_tier || ''
-                    });
+                    acc[item.student_id].push(normalizeAssignedSubject(item));
                     return acc;
                 }, {});
 
@@ -129,7 +142,7 @@ export function useRegistrationData() {
                     status: s.status || 'inactive',
                     createdAt: s.profiles?.created_at || s.created_at,
                     subjects: (s.subjects && s.subjects.length > 0)
-                        ? s.subjects
+                        ? s.subjects.map(normalizeAssignedSubject)
                         : (studentSubjectsByStudentId[s.id] || [])
                 })));
                 setStudentSubjects((ssData || []).map(ss => ({
@@ -295,12 +308,12 @@ export function useRegistrationData() {
             createdAt: created.created_at || new Date().toISOString(),
             subjects: subjectIds.map(subjectId => {
                 const subject = subjects.find(s => s.id === subjectId);
-                return {
+                return normalizeAssignedSubject({
+                    id: `temp-${created.id}-${subjectId}`,
                     subject_id: subjectId,
-                    subjectId,
                     subject_name: subject?.name || '',
                     grade_tier: subject?.gradeTier || ''
-                };
+                });
             }),
         };
 

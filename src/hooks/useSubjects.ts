@@ -19,6 +19,7 @@ interface LMSData {
 
 export function useSubjects() {
     const { user } = useAuth();
+    const [progressTrackingAvailable, setProgressTrackingAvailable] = useState(true);
     const [data, setData] = useState<LMSData>({
         subjects: [],
         topics: [],
@@ -48,7 +49,12 @@ export function useSubjects() {
                 const { data: submissions } = await supabase.from('quiz_submissions').select('*');
                 const { data: progress, error: progressError } = user ? await supabase.from('user_lesson_progress').select('lesson_id').eq('user_id', user.id) : { data: [], error: null };
                 if (progressError) {
+                    if (progressError.code === 'PGRST205') {
+                        setProgressTrackingAvailable(false);
+                    }
                     console.warn("user_lesson_progress table not found, skipping progress tracking:", progressError.message);
+                } else {
+                    setProgressTrackingAvailable(true);
                 }
 
                 if (cancelled) return;
@@ -255,7 +261,7 @@ export function useSubjects() {
     };
 
     const toggleLessonCompletion = async (lessonId: string) => {
-        if (!user) return;
+        if (!user || !progressTrackingAvailable) return;
 
         const isCompleted = data.completedLessonIds.includes(lessonId);
 

@@ -256,11 +256,12 @@ export default function StudentDirectory() {
                                         </div>
                                         <div className="grid grid-cols-2 gap-3">
                                             {stuSubjects.map(ss => {
-                                                const sub = subjects.find(s => s.id === ss.subjectId);
+                                                const subjectId = ss.subjectId || ss.subject_id;
+                                                const displayName = ss.subject_name || subjects.find(s => s.id === subjectId)?.name || "Unknown";
                                                 return (
-                                                    <div key={ss.id} className="p-4 rounded-xl border-2 hover:border-primary/30 transition-all flex items-center group">
+                                                    <div key={ss.id || `${selectedStudent.id}-${subjectId}`} className="p-4 rounded-xl border-2 hover:border-primary/30 transition-all flex items-center group">
                                                         <div className="h-2 w-2 rounded-full bg-primary/30 group-hover:bg-primary mr-3 transition-colors" />
-                                                        <span className="text-sm font-bold">{sub?.name || "Unknown"}</span>
+                                                        <span className="text-sm font-bold">{displayName}</span>
                                                     </div>
                                                 );
                                             })}
