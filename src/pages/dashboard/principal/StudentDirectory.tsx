@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
-    Dialog, DialogContent,
+    Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -16,7 +16,7 @@ import {
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Search, Eye, Users, BookOpen, School, Filter, UserCheck, Trash2 } from "lucide-react";
+import { Search, Eye, Users, GraduationCap, BookOpen, School, Filter, MoreHorizontal, UserCheck, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -199,6 +199,7 @@ export default function StudentDirectory() {
                     {selectedStudent && (() => {
                         const grade = grades.find(g => g.id === selectedStudent.gradeId);
                         const regClass = registerClasses.find(rc => rc.id === selectedStudent.registerClassId);
+                        const teacher = teachers.find(t => t.id === regClass?.classTeacherId);
                         const stuSubjects = getStudentSubjects(selectedStudent.id);
                         const stuSubjectClasses = getStudentSubjectClasses(selectedStudent.id);
 

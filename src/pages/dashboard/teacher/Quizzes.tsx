@@ -1,14 +1,16 @@
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import {
     Search,
     Filter,
     Share2,
     MoreHorizontal,
     CheckCircle2,
+    Clock,
     ChevronDown,
     FileText,
     ArrowUpDown,
+    Download,
     Trash2,
     Check
 } from "lucide-react";
@@ -34,6 +36,7 @@ import { useSubjects } from "@/hooks/useSubjects";
 import { useAuth } from "@/context/AuthContext";
 import { useSchoolData } from "@/hooks/useSchoolData";
 import { cn } from "@/lib/utils";
+import { useMemo } from "react";
 
 
 
@@ -58,7 +61,7 @@ export default function Quizzes() {
         const totalSubmissions = quizSubmissions.length;
 
         // Count unique learners
-        const uniqueLearners = [...new Set(quizSubmissions.map(s => s.studentId))];
+        const uniqueLearners = [...new Set(quizSubmissions.map(s => s.learnerId))];
 
         // Calculate average accuracy
         const avgAccuracy = totalSubmissions > 0
@@ -301,7 +304,7 @@ export default function Quizzes() {
                                         <div className="flex items-center">
                                             {getQuizMetrics(quiz.id).uniqueLearners.length > 0 ? (
                                                 <div className="flex -space-x-2">
-                                                    {getQuizMetrics(quiz.id).uniqueLearners.slice(0, 3).map((learnerId, _) => (
+                                                    {getQuizMetrics(quiz.id).uniqueLearners.slice(0, 3).map((learnerId, i) => (
                                                         <Avatar key={learnerId} className="h-7 w-7 ring-2 ring-white">
                                                             <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${learnerId}`} />
                                                             <AvatarFallback>?</AvatarFallback>
