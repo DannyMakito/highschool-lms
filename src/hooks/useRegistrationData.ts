@@ -47,7 +47,7 @@ export function useRegistrationData() {
 
     useEffect(() => {
         if (authLoading) return;
-        
+
         if (!user) {
             setGrades([]);
             setRegisterClasses([]);
@@ -209,10 +209,10 @@ export function useRegistrationData() {
 
     const updateRegisterClass = async (id: string, updates: Partial<RegisterClass>) => {
         const dbUpdates: Record<string, unknown> = {};
-        if (updates.name) dbUpdates['name'] = updates.name;
-        if (updates.gradeId) dbUpdates['grade_id'] = updates.gradeId;
-        if (updates.classTeacherId) dbUpdates['class_teacher_id'] = updates.classTeacherId;
-        if (updates.maxStudents) dbUpdates['max_students'] = updates.maxStudents;
+        if (updates.name !== undefined) dbUpdates['name'] = updates.name;
+        if (updates.gradeId !== undefined) dbUpdates['grade_id'] = updates.gradeId;
+        if (updates.classTeacherId !== undefined) dbUpdates['class_teacher_id'] = updates.classTeacherId || null;
+        if (updates.maxStudents !== undefined) dbUpdates['max_students'] = updates.maxStudents;
 
         const { error } = await supabase
             .from('register_classes')
@@ -255,9 +255,11 @@ export function useRegistrationData() {
 
     const updateSubjectClass = async (id: string, updates: Partial<SubjectClass>) => {
         const dbUpdates: Record<string, unknown> = {};
-        if (updates.name) dbUpdates['name'] = updates.name;
-        if (updates.teacherId) dbUpdates['teacher_id'] = updates.teacherId;
-        if (updates.capacity) dbUpdates['capacity'] = updates.capacity;
+        if (updates.name !== undefined) dbUpdates['name'] = updates.name;
+        if (updates.subjectId !== undefined) dbUpdates['subject_id'] = updates.subjectId;
+        if (updates.gradeId !== undefined) dbUpdates['grade_id'] = updates.gradeId;
+        if (updates.teacherId !== undefined) dbUpdates['teacher_id'] = updates.teacherId || null;
+        if (updates.capacity !== undefined) dbUpdates['capacity'] = updates.capacity;
 
         const { error } = await supabase
             .from('subject_classes')
@@ -338,19 +340,39 @@ export function useRegistrationData() {
 
     const updateStudent = async (id: string, updates: Partial<Student>) => {
         const dbUpdates: Record<string, unknown> = {};
-        if (updates.administrationNumber) dbUpdates['administration_number'] = updates.administrationNumber;
-        if (updates.gender) dbUpdates['gender'] = updates.gender;
-        if (updates.admissionYear) dbUpdates['admission_year'] = updates.admissionYear;
-        if (updates.gradeId) dbUpdates['grade_id'] = updates.gradeId;
-        if (updates.registerClassId) dbUpdates['register_class_id'] = updates.registerClassId;
-        if (updates.status) dbUpdates['status'] = updates.status;
+        const profileUpdates: Record<string, unknown> = {};
+        if (updates.administrationNumber !== undefined) dbUpdates['administration_number'] = updates.administrationNumber;
+        if (updates.gender !== undefined) dbUpdates['gender'] = updates.gender;
+        if (updates.admissionYear !== undefined) dbUpdates['admission_year'] = updates.admissionYear;
+        if (updates.gradeId !== undefined) dbUpdates['grade_id'] = updates.gradeId;
+        if (updates.registerClassId !== undefined) dbUpdates['register_class_id'] = updates.registerClassId;
+        if (updates.status !== undefined) dbUpdates['status'] = updates.status;
+        if (updates.firstName !== undefined || updates.lastName !== undefined) {
+            const currentStudent = students.find(s => s.id === id);
+            const firstName = updates.firstName ?? currentStudent?.firstName ?? '';
+            const lastName = updates.lastName ?? currentStudent?.lastName ?? '';
+            profileUpdates['full_name'] = `${firstName} ${lastName}`.trim();
+        }
+        if (updates.email !== undefined) profileUpdates['email'] = updates.email;
+        if (updates.pin !== undefined) profileUpdates['pin'] = updates.pin;
 
-        const { error } = await supabase
-            .from('students')
-            .update(dbUpdates)
-            .eq('id', id);
+        if (Object.keys(dbUpdates).length > 0) {
+            const { error } = await supabase
+                .from('students')
+                .update(dbUpdates)
+                .eq('id', id);
 
-        if (error) throw error;
+            if (error) throw error;
+        }
+
+        if (Object.keys(profileUpdates).length > 0) {
+            const { error } = await supabase
+                .from('profiles')
+                .update(profileUpdates)
+                .eq('id', id);
+
+            if (error) throw error;
+        }
 
         setStudents(prev => prev.map(s => {
             if (s.id !== id) return s;
@@ -378,6 +400,12 @@ export function useRegistrationData() {
 
     // === Student Subjects ===
     const assignSubjectsToStudent = async (studentId: string, subjectIds: string[]) => {
+        const invalidPlacements = studentSubjectClasses.filter(ssc => {
+            if (ssc.studentId !== studentId) return false;
+            const subjectClass = subjectClasses.find(sc => sc.id === ssc.subjectClassId);
+            return !!subjectClass && !subjectIds.includes(subjectClass.subjectId);
+        });
+
         // Delete all old assignments for this student in DB
         const { error: delError } = await supabase
             .from('student_subjects')
@@ -404,6 +432,33 @@ export function useRegistrationData() {
             const mapped = (insertedData || []).map(ss => ({ ...ss, studentId: ss.student_id, subjectId: ss.subject_id }));
             return [...filtered, ...mapped];
         });
+
+        if (invalidPlacements.length > 0) {
+            const { error: placementDeleteError } = await supabase
+                .from('student_subject_classes')
+                .delete()
+                .in('id', invalidPlacements.map(placement => placement.id));
+
+            if (placementDeleteError) throw placementDeleteError;
+
+            setStudentSubjectClasses(prev =>
+                prev.filter(ssc => !invalidPlacements.some(placement => placement.id === ssc.id))
+            );
+        }
+
+        const assignedSubjects = subjectIds.map(subjectId => {
+            const subject = subjects.find(s => s.id === subjectId);
+            return normalizeAssignedSubject({
+                id: `temp-${studentId}-${subjectId}`,
+                subject_id: subjectId,
+                subject_name: subject?.name || '',
+                grade_tier: subject?.gradeTier || ''
+            });
+        });
+
+        setStudents(prev => prev.map(student =>
+            student.id === studentId ? { ...student, subjects: assignedSubjects } : student
+        ));
     };
 
     const getStudentSubjects = (studentId: string) => {
