@@ -18,7 +18,7 @@ interface LMSData {
 }
 
 export function useSubjects() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [progressTrackingAvailable, setProgressTrackingAvailable] = useState(true);
     const [data, setData] = useState<LMSData>({
         subjects: [],

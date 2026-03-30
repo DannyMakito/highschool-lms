@@ -35,7 +35,7 @@ const normalizeAssignedSubject = (
 });
 
 export function useRegistrationData() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const { subjects } = useSubjects();
     const [grades, setGrades] = useState<Grade[]>([]);
     const [registerClasses, setRegisterClasses] = useState<RegisterClass[]>([]);
@@ -173,7 +173,7 @@ export function useRegistrationData() {
         fetchRegistrationData();
 
         return () => { cancelled = true; };
-    }, [user]);
+    }, [user, authLoading]);
 
     // === Grade CRUD ===
     const addGrade = async (grade: Omit<Grade, 'id'>) => {
