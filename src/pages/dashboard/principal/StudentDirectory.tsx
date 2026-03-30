@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { Student } from "@/types";
 import { useRegistrationData } from "@/hooks/useRegistrationData";
 import { useSubjects } from "@/hooks/useSubjects";
 import { useSchoolData } from "@/hooks/useSchoolData";
@@ -29,7 +30,7 @@ export default function StudentDirectory() {
     const { subjects } = useSubjects();
     const { teachers } = useSchoolData();
 
-    const [selectedStudent, setSelectedStudent] = useState<any>(null);
+    const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterGrade, setFilterGrade] = useState("all");
@@ -44,7 +45,7 @@ export default function StudentDirectory() {
         return matchesSearch && matchesGrade && matchesClass;
     });
 
-    const openProfile = (student: any) => {
+    const openProfile = (student: Student) => {
         setSelectedStudent(student);
         setIsProfileOpen(true);
     };
@@ -130,7 +131,7 @@ export default function StudentDirectory() {
                         {filteredStudents.map(student => {
                             const grade = grades.find(g => g.id === student.gradeId);
                             const regClass = registerClasses.find(rc => rc.id === student.registerClassId);
-                            const subjectCount = getStudentSubjects(student.id).length;
+                            const subjectCount = student.subjects?.length ?? getStudentSubjects(student.id).length;
                             return (
                                 <TableRow key={student.id} className="group hover:bg-muted/30 transition-colors">
                                     <TableCell>
@@ -157,14 +158,19 @@ export default function StudentDirectory() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant="outline" className={cn(
-                                            "capitalize text-[10px] font-black px-2 py-0 border-2",
-                                            student.status === "active" ? "text-green-600 bg-green-50 border-green-200" :
-                                                student.status === "transferred" ? "text-orange-600 bg-orange-50 border-orange-200" :
-                                                    "text-red-600 bg-red-50 border-red-200"
-                                        )}>
-                                            {student.status}
-                                        </Badge>
+                                        {(() => {
+                                            const status = student.status || 'inactive';
+                                            return (
+                                                <Badge variant="outline" className={cn(
+                                                    "capitalize text-[10px] font-black px-2 py-0 border-2",
+                                                    status === "active" ? "text-green-600 bg-green-50 border-green-200" :
+                                                        status === "transferred" ? "text-orange-600 bg-orange-50 border-orange-200" :
+                                                            "text-red-600 bg-red-50 border-red-200"
+                                                )}>
+                                                    {status}
+                                                </Badge>
+                                            );
+                                        })()}
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex gap-2 justify-end">
@@ -199,7 +205,7 @@ export default function StudentDirectory() {
                     {selectedStudent && (() => {
                         const grade = grades.find(g => g.id === selectedStudent.gradeId);
                         const regClass = registerClasses.find(rc => rc.id === selectedStudent.registerClassId);
-                        const stuSubjects = getStudentSubjects(selectedStudent.id);
+                        const stuSubjects = selectedStudent.subjects ?? getStudentSubjects(selectedStudent.id);
                         const stuSubjectClasses = getStudentSubjectClasses(selectedStudent.id);
 
                         return (
@@ -250,11 +256,12 @@ export default function StudentDirectory() {
                                         </div>
                                         <div className="grid grid-cols-2 gap-3">
                                             {stuSubjects.map(ss => {
-                                                const sub = subjects.find(s => s.id === ss.subjectId);
+                                                const subjectId = ss.subjectId || ss.subject_id;
+                                                const displayName = ss.subject_name || subjects.find(s => s.id === subjectId)?.name || "Unknown";
                                                 return (
-                                                    <div key={ss.id} className="p-4 rounded-xl border-2 hover:border-primary/30 transition-all flex items-center group">
+                                                    <div key={ss.id || `${selectedStudent.id}-${subjectId}`} className="p-4 rounded-xl border-2 hover:border-primary/30 transition-all flex items-center group">
                                                         <div className="h-2 w-2 rounded-full bg-primary/30 group-hover:bg-primary mr-3 transition-colors" />
-                                                        <span className="text-sm font-bold">{sub?.name || "Unknown"}</span>
+                                                        <span className="text-sm font-bold">{displayName}</span>
                                                     </div>
                                                 );
                                             })}

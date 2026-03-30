@@ -2,13 +2,41 @@
 import { useState, useEffect, useCallback } from 'react';
 import type {
     Grade, RegisterClass, SubjectClass,
-    Student, StudentSubject, StudentSubjectClass
+    Student, StudentAssignedSubject, StudentSubject, StudentSubjectClass
 } from '../types';
 import supabase from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useSubjects } from './useSubjects';
+
+type StudentsWithSubjectsRow = Student & {
+    full_name?: string;
+    email?: string;
+    pin?: string;
+    created_at?: string;
+    subjects?: StudentAssignedSubject[];
+    student_subjects?: Array<{ id: string; student_id: string; subject_id: string }>;
+};
+
+const normalizeAssignedSubject = (
+    item: Partial<StudentAssignedSubject> & {
+        id?: string;
+        subject_id?: string;
+        subjectId?: string;
+        subject_name?: string;
+        grade_tier?: string;
+        subjects?: { name?: string | null } | null;
+    }
+): StudentAssignedSubject => ({
+    id: item.id,
+    subjectId: item.subjectId ?? item.subject_id ?? '',
+    subject_id: item.subject_id ?? item.subjectId ?? '',
+    subject_name: item.subject_name ?? item.subjects?.name ?? '',
+    grade_tier: item.grade_tier ?? '',
+});
 
 export function useRegistrationData() {
-    const { user, loading: authLoading } = useAuth();
+    const { user } = useAuth();
+    const { subjects } = useSubjects();
     const [grades, setGrades] = useState<Grade[]>([]);
     const [registerClasses, setRegisterClasses] = useState<RegisterClass[]>([]);
     const [subjectClasses, setSubjectClasses] = useState<SubjectClass[]>([]);
@@ -40,25 +68,51 @@ export function useRegistrationData() {
                 const gradesRes = await supabase.from('grades').select('*');
                 const rcRes = await supabase.from('register_classes').select('*');
                 const scRes = await supabase.from('subject_classes').select('*');
-                const studentsRes = await supabase.from('students').select('*, profiles(*)');
-                const ssRes = await supabase.from('student_subjects').select('*');
+                // Use the new view or RPC to get students together with their assigned subjects.
+                // This reduces client-side joins & ensures we rely on the DB to enforce RLS.
+                const { data: studentsRpc, error: studentsRpcErr } = await supabase.rpc<StudentsWithSubjectsRow[]>('get_students_with_subjects');
+                const studentsViewRes = await supabase.from<StudentsWithSubjectsRow>('students_with_subjects').select('*');
+
+                // Fallback path: fetch directly from students + profile relations (for environments where RPC/View may be missing or incomplete)
+                // Avoid relying on implicit FK relationship to student_subjects from students, as some schemas may not have it configured.
+                const studentsDirectRes = await supabase.from('students').select(`
+                    *,
+                    profiles(*)
+                `);
+
+                const ssRes = await supabase.from('student_subjects').select(`
+                    *,
+                    subjects(name)
+                `);
                 const sscRes = await supabase.from('student_subject_classes').select('*');
 
                 if (gradesRes.error) console.error("Grades Error:", gradesRes.error);
                 if (rcRes.error) console.error("RC Error:", rcRes.error);
                 if (scRes.error) console.error("SC Error:", scRes.error);
-                if (studentsRes.error) console.error("Students Error:", studentsRes.error);
-                if (ssRes.error) console.error("SS Error:", ssRes.error);
-                if (sscRes.error) console.error("SSC Error:", sscRes.error);
+                if (studentsRpcErr) console.warn("Students RPC error (falling back to view):", studentsRpcErr);
+                if (studentsViewRes.error) console.error("Students View Error:", studentsViewRes.error);
 
                 const gradesData = gradesRes.data;
                 const rcData = rcRes.data;
                 const scData = scRes.data;
-                const studentsData = studentsRes.data;
+
+                const studentsRpcData = Array.isArray(studentsRpc) ? studentsRpc : [];
+                const studentsViewData = Array.isArray(studentsViewRes.data) ? studentsViewRes.data : [];
+                const studentsDirectData = Array.isArray(studentsDirectRes.data) ? studentsDirectRes.data : [];
+
+                // Prioritize direct joined student data to avoid view/RPC mismatch in deployed env.
+                // Fall back to RPC/view only when direct results are unavailable.
+                const studentsData = studentsDirectData.length > 0 ? studentsDirectData :
+                    (studentsRpcData.length > 0 ? studentsRpcData : studentsViewData);
+
                 const ssData = ssRes.data;
                 const sscData = sscRes.data;
 
-                setGrades(gradesData || []);
+                // Normalize grades: ensure `level` exists (from level, sort_order, or derived from name)
+                setGrades((gradesData || []).map((g: { level?: number; sort_order?: number; name?: string }) => ({
+                    ...g,
+                    level: g.level ?? g.sort_order ?? (parseInt(String(g.name || '').replace(/\D/g, ''), 10) || 0),
+                })));
                 setRegisterClasses((rcData || []).map(rc => ({
                     ...rc,
                     gradeId: rc.grade_id,
@@ -73,20 +127,31 @@ export function useRegistrationData() {
                     gradeId: sc.grade_id,
                     createdAt: sc.created_at
                 })));
+                const studentSubjectsByStudentId = (ssData || []).reduce<Record<string, StudentAssignedSubject[]>>((acc, item) => {
+                    if (!item.student_id) return acc;
+                    if (!acc[item.student_id]) acc[item.student_id] = [];
+                    acc[item.student_id].push(normalizeAssignedSubject(item));
+                    return acc;
+                }, {});
+
                 setStudents((studentsData || []).map(s => ({
                     ...s,
-                    firstName: s.profiles?.full_name?.split(' ')[0] || '',
-                    lastName: s.profiles?.full_name?.split(' ').slice(1).join(' ') || '',
-                    name: s.profiles?.full_name || '',
-                    email: s.profiles?.email || '',
-                    pin: s.profiles?.pin || '',
+                    firstName: (s.profiles?.full_name || s.full_name || "").split(' ')[0] || '',
+                    lastName: (s.profiles?.full_name || s.full_name || "").split(' ').slice(1).join(' ') || '',
+                    name: s.profiles?.full_name || s.full_name || '',
+                    email: s.profiles?.email || s.email || '',
+                    pin: s.profiles?.pin || s.pin || '',
                     administrationNumber: s.administration_number,
                     admissionYear: s.admission_year,
                     gradeId: s.grade_id,
                     registerClassId: s.register_class_id,
                     grade: gradesData?.find(g => g.id === s.grade_id)?.name || '',
                     studentClass: rcData?.find(rc => rc.id === s.register_class_id)?.name || '',
-                    createdAt: s.profiles?.created_at
+                    status: s.status || 'inactive',
+                    createdAt: s.profiles?.created_at || s.created_at,
+                    subjects: (s.subjects && s.subjects.length > 0)
+                        ? s.subjects.map(normalizeAssignedSubject)
+                        : (studentSubjectsByStudentId[s.id] || [])
                 })));
                 setStudentSubjects((ssData || []).map(ss => ({
                     ...ss,
@@ -108,7 +173,7 @@ export function useRegistrationData() {
         fetchRegistrationData();
 
         return () => { cancelled = true; };
-    }, [user?.id, authLoading]);
+    }, [user]);
 
     // === Grade CRUD ===
     const addGrade = async (grade: Omit<Grade, 'id'>) => {
@@ -143,11 +208,11 @@ export function useRegistrationData() {
     };
 
     const updateRegisterClass = async (id: string, updates: Partial<RegisterClass>) => {
-        const dbUpdates: any = {};
-        if (updates.name) dbUpdates.name = updates.name;
-        if (updates.gradeId) dbUpdates.grade_id = updates.gradeId;
-        if (updates.classTeacherId) dbUpdates.class_teacher_id = updates.classTeacherId;
-        if (updates.maxStudents) dbUpdates.max_students = updates.maxStudents;
+        const dbUpdates: Record<string, unknown> = {};
+        if (updates.name) dbUpdates['name'] = updates.name;
+        if (updates.gradeId) dbUpdates['grade_id'] = updates.gradeId;
+        if (updates.classTeacherId) dbUpdates['class_teacher_id'] = updates.classTeacherId;
+        if (updates.maxStudents) dbUpdates['max_students'] = updates.maxStudents;
 
         const { error } = await supabase
             .from('register_classes')
@@ -189,10 +254,10 @@ export function useRegistrationData() {
     };
 
     const updateSubjectClass = async (id: string, updates: Partial<SubjectClass>) => {
-        const dbUpdates: any = {};
-        if (updates.name) dbUpdates.name = updates.name;
-        if (updates.teacherId) dbUpdates.teacher_id = updates.teacherId;
-        if (updates.capacity) dbUpdates.capacity = updates.capacity;
+        const dbUpdates: Record<string, unknown> = {};
+        if (updates.name) dbUpdates['name'] = updates.name;
+        if (updates.teacherId) dbUpdates['teacher_id'] = updates.teacherId;
+        if (updates.capacity) dbUpdates['capacity'] = updates.capacity;
 
         const { error } = await supabase
             .from('subject_classes')
@@ -215,7 +280,7 @@ export function useRegistrationData() {
     };
 
     // === Student CRUD ===
-    const addStudent = async (student: Omit<Student, 'id' | 'createdAt' | 'name' | 'pin'>) => {
+    const addStudent = async (student: Omit<Student, 'id' | 'createdAt' | 'name' | 'pin'>, options?: { subjectIds?: string[] }) => {
         const { data: { session } } = await supabase.auth.getSession();
         const { data, error } = await supabase.functions.invoke("create-user", {
             body: {
@@ -228,7 +293,8 @@ export function useRegistrationData() {
                 gender: student.gender,
                 gradeId: student.gradeId,
                 registerClassId: student.registerClassId,
-                status: student.status || 'active'
+                status: student.status || 'active',
+                subjectIds: options?.subjectIds ?? [],
             },
             headers: {
                 Authorization: `Bearer ${session?.access_token}`
@@ -239,6 +305,7 @@ export function useRegistrationData() {
 
         const created = data as { id: string; created_at?: string; pin: string };
 
+        const subjectIds = options?.subjectIds ?? [];
         const mappedStudent: Student = {
             ...student,
             id: created.id,
@@ -246,21 +313,37 @@ export function useRegistrationData() {
             pin: created.pin,
             grade: grades.find(g => g.id === student.gradeId)?.name || '',
             studentClass: registerClasses.find(rc => rc.id === student.registerClassId)?.name || '',
-            createdAt: created.created_at || new Date().toISOString()
+            createdAt: created.created_at || new Date().toISOString(),
+            subjects: subjectIds.map(subjectId => {
+                const subject = subjects.find(s => s.id === subjectId);
+                return normalizeAssignedSubject({
+                    id: `temp-${created.id}-${subjectId}`,
+                    subject_id: subjectId,
+                    subject_name: subject?.name || '',
+                    grade_tier: subject?.gradeTier || ''
+                });
+            }),
         };
 
         setStudents(prev => [...prev, mappedStudent]);
+        if (subjectIds.length > 0) {
+            setStudentSubjects(prev => [...prev, ...subjectIds.map(subjectId => ({
+                id: `temp-${created.id}-${subjectId}`,
+                studentId: created.id,
+                subjectId,
+            }))]);
+        }
         return mappedStudent;
     };
 
     const updateStudent = async (id: string, updates: Partial<Student>) => {
-        const dbUpdates: any = {};
-        if (updates.administrationNumber) dbUpdates.administration_number = updates.administrationNumber;
-        if (updates.gender) dbUpdates.gender = updates.gender;
-        if (updates.admissionYear) dbUpdates.admission_year = updates.admissionYear;
-        if (updates.gradeId) dbUpdates.grade_id = updates.gradeId;
-        if (updates.registerClassId) dbUpdates.register_class_id = updates.registerClassId;
-        if (updates.status) dbUpdates.status = updates.status;
+        const dbUpdates: Record<string, unknown> = {};
+        if (updates.administrationNumber) dbUpdates['administration_number'] = updates.administrationNumber;
+        if (updates.gender) dbUpdates['gender'] = updates.gender;
+        if (updates.admissionYear) dbUpdates['admission_year'] = updates.admissionYear;
+        if (updates.gradeId) dbUpdates['grade_id'] = updates.gradeId;
+        if (updates.registerClassId) dbUpdates['register_class_id'] = updates.registerClassId;
+        if (updates.status) dbUpdates['status'] = updates.status;
 
         const { error } = await supabase
             .from('students')
@@ -333,8 +416,7 @@ export function useRegistrationData() {
     }, [studentSubjectClasses]);
 
     const autoAssignSubjectClasses = useCallback(async (studentId: string, subjectIds: string[], gradeId: string) => {
-        const newPlacements: any[] = [];
-
+            const newPlacements: Array<{ student_id: string; subject_class_id: string }> = [];
         for (const subjectId of subjectIds) {
             const matchingClasses = subjectClasses
                 .filter(sc => sc.subjectId === subjectId && sc.gradeId === gradeId);
@@ -393,6 +475,17 @@ export function useRegistrationData() {
         const targetClass = subjectClasses.find(sc => sc.id === subjectClassId);
         if (!targetClass) return;
 
+        // Ensure student has the subject in student_subjects (for student dashboard visibility)
+        const hasSubject = studentSubjects.some(ss => ss.studentId === studentId && ss.subjectId === targetClass.subjectId);
+        if (!hasSubject) {
+            const { error: ssErr } = await supabase
+                .from('student_subjects')
+                .insert({ student_id: studentId, subject_id: targetClass.subjectId });
+            if (!ssErr) {
+                setStudentSubjects(prev => [...prev, { id: `temp-${studentId}-${targetClass.subjectId}`, studentId, subjectId: targetClass.subjectId }]);
+            }
+        }
+
         // Find existing for same subject to replace
         const existingPlacements = studentSubjectClasses.filter(ssc => {
             const sc = subjectClasses.find(c => c.id === ssc.subjectClassId);
@@ -433,6 +526,20 @@ export function useRegistrationData() {
         return students.filter(s => studentIds.includes(s.id));
     };
 
+    const removeStudentFromSubjectClass = async (studentId: string, subjectClassId: string) => {
+        const { error } = await supabase
+            .from('student_subject_classes')
+            .delete()
+            .eq('student_id', studentId)
+            .eq('subject_class_id', subjectClassId);
+
+        if (error) throw error;
+
+        setStudentSubjectClasses(prev =>
+            prev.filter(ssc => !(ssc.studentId === studentId && ssc.subjectClassId === subjectClassId))
+        );
+    };
+
     const getRegisterClassStudents = (registerClassId: string) => {
         return students.filter(s => s.registerClassId === registerClassId);
     };
@@ -459,6 +566,7 @@ export function useRegistrationData() {
         getStudentSubjects,
         autoAssignSubjectClasses,
         manualAssignSubjectClass,
+        removeStudentFromSubjectClass,
         getStudentSubjectClasses,
         getSubjectClassStudents,
         getRegisterClassStudents,

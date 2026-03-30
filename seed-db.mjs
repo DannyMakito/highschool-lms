@@ -32,13 +32,37 @@ async function seed() {
     console.log(`Found ${grades.length} grades. No seeding needed.`);
   }
 
-  // Same for subjects if empty?
+  // Seed canonical subjects if empty
   console.log("Checking subjects...");
   const { data: subjects } = await supabase.from('subjects').select('*');
   if (!subjects || subjects.length === 0) {
-     console.log("Subjects list is empty! They will need to create some first.");
+    console.log("No subjects found. Seeding canonical subjects...");
+    const canonicalSubjects = [
+      { name: "Mathematics", description: "Core mathematics curriculum", grade_tier: "8", category: "core", access_type: "Free", thumbnail: "" },
+      { name: "Mathematics", description: "Core mathematics curriculum", grade_tier: "9", category: "core", access_type: "Free", thumbnail: "" },
+      { name: "Mathematics", description: "Core mathematics curriculum", grade_tier: "10", category: "core", access_type: "Free", thumbnail: "" },
+      { name: "Mathematics", description: "Core mathematics curriculum", grade_tier: "11", category: "core", access_type: "Free", thumbnail: "" },
+      { name: "Mathematics", description: "Core mathematics curriculum", grade_tier: "12", category: "core", access_type: "Free", thumbnail: "" },
+      { name: "English", description: "Language and literature", grade_tier: "8", category: "core", access_type: "Free", thumbnail: "" },
+      { name: "English", description: "Language and literature", grade_tier: "9", category: "core", access_type: "Free", thumbnail: "" },
+      { name: "English", description: "Language and literature", grade_tier: "10", category: "core", access_type: "Free", thumbnail: "" },
+      { name: "English", description: "Language and literature", grade_tier: "11", category: "core", access_type: "Free", thumbnail: "" },
+      { name: "English", description: "Language and literature", grade_tier: "12", category: "core", access_type: "Free", thumbnail: "" },
+      { name: "Physical Sciences", description: "Physics and Chemistry", grade_tier: "10", category: "core", access_type: "Free", thumbnail: "" },
+      { name: "Physical Sciences", description: "Physics and Chemistry", grade_tier: "11", category: "core", access_type: "Free", thumbnail: "" },
+      { name: "Physical Sciences", description: "Physics and Chemistry", grade_tier: "12", category: "core", access_type: "Free", thumbnail: "" },
+      { name: "Life Sciences", description: "Biology", grade_tier: "10", category: "core", access_type: "Free", thumbnail: "" },
+      { name: "Life Sciences", description: "Biology", grade_tier: "11", category: "core", access_type: "Free", thumbnail: "" },
+      { name: "Life Sciences", description: "Biology", grade_tier: "12", category: "core", access_type: "Free", thumbnail: "" },
+    ];
+    const { error: subErr } = await supabase.from('subjects').insert(canonicalSubjects);
+    if (subErr) {
+      console.error("Failed to seed subjects:", subErr);
+    } else {
+      console.log(`Successfully seeded ${canonicalSubjects.length} subjects!`);
+    }
   } else {
-     console.log(`Found ${subjects.length} subjects.`);
+    console.log(`Found ${subjects.length} subjects. No seeding needed.`);
   }
 }
 

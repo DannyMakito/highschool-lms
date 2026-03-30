@@ -19,14 +19,70 @@ You should also be able to see all your subjects, your assigned class
 **Principle portal **
 
 - when you create a subject and you select to upload an image, you will get a error that says "bucket not created". Subject creation only works when a url image is used
- There is currently no way to add a learner to a subject class
-- When registering a learner  the registraion does not complete when you press enroll. for G10-12 learner after you select subjects you the enrol button doesnt work so no leaner is created 
-  - after page refresh  users are not able to view their data thatis stored in supabase
-- In the learner directory, the  learner profile does not show learner name and surname , status , pin ,contact
-
-*teacher portal *
+- ~~There is currently no way to add a learner to a subject class~~ ✅ Fixed: Subject Classes → click eye icon → Add learner dropdown + remove (X) button
+- ~~When registering a learner the system automatically assigns all available subjects for grades 10 to 12. It does not give us the option to select or deselect a specific subject for learner~~ ✅ Fixed: G10-12 registration Step 3 now lets you select/deselect both core and elective subjects
+- In the learner directory, the assigned subjects that were assigned to the learner  while doing registration does not show on the table.
 - Teachers are not able to see learners in their register class and also subject class dont apear on the table
 
   **  Learner portal **
 - when learner login there are not able to see their data, such as subjects, class and anything that is related to them.
 - there is an issue with the login  . You need to login twice before you can access your respective dashboard 
+
+
+
+
+----------------
+
+🧠 Main README problems we addressed
+1) Double login required
+Problem: UI rendered before profile load completed → app thought user wasn’t logged in → forced second login.
+Fix (code):
+Updated AuthContext.tsx to await profile fetch during INITIAL_SESSION and SIGNED_IN.
+Updated login() to eagerly fetch profile right after sign-in.
+Result: role routing happens only after auth + profile data are fully resolved.
+2) Students/Teachers “don’t see their data” / RLS problem
+Problem: frontend was querying full tables (select('*')) and assuming data was complete; data access was inconsistent because RLS was now filtering results.
+Fix (code):
+Updated useRegistrationData to consume the new students_with_subjects view / get_students_with_subjects() RPC for student+subject mapping.
+Updated StudentDirectory to use the subjects array returned by the view/RPC instead of joining student_subjects manually.
+This makes the UI directly consume the data shape the DB already enforces.
+3) Assigned subjects not showing in student directory
+Problem: UI was joining students + student_subjects manually and failing when RLS filtered rows.
+Fix (code):
+Added subjects?: StudentAssignedSubject[] to Student type.
+Made StudentDirectory render from student.subjects (provided by view/RPC).
+This resolves the “missing assigned subjects” display issue.
+🗄️ What was done in Supabase (DB side)
+✅ RLS + helper functions (implemented earlier in SQL)
+Enabled RLS on all key tables (students, subjects, classes, etc.)
+Created helper functions:
+get_user_role()
+is_teacher_of_student(student_id)
+plus access helpers (grade/subject matching)
+Created policies that enforce:
+Principal = full access
+Teacher = only their own students/subjects
+Student = only their own profile/assignments/subject data
+✅ New view / RPC (done by you)
+Created public.students_with_subjects view returning:
+each student row
+subjects JSON array (subject_id, subject_name, grade_tier)
+Created public.get_students_with_subjects() RPC
+Confirmed both are readable by authenticated role
+✅ Missing Storage bucket (not in code)
+Noted that the subjects storage bucket was missing and must be created in the Supabase Dashboard.
+You should also add Storage RLS policies (if you want access restrictions on uploads/reads).
+🔍 What you should verify next (to confirm everything is working)
+1) Confirm RLS is behaving correctly per role
+As each role (principal / teacher / student), run in Supabase SQL:
+
+SELECT * FROM students LIMIT 5;
+SELECT * FROM student_subjects LIMIT 5;
+SELECT * FROM get_students_with_subjects() LIMIT 5;
+✅ Teachers should only see their students; students should only see their own row & subjects.
+
+2) Verify UI behavior
+Login as student → confirm dashboard shows subjects/assignments.
+Login as teacher → confirm class/student lists are scoped to teacher.
+Login as principal → confirm full access.
+If you want, I can now provide exact SQL snippets to validate the RLS policy behavior for each role (principal / teacher / student) and confirm the view/RPC returns what you expect.

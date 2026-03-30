@@ -1,6 +1,9 @@
 
-import { createContext, useContext, useState, useEffect, useRef } from "react";
+/* eslint-disable react-refresh/only-export-components */
+
+import { createContext, useContext, useState, useEffect } from "react";
 import type { ReactNode } from "react";
+import type { Session } from "@supabase/supabase-js";
 import supabase from "@/lib/supabase";
 
 export type UserRole = "learner" | "teacher" | "principal" | null;
@@ -79,32 +82,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (mounted) setLoading(false);
         }, 4000);
 
+        const handleSession = async (session: Session | null) => {
+            if (!mounted) return;
+
+            if (session?.user) {
+                try {
+                    await fetchProfile(session.user.id, session.user.email || "");
+                } finally {
+                    if (mounted) setLoading(false);
+                }
+            } else {
+                setUser(null);
+                localStorage.removeItem("hlms_user");
+                if (mounted) setLoading(false);
+            }
+        };
+
+        // Immediately check for existing session (doesn't wait for event)
+        const initSession = async () => {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (mounted) {
+                    await handleSession(session);
+                }
+            } catch (error) {
+                console.error("Failed to get initial session:", error);
+                if (mounted) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        // Start checking for session immediately
+        initSession();
+
+        // Also listen for auth state changes (login, logout, token refresh)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            (event, session) => {
+            async (event, session) => {
                 if (!mounted) return;
-                
-                if (event === "INITIAL_SESSION") {
-                    if (session?.user) {
-                        setTimeout(async () => {
-                            try {
-                                await fetchProfile(session.user.id, session.user.email || "");
-                            } finally {
-                                if (mounted) setLoading(false);
-                            }
-                        }, 0);
-                    } else {
-                        setUser(null);
-                        localStorage.removeItem("hlms_user");
-                        if (mounted) setLoading(false);
-                    }
-                } else if (event === "SIGNED_IN") {
-                    setTimeout(async () => {
-                        try {
-                            await fetchProfile(session!.user.id, session!.user.email || "");
-                        } finally {
-                            if (mounted) setLoading(false);
-                        }
-                    }, 0);
+
+                // Skip INITIAL_SESSION since we already handled it above
+                if (event === "SIGNED_IN") {
+                    await handleSession(session);
                 } else if (event === "SIGNED_OUT") {
                     setUser(null);
                     localStorage.removeItem("hlms_user");
@@ -121,15 +140,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const login = async (email: string, pin: string) => {
         try {
-            const { error } = await supabase.auth.signInWithPassword({
+            const { data, error } = await supabase.auth.signInWithPassword({
                 email,
                 password: pin,
             });
             if (error) throw error;
-            // onAuthStateChange will fire SIGNED_IN → fetchProfile → setUser
+
+            // Eagerly fetch the profile so the app can render routes immediately
+            const user = data.session?.user;
+            if (user) {
+                await fetchProfile(user.id, user.email || "");
+            }
+
             return { success: true };
-        } catch (error: any) {
-            return { success: false, message: error.message || "Invalid credentials" };
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Invalid credentials";
+            return { success: false, message };
         }
     };
 

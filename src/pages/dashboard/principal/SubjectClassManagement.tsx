@@ -16,21 +16,27 @@ import {
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Plus, BookOpen, Trash2, Users, Eye } from "lucide-react";
+import { Plus, BookOpen, Trash2, Users, Eye, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export default function SubjectClassManagement() {
     const {
-        grades, subjectClasses, addSubjectClass, deleteSubjectClass,
+        grades, subjectClasses, students, addSubjectClass, deleteSubjectClass,
         getSubjectClassStudents, getSubjectClassEnrollment,
+        manualAssignSubjectClass, removeStudentFromSubjectClass,
+        loading: registrationLoading,
     } = useRegistrationData();
-    const { subjects } = useSubjects();
-    const { teachers } = useSchoolData();
+    const { subjects, loading: subjectsLoading } = useSubjects();
+    const { teachers, loading: schoolLoading } = useSchoolData();
+
+    const isLoading = registrationLoading || subjectsLoading || schoolLoading;
 
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [selectedClass, setSelectedClass] = useState<any>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
+    const [addStudentId, setAddStudentId] = useState<string>("");
+    const [isAdding, setIsAdding] = useState(false);
     const [filterGrade, setFilterGrade] = useState("all");
     const [filterSubject, setFilterSubject] = useState("all");
 
@@ -50,12 +56,21 @@ export default function SubjectClassManagement() {
         const grade = grades.find(g => g.id === form.gradeId);
         if (subject && grade) {
             const prefix = subject.name.substring(0, 3).toUpperCase();
+            const level = grade.level ?? grade.sort_order ?? (parseInt(String(grade.name || '').replace(/\D/g, ''), 10) || 0);
             const existingCount = subjectClasses.filter(sc => sc.subjectId === form.subjectId && sc.gradeId === form.gradeId).length;
             const letter = String.fromCharCode(65 + existingCount); // A, B, C...
-            return `${prefix}${grade.level}-${letter}`;
+            return `${prefix}${level}-${letter}`;
         }
         return "";
     };
+
+    // Filtered subjects for the selected grade (matches grade level/tier)
+    const subjectsForGrade = subjects.filter(s => {
+        if (!form.gradeId) return true;
+        const grade = grades.find(g => g.id === form.gradeId);
+        const level = grade?.level ?? grade?.sort_order ?? parseInt(String(grade?.name || '').replace(/\D/g, ''), 10);
+        return s.gradeTier === String(level);
+    });
 
     const handleCreate = () => {
         if (!form.subjectId || !form.gradeId) {
@@ -103,8 +118,8 @@ export default function SubjectClassManagement() {
                         <div className="grid gap-5 py-4">
                             <div className="grid gap-2">
                                 <Label>Grade *</Label>
-                                <Select value={form.gradeId} onValueChange={(v) => setForm({ ...form, gradeId: v })}>
-                                    <SelectTrigger><SelectValue placeholder="Select grade" /></SelectTrigger>
+                                <Select value={form.gradeId} onValueChange={(v) => setForm({ ...form, gradeId: v, subjectId: "" })} disabled={isLoading}>
+                                    <SelectTrigger><SelectValue placeholder={isLoading ? "Loading..." : grades.length === 0 ? "No grades — run seed" : "Select grade"} /></SelectTrigger>
                                     <SelectContent>
                                         {grades.map(g => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
                                     </SelectContent>
@@ -112,12 +127,10 @@ export default function SubjectClassManagement() {
                             </div>
                             <div className="grid gap-2">
                                 <Label>Subject *</Label>
-                                <Select value={form.subjectId} onValueChange={(v) => setForm({ ...form, subjectId: v })}>
-                                    <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
+                                <Select value={form.subjectId} onValueChange={(v) => setForm({ ...form, subjectId: v })} disabled={isLoading}>
+                                    <SelectTrigger><SelectValue placeholder={isLoading ? "Loading..." : subjectsForGrade.length === 0 ? "Select grade first or no subjects" : "Select subject"} /></SelectTrigger>
                                     <SelectContent>
-                                        {subjects
-                                            .filter(s => !form.gradeId || s.gradeTier === grades.find(g => g.id === form.gradeId)?.level.toString())
-                                            .map(s => <SelectItem key={s.id} value={s.id}>{s.name} (G{s.gradeTier})</SelectItem>)}
+                                        {subjectsForGrade.map(s => <SelectItem key={s.id} value={s.id}>{s.name} (G{s.gradeTier})</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -129,8 +142,8 @@ export default function SubjectClassManagement() {
                             </div>
                             <div className="grid gap-2">
                                 <Label>Teacher</Label>
-                                <Select value={form.teacherId} onValueChange={(v) => setForm({ ...form, teacherId: v })}>
-                                    <SelectTrigger><SelectValue placeholder="Assign teacher" /></SelectTrigger>
+                                <Select value={form.teacherId} onValueChange={(v) => setForm({ ...form, teacherId: v })} disabled={isLoading}>
+                                    <SelectTrigger><SelectValue placeholder={isLoading ? "Loading..." : teachers.length === 0 ? "No teachers yet" : "Assign teacher"} /></SelectTrigger>
                                     <SelectContent>
                                         {teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                                     </SelectContent>
@@ -233,13 +246,40 @@ export default function SubjectClassManagement() {
             </Card>
 
             {/* Detail Dialog */}
-            <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+            <Dialog open={isDetailOpen} onOpenChange={(open) => { setIsDetailOpen(open); if (!open) setAddStudentId(""); }}>
                 <DialogContent className="sm:max-w-[500px]">
                     {selectedClass && (() => {
                         const subject = subjects.find(s => s.id === selectedClass.subjectId);
                         const grade = grades.find(g => g.id === selectedClass.gradeId);
                         const teacher = teachers.find(t => t.id === selectedClass.teacherId);
                         const classStudents = getSubjectClassStudents(selectedClass.id);
+                        const enrolledIds = classStudents.map(s => s.id);
+                        const isFull = classStudents.length >= selectedClass.capacity;
+                        const studentsToAdd = students.filter(s => s.gradeId === selectedClass.gradeId && !enrolledIds.includes(s.id));
+
+                        const handleAddStudent = async () => {
+                            if (!addStudentId) return;
+                            setIsAdding(true);
+                            try {
+                                await manualAssignSubjectClass(addStudentId, selectedClass.id);
+                                toast.success("Student added to class");
+                                setAddStudentId("");
+                            } catch (err) {
+                                toast.error("Failed to add student");
+                            } finally {
+                                setIsAdding(false);
+                            }
+                        };
+
+                        const handleRemoveStudent = async (studentId: string) => {
+                            try {
+                                await removeStudentFromSubjectClass(studentId, selectedClass.id);
+                                toast.success("Student removed from class");
+                            } catch (err) {
+                                toast.error("Failed to remove student");
+                            }
+                        };
+
                         return (
                             <>
                                 <DialogHeader>
@@ -251,20 +291,39 @@ export default function SubjectClassManagement() {
                                         <span className="text-sm font-bold">Enrolled Students</span>
                                         <Badge>{classStudents.length}/{selectedClass.capacity}</Badge>
                                     </div>
+                                    {!isFull && studentsToAdd.length > 0 && (
+                                        <div className="flex gap-2">
+                                            <Select value={addStudentId} onValueChange={setAddStudentId}>
+                                                <SelectTrigger className="flex-1"><SelectValue placeholder="Add learner to class" /></SelectTrigger>
+                                                <SelectContent>
+                                                    {studentsToAdd.map(s => <SelectItem key={s.id} value={s.id}>{s.name} ({s.administrationNumber})</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                            <Button size="sm" onClick={handleAddStudent} disabled={!addStudentId || isAdding}>
+                                                <UserPlus className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    )}
                                     <div className="space-y-2 max-h-[300px] overflow-y-auto">
                                         {classStudents.map(s => (
-                                            <div key={s.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border">
-                                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
-                                                    {s.firstName?.charAt(0)}{s.lastName?.charAt(0)}
+                                            <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-muted/30 border group">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+                                                        {s.firstName?.charAt(0)}{s.lastName?.charAt(0)}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="font-bold text-sm truncate">{s.name}</div>
+                                                        <div className="text-[10px] text-muted-foreground font-mono">{s.administrationNumber}</div>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <div className="font-bold text-sm">{s.name}</div>
-                                                    <div className="text-[10px] text-muted-foreground font-mono">{s.administrationNumber}</div>
-                                                </div>
+                                                <Button variant="ghost" size="icon" className="shrink-0 text-red-500 hover:bg-red-50 h-8 w-8"
+                                                    onClick={() => handleRemoveStudent(s.id)} title="Remove from class">
+                                                    <X className="h-4 w-4" />
+                                                </Button>
                                             </div>
                                         ))}
                                         {classStudents.length === 0 && (
-                                            <p className="text-center text-sm text-muted-foreground py-8">No students enrolled yet.</p>
+                                            <p className="text-center text-sm text-muted-foreground py-8">No students enrolled yet. Add learners above.</p>
                                         )}
                                     </div>
                                 </div>

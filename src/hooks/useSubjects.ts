@@ -18,7 +18,8 @@ interface LMSData {
 }
 
 export function useSubjects() {
-    const { user, loading: authLoading } = useAuth();
+    const { user } = useAuth();
+    const [progressTrackingAvailable, setProgressTrackingAvailable] = useState(true);
     const [data, setData] = useState<LMSData>({
         subjects: [],
         topics: [],
@@ -48,7 +49,15 @@ export function useSubjects() {
                 const { data: lessons } = await supabase.from('lessons').select('*');
                 const { data: quizzes } = await supabase.from('quizzes').select('*');
                 const { data: submissions } = await supabase.from('quiz_submissions').select('*');
-                const { data: progress } = user ? await supabase.from('user_lesson_progress').select('lesson_id').eq('user_id', user.id) : { data: [] };
+                const { data: progress, error: progressError } = user ? await supabase.from('user_lesson_progress').select('lesson_id').eq('user_id', user.id) : { data: [], error: null };
+                if (progressError) {
+                    if (progressError.code === 'PGRST205') {
+                        setProgressTrackingAvailable(false);
+                    }
+                    console.warn("user_lesson_progress table not found, skipping progress tracking:", progressError.message);
+                } else {
+                    setProgressTrackingAvailable(true);
+                }
 
                 if (cancelled) return;
 
@@ -72,7 +81,7 @@ export function useSubjects() {
                     lessons: (lessons || []).map(l => ({ ...l, topicId: l.topic_id, videoUrl: l.video_url })),
                     quizzes: (quizzes || []).map(q => ({ ...q, subjectId: q.subject_id })),
                     submissions: (submissions || []).map(sub => ({ ...sub, quizId: sub.quiz_id, studentId: sub.student_id })),
-                    completedLessonIds: progress?.map(p => p.lesson_id) || [],
+                    completedLessonIds: (progress && !progressError) ? progress.map(p => p.lesson_id) : [],
                 });
             } catch (error) {
                 console.error("Error fetching LMS data:", error);
@@ -254,34 +263,38 @@ export function useSubjects() {
     };
 
     const toggleLessonCompletion = async (lessonId: string) => {
-        if (!user) return;
+        if (!user || !progressTrackingAvailable) return;
 
         const isCompleted = data.completedLessonIds.includes(lessonId);
 
-        if (isCompleted) {
-            const { error } = await supabase
-                .from('user_lesson_progress')
-                .delete()
-                .eq('user_id', user.id)
-                .eq('lesson_id', lessonId);
+        try {
+            if (isCompleted) {
+                const { error } = await supabase
+                    .from('user_lesson_progress')
+                    .delete()
+                    .eq('user_id', user.id)
+                    .eq('lesson_id', lessonId);
 
-            if (error) throw error;
+                if (error) throw error;
 
-            setData(prev => ({
-                ...prev,
-                completedLessonIds: prev.completedLessonIds.filter(id => id !== lessonId)
-            }));
-        } else {
-            const { error } = await supabase
-                .from('user_lesson_progress')
-                .insert({ user_id: user.id, lesson_id: lessonId });
+                setData(prev => ({
+                    ...prev,
+                    completedLessonIds: prev.completedLessonIds.filter(id => id !== lessonId)
+                }));
+            } else {
+                const { error } = await supabase
+                    .from('user_lesson_progress')
+                    .insert({ user_id: user.id, lesson_id: lessonId });
 
-            if (error) throw error;
+                if (error) throw error;
 
-            setData(prev => ({
-                ...prev,
-                completedLessonIds: [...prev.completedLessonIds, lessonId]
-            }));
+                setData(prev => ({
+                    ...prev,
+                    completedLessonIds: [...prev.completedLessonIds, lessonId]
+                }));
+            }
+        } catch (error) {
+            console.warn("user_lesson_progress table not available, lesson completion tracking disabled:", error);
         }
     };
 
