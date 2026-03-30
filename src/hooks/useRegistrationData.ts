@@ -21,6 +21,12 @@ export function useRegistrationData() {
         if (authLoading) return;
         
         if (!user) {
+            setGrades([]);
+            setRegisterClasses([]);
+            setSubjectClasses([]);
+            setStudents([]);
+            setStudentSubjects([]);
+            setStudentSubjectClasses([]);
             setLoading(false);
             return;
         }
@@ -42,6 +48,8 @@ export function useRegistrationData() {
                 if (rcRes.error) console.error("RC Error:", rcRes.error);
                 if (scRes.error) console.error("SC Error:", scRes.error);
                 if (studentsRes.error) console.error("Students Error:", studentsRes.error);
+                if (ssRes.error) console.error("SS Error:", ssRes.error);
+                if (sscRes.error) console.error("SSC Error:", sscRes.error);
 
                 const gradesData = gradesRes.data;
                 const rcData = rcRes.data;

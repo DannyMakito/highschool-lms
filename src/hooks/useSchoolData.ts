@@ -5,14 +5,19 @@ import supabase from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 
 export function useSchoolData() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [teachers, setTeachers] = useState<Teacher[]>([]);
     const [classes, setClasses] = useState<SchoolClass[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (authLoading) return;
+        
         if (!user) {
+            setTeachers([]);
+            setClasses([]);
+            setStudents([]);
             setLoading(false);
             return;
         }
@@ -93,7 +98,7 @@ export function useSchoolData() {
         fetchSchoolData();
 
         return () => { cancelled = true; };
-    }, [user?.id]);
+    }, [user?.id, authLoading]);
 
     const addTeacher = async (teacher: Omit<Teacher, 'id' | 'createdAt'>) => {
         const { data: { session } } = await supabase.auth.getSession();
