@@ -1,6 +1,9 @@
 import { useAuth } from "@/context/AuthContext";
 import { Navigate, Outlet } from "react-router-dom";
 import { AppSidebar } from "@/components/app-sidebar";
+import { SubjectsProvider } from "@/context/SubjectsContext";
+import { RegistrationDataProvider } from "@/context/RegistrationDataContext";
+import { SchoolDataProvider } from "@/context/SchoolDataContext";
 import {
     SidebarInset,
     SidebarProvider,
@@ -38,32 +41,38 @@ export default function PrincipalLayout() {
     }
 
     return (
-        <SidebarProvider>
-            <AppSidebar />
-            <SidebarInset>
-                <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b">
-                    <div className="flex items-center gap-2 px-4">
-                        <SidebarTrigger className="-ml-1" />
-                        <Separator orientation="vertical" className="mr-2 h-4" />
-                        <Breadcrumb>
-                            <BreadcrumbList>
-                                <BreadcrumbItem className="hidden md:block">
-                                    <BreadcrumbLink href="#">
-                                        Afrinexel
-                                    </BreadcrumbLink>
-                                </BreadcrumbItem>
-                                <BreadcrumbSeparator className="hidden md:block" />
-                                <BreadcrumbItem>
-                                    <BreadcrumbPage>Admin Portal</BreadcrumbPage>
-                                </BreadcrumbItem>
-                            </BreadcrumbList>
-                        </Breadcrumb>
-                    </div>
-                </header>
-                <div className="flex flex-1 flex-col gap-4 p-4 pt-0 mt-4">
-                    <Outlet />
-                </div>
-            </SidebarInset>
-        </SidebarProvider>
+        <SubjectsProvider>
+            <RegistrationDataProvider>
+                <SchoolDataProvider>
+                    <SidebarProvider>
+                        <AppSidebar />
+                        <SidebarInset>
+                            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b">
+                                <div className="flex items-center gap-2 px-4">
+                                    <SidebarTrigger className="-ml-1" />
+                                    <Separator orientation="vertical" className="mr-2 h-4" />
+                                    <Breadcrumb>
+                                        <BreadcrumbList>
+                                            <BreadcrumbItem className="hidden md:block">
+                                                <BreadcrumbLink href="#">
+                                                    Afrinexel
+                                                </BreadcrumbLink>
+                                            </BreadcrumbItem>
+                                            <BreadcrumbSeparator className="hidden md:block" />
+                                            <BreadcrumbItem>
+                                                <BreadcrumbPage>Admin Portal</BreadcrumbPage>
+                                            </BreadcrumbItem>
+                                        </BreadcrumbList>
+                                    </Breadcrumb>
+                                </div>
+                            </header>
+                            <div className="flex flex-1 flex-col gap-4 p-4 pt-0 mt-4">
+                                <Outlet />
+                            </div>
+                        </SidebarInset>
+                    </SidebarProvider>
+                </SchoolDataProvider>
+            </RegistrationDataProvider>
+        </SubjectsProvider>
     );
 }

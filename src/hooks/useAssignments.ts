@@ -31,19 +31,16 @@ export function useAssignments() {
         const fetchAssignmentsData = async () => {
             setLoading(true);
             try {
-                // Fetch rubrics with criteria
-                const { data: rubricsData, error: rubricsError } = await supabase
-                    .from('rubrics')
-                    .select('*, criteria:rubric_criteria(*)');
+                // Fetch all assignment data in parallel for speed
+                const [rubricsRes, assignmentsRes, submissionsRes] = await Promise.all([
+                    supabase.from('rubrics').select('*, criteria:rubric_criteria(*)'),
+                    supabase.from('assignments').select('*').order('created_at', { ascending: false }),
+                    supabase.from('assignment_submissions').select('*, annotations(*)'),
+                ]);
 
-                const { data: assignmentsData, error: assignmentsError } = await supabase
-                    .from('assignments')
-                    .select('*')
-                    .order('created_at', { ascending: false });
-
-                const { data: submissionsData, error: submissionsError } = await supabase
-                    .from('assignment_submissions')
-                    .select('*, annotations(*)');
+                const { data: rubricsData, error: rubricsError } = rubricsRes;
+                const { data: assignmentsData, error: assignmentsError } = assignmentsRes;
+                const { data: submissionsData, error: submissionsError } = submissionsRes;
 
                 if (rubricsError || assignmentsError || submissionsError) {
                     console.error("Supabase Error:", rubricsError || assignmentsError || submissionsError);
