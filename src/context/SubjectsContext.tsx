@@ -73,6 +73,15 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
 
         const fetchData = async () => {
             setLoading(true);
+            
+            // Failsafe timer to prevent infinite load
+            const timer = setTimeout(() => {
+                if (!cancelled && loading) {
+                    console.warn("Subjects data fetch timed out, forcing loading to false");
+                    setLoading(false);
+                }
+            }, 15000);
+
             try {
 
                 const [subjectsRes, topicsRes, lessonsRes, quizzesRes, submissionsRes, progressRes] = await Promise.all([
@@ -128,6 +137,7 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
             } catch (error) {
                 console.error("Error fetching LMS data:", error);
             } finally {
+                clearTimeout(timer);
                 if (!cancelled) setLoading(false);
             }
         };
@@ -305,6 +315,14 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
         if (!user || !progressTrackingAvailable) return;
 
         const isCompleted = data.completedLessonIds.includes(lessonId);
+        
+        // Optimistic update for instant UI feedback
+        setData(prev => ({
+            ...prev,
+            completedLessonIds: isCompleted 
+                ? prev.completedLessonIds.filter(id => id !== lessonId)
+                : [...prev.completedLessonIds, lessonId]
+        }));
 
         try {
             if (isCompleted) {
@@ -314,26 +332,34 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
                     .eq('user_id', user.id)
                     .eq('lesson_id', lessonId);
 
-                if (error) throw error;
-
-                setData(prev => ({
-                    ...prev,
-                    completedLessonIds: prev.completedLessonIds.filter(id => id !== lessonId)
-                }));
+                if (error) {
+                    // Rollback on error
+                    setData(prev => ({
+                        ...prev,
+                        completedLessonIds: [...prev.completedLessonIds, lessonId]
+                    }));
+                    throw error;
+                }
             } else {
                 const { error } = await supabase
                     .from('user_lesson_progress')
                     .insert({ user_id: user.id, lesson_id: lessonId });
 
-                if (error) throw error;
-
-                setData(prev => ({
-                    ...prev,
-                    completedLessonIds: [...prev.completedLessonIds, lessonId]
-                }));
+                if (error) {
+                    // Rollback on error
+                    setData(prev => ({
+                        ...prev,
+                        completedLessonIds: prev.completedLessonIds.filter(id => id !== lessonId)
+                    }));
+                    throw error;
+                }
             }
-        } catch (error) {
-            console.warn("user_lesson_progress table not available, lesson completion tracking disabled:", error);
+        } catch (error: any) {
+            console.error("Error toggling progress:", error);
+            // If it's a permission/RLS error, it might mean the table or policy is misconfigured.
+            if (error.code === '42P01' || error.code === 'PGRST204') {
+                setProgressTrackingAvailable(false);
+            }
         }
     };
 

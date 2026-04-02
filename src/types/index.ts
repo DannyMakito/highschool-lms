@@ -87,6 +87,7 @@ export interface QuizSubmission {
     studentAvatar?: string;
     studentRole?: string;
     score: number;
+    totalPoints: number;
     accuracy: number;
     timeSpent: number; // in seconds
     status: "completed" | "in-progress" | "need-review";

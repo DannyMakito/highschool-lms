@@ -37,13 +37,15 @@ import {
 } from "@/components/ui/table";
 
 export default function TeacherManagement() {
-    const { teachers, classes, students, addTeacher } = useSchoolData();
+    const { teachers, classes, students, addTeacher, addSubjectToTeacher, removeSubjectFromTeacher } = useSchoolData();
     const { subjects } = useSubjects();
     const [searchTerm, setSearchTerm] = useState("");
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
     const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
+    const [isEditingSubjects, setIsEditingSubjects] = useState(false);
+    const [isUpdating, setIsUpdating] = useState(false);
 
     const [newTeacher, setNewTeacher] = useState({
         name: "",
@@ -83,6 +85,34 @@ export default function TeacherManagement() {
             toast.error(error?.message || "Failed to create teacher profile");
         } finally {
             setIsCreating(false);
+        }
+    };
+
+    const handleUpdateSubjects = async (subjectId: string, add: boolean) => {
+        if (!selectedTeacher) return;
+        
+        setIsUpdating(true);
+        try {
+            if (add) {
+                await addSubjectToTeacher(selectedTeacher.id, subjectId);
+                setSelectedTeacher(prev => ({
+                    ...prev,
+                    subjects: [...prev.subjects, subjectId]
+                }));
+                toast.success("Subject added successfully");
+            } else {
+                await removeSubjectFromTeacher(selectedTeacher.id, subjectId);
+                setSelectedTeacher(prev => ({
+                    ...prev,
+                    subjects: prev.subjects.filter(s => s !== subjectId)
+                }));
+                toast.success("Subject removed successfully");
+            }
+        } catch (error: any) {
+            console.error("Subject update error:", error);
+            toast.error(error?.message || "Failed to update subjects");
+        } finally {
+            setIsUpdating(false);
         }
     };
 
@@ -288,11 +318,23 @@ export default function TeacherManagement() {
             </Card>
 
             {/* Teacher Detail Dialog */}
-            <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-                <DialogContent className="sm:max-w-[700px] gap-0 p-0 overflow-hidden">
+            <Dialog open={isDetailOpen} onOpenChange={(open) => {
+                setIsDetailOpen(open);
+                if (!open) {
+                    setIsEditingSubjects(false);
+                    // Sync teacher data when closing to get latest changes
+                    if (selectedTeacher) {
+                        const updatedTeacher = teachers.find(t => t.id === selectedTeacher.id);
+                        if (updatedTeacher) {
+                            setSelectedTeacher(updatedTeacher);
+                        }
+                    }
+                }
+            }}>
+                <DialogContent className="sm:max-w-[700px] gap-0 p-0 overflow-hidden flex flex-col max-h-[90vh]">
                     {selectedTeacher && (
                         <>
-                            <div className="bg-primary p-8 text-primary-foreground">
+                            <div className="bg-primary p-8 text-primary-foreground flex-shrink-0">
                                 <div className="flex items-center gap-6">
                                     <div className="h-20 w-20 rounded-2xl bg-white/20 flex items-center justify-center text-3xl font-black">
                                         {selectedTeacher.name.charAt(0)}
@@ -314,65 +356,131 @@ export default function TeacherManagement() {
                                 </div>
                             </div>
 
-                            <div className="p-6 space-y-6 max-h-[500px] overflow-y-auto">
-                                <div>
-                                    <h3 className="font-bold flex items-center gap-2 mb-4">
-                                        <BookOpen className="h-4 w-4 text-primary" />
-                                        Assigned Curriculum
+                            <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                            <div>
+                                    <h3 className="font-bold flex items-center justify-between mb-4">
+                                        <span className="flex items-center gap-2">
+                                            <BookOpen className="h-4 w-4 text-primary" />
+                                            Assigned Curriculum
+                                        </span>
+                                        {isEditingSubjects && (
+                                            <span className="text-xs text-muted-foreground">Click to select</span>
+                                        )}
                                     </h3>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {selectedTeacher.subjects.map((sid: string) => {
-                                            const s = subjects.find(sub => sub.id === sid);
-                                            return (
-                                                <div key={sid} className="p-3 rounded-lg border bg-muted/30 flex items-center justify-between">
-                                                    <span className="font-medium text-sm">{s?.name || "Unknown"}</span>
-                                                    <Badge variant="outline">Grade {s?.gradeTier || "?"}</Badge>
-                                                </div>
-                                            );
-                                        })}
-                                        {selectedTeacher.subjects.length === 0 && <p className="text-sm text-muted-foreground italic">No subjects assigned yet.</p>}
-                                    </div>
+
+                                    {!isEditingSubjects ? (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {selectedTeacher.subjects.map((sid: string) => {
+                                                const s = subjects.find(sub => sub.id === sid);
+                                                return (
+                                                    <div key={sid} className="p-3 rounded-lg border bg-muted/30 flex items-center justify-between">
+                                                        <span className="font-medium text-sm">{s?.name || "Unknown"}</span>
+                                                        <Badge variant="outline">Grade {s?.gradeTier || "?"}</Badge>
+                                                    </div>
+                                                );
+                                            })}
+                                            {selectedTeacher.subjects.length === 0 && <p className="text-sm text-muted-foreground italic">No subjects assigned yet.</p>}
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-2 p-2 border rounded-md bg-muted/10">
+                                            {subjects.map(s => {
+                                                const isAssigned = selectedTeacher.subjects.includes(s.id);
+                                                return (
+                                                    <div
+                                                        key={s.id}
+                                                        className={`flex items-center justify-between p-3 rounded-lg border-2 transition-colors cursor-pointer ${
+                                                            isAssigned
+                                                                ? "bg-primary/10 border-primary"
+                                                                : "border-muted hover:bg-muted/50"
+                                                        }`}
+                                                        onClick={() => handleUpdateSubjects(s.id, !isAssigned)}
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`h-2 w-2 rounded-full ${isAssigned ? "bg-primary" : "bg-muted-foreground/30"}`} />
+                                                            <span className="text-xs font-medium">{s.name} (G{s.gradeTier})</span>
+                                                        </div>
+                                                        <div className={`h-4 w-4 rounded border-2 flex items-center justify-center text-xs font-bold ${
+                                                            isAssigned ? "bg-primary border-primary text-white" : "border-muted-foreground/30"
+                                                        }`}>
+                                                            {isAssigned && "✓"}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            {subjects.length === 0 && (
+                                                <p className="col-span-2 text-center text-xs text-muted-foreground py-4">No subjects available</p>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div>
-                                    <h3 className="font-bold flex items-center gap-2 mb-4">
-                                        <School className="h-4 w-4 text-primary" />
-                                        Managed Classes
-                                    </h3>
-                                    <div className="space-y-4">
-                                        {getTeacherSchoolClasses(selectedTeacher.id).map(c => (
-                                            <div key={c.id} className="p-4 rounded-xl border bg-card/50">
-                                                <div className="flex items-center justify-between mb-3">
-                                                    <div>
-                                                        <h4 className="font-bold">{c.name}</h4>
-                                                        <p className="text-xs text-muted-foreground">Class ID: {c.id.slice(0, 8)}</p>
+                                {!isEditingSubjects && (
+                                    <div>
+                                        <h3 className="font-bold flex items-center gap-2 mb-4">
+                                            <School className="h-4 w-4 text-primary" />
+                                            Managed Classes
+                                        </h3>
+                                        <div className="space-y-4">
+                                            {getTeacherSchoolClasses(selectedTeacher.id).map(c => (
+                                                <div key={c.id} className="p-4 rounded-xl border bg-card/50">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <div>
+                                                            <h4 className="font-bold">{c.name}</h4>
+                                                            <p className="text-xs text-muted-foreground">Class ID: {c.id.slice(0, 8)}</p>
+                                                        </div>
+                                                        <Badge className="bg-green-500/10 text-green-600 border-green-200">{c.studentIds.length} Learners</Badge>
                                                     </div>
-                                                    <Badge className="bg-green-500/10 text-green-600 border-green-200">{c.studentIds.length} Learners</Badge>
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <div className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">Class Roster</div>
-                                                    <div className="grid grid-cols-2 gap-2 text-xs">
-                                                        {c.studentIds.map(sid => {
-                                                            const student = students.find(st => st.id === sid);
-                                                            return (
-                                                                <div key={sid} className="flex items-center gap-2 text-muted-foreground">
-                                                                    <div className="h-1.5 w-1.5 rounded-full bg-primary/40" />
-                                                                    {student?.name || "Unknown Student"}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                        {c.studentIds.length === 0 && <p className="text-xs text-muted-foreground italic col-span-2">No students enrolled yet.</p>}
+                                                    <div className="space-y-2">
+                                                        <div className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">Class Roster</div>
+                                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                                            {c.studentIds.map(sid => {
+                                                                const student = students.find(st => st.id === sid);
+                                                                return (
+                                                                    <div key={sid} className="flex items-center gap-2 text-muted-foreground">
+                                                                        <div className="h-1.5 w-1.5 rounded-full bg-primary/40" />
+                                                                        {student?.name || "Unknown Student"}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                            {c.studentIds.length === 0 && <p className="text-xs text-muted-foreground italic col-span-2">No students enrolled yet.</p>}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
-                                        {getTeacherSchoolClasses(selectedTeacher.id).length === 0 && (
-                                            <div className="text-center py-8 rounded-xl border-2 border-dashed bg-muted/20">
-                                                <p className="text-sm text-muted-foreground">This teacher hasn't created any classes yet.</p>
-                                            </div>
-                                        )}
+                                            ))}
+                                            {getTeacherSchoolClasses(selectedTeacher.id).length === 0 && (
+                                                <div className="text-center py-8 rounded-xl border-2 border-dashed bg-muted/20">
+                                                    <p className="text-sm text-muted-foreground">This teacher hasn't created any classes yet.</p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
+                            </div>
+
+                            {/* Sticky Footer */}
+                            <div className="border-t bg-muted/30 p-4 flex-shrink-0 flex gap-3 justify-end">
+                                <Button 
+                                    variant="outline"
+                                    onClick={() => setIsDetailOpen(false)}
+                                >
+                                    Close
+                                </Button>
+                                {isEditingSubjects && (
+                                    <Button 
+                                        onClick={() => setIsEditingSubjects(false)}
+                                        disabled={isUpdating}
+                                    >
+                                        {isUpdating ? "Saving..." : "Done"}
+                                    </Button>
+                                )}
+                                {!isEditingSubjects && (
+                                    <Button 
+                                        variant="outline"
+                                        onClick={() => setIsEditingSubjects(true)}
+                                    >
+                                        Edit Subjects
+                                    </Button>
+                                )}
                             </div>
                         </>
                     )}

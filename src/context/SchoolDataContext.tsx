@@ -14,6 +14,8 @@ interface SchoolDataContextType {
     addSchoolClass: (newClass: Omit<SchoolClass, 'id' | 'createdAt'>) => Promise<any>;
     addStudent: (student: Omit<Student, 'id' | 'createdAt' | 'name' | 'pin'>) => Promise<any>;
     addStudentToSchoolClass: (classId: string, studentId: string) => Promise<void>;
+    addSubjectToTeacher: (teacherId: string, subjectId: string) => Promise<void>;
+    removeSubjectFromTeacher: (teacherId: string, subjectId: string) => Promise<void>;
 }
 
 const SchoolDataContext = createContext<SchoolDataContextType | undefined>(undefined);
@@ -40,6 +42,15 @@ export function SchoolDataProvider({ children }: { children: ReactNode }) {
 
         const fetchSchoolData = async () => {
             setLoading(true);
+
+            // Failsafe timer
+            const timer = setTimeout(() => {
+                if (!cancelled && loading) {
+                    console.warn("School data fetch timed out, forcing loading to false");
+                    setLoading(false);
+                }
+            }, 5000);
+
             try {
                 // Fire all queries in parallel
                 const [profilesRes, assignmentsRes, classesRes, studentsRes, sscRes] = await Promise.all([
@@ -93,6 +104,7 @@ export function SchoolDataProvider({ children }: { children: ReactNode }) {
             } catch (error) {
                 console.error("Error fetching school data:", error);
             } finally {
+                clearTimeout(timer);
                 if (!cancelled) setLoading(false);
             }
         };
@@ -220,6 +232,43 @@ export function SchoolDataProvider({ children }: { children: ReactNode }) {
         }));
     };
 
+    const addSubjectToTeacher = async (teacherId: string, subjectId: string) => {
+        const { error } = await supabase
+            .from('teacher_subjects')
+            .insert({
+                teacher_id: teacherId,
+                subject_id: subjectId
+            });
+
+        if (error) throw error;
+
+        // Update local state
+        setTeachers(prev => prev.map(t => {
+            if (t.id === teacherId && !t.subjects.includes(subjectId)) {
+                return { ...t, subjects: [...t.subjects, subjectId] };
+            }
+            return t;
+        }));
+    };
+
+    const removeSubjectFromTeacher = async (teacherId: string, subjectId: string) => {
+        const { error } = await supabase
+            .from('teacher_subjects')
+            .delete()
+            .eq('teacher_id', teacherId)
+            .eq('subject_id', subjectId);
+
+        if (error) throw error;
+
+        // Update local state
+        setTeachers(prev => prev.map(t => {
+            if (t.id === teacherId) {
+                return { ...t, subjects: t.subjects.filter(s => s !== subjectId) };
+            }
+            return t;
+        }));
+    };
+
     const value: SchoolDataContextType = {
         teachers,
         classes,
@@ -229,6 +278,8 @@ export function SchoolDataProvider({ children }: { children: ReactNode }) {
         addSchoolClass,
         addStudent,
         addStudentToSchoolClass,
+        addSubjectToTeacher,
+        removeSubjectFromTeacher,
     };
 
     return <SchoolDataContext.Provider value={value}>{children}</SchoolDataContext.Provider>;

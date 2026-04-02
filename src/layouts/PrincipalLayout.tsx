@@ -1,9 +1,17 @@
+
 import { useAuth } from "@/context/AuthContext";
 import { Navigate, Outlet } from "react-router-dom";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SubjectsProvider } from "@/context/SubjectsContext";
+import { useSubjects } from "@/hooks/useSubjects";
 import { RegistrationDataProvider } from "@/context/RegistrationDataContext";
+import { useRegistrationData } from "@/hooks/useRegistrationData";
 import { SchoolDataProvider } from "@/context/SchoolDataContext";
+import { useSchoolData } from "@/hooks/useSchoolData";
+import { MessagingProvider } from "@/context/MessagingContext";
+import { useMessaging } from "@/hooks/useMessaging";
+import { AssignmentsProvider } from "@/context/AssignmentsContext";
+import { useAssignments } from "@/hooks/useAssignments";
 import {
     SidebarInset,
     SidebarProvider,
@@ -18,22 +26,57 @@ import {
     BreadcrumbPage,
     BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { PortalLoadingScreen } from "@/components/PortalLoadingScreen";
+
+function PrincipalPortalContent() {
+    const { loading: subjectsLoading } = useSubjects();
+    const { loading: regLoading } = useRegistrationData();
+    const { loading: schoolLoading } = useSchoolData();
+    const { loading: msgLoading } = useMessaging();
+    const { loading: assignLoading } = useAssignments();
+
+    const isDataLoading = subjectsLoading || regLoading || schoolLoading || msgLoading || assignLoading;
+
+    if (isDataLoading) {
+        return <PortalLoadingScreen message="Syncing admin portal..." />;
+    }
+
+    return (
+        <SidebarProvider>
+            <AppSidebar />
+            <SidebarInset>
+                <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b">
+                    <div className="flex items-center gap-2 px-4">
+                        <SidebarTrigger className="-ml-1" />
+                        <Separator orientation="vertical" className="mr-2 h-4" />
+                        <Breadcrumb>
+                            <BreadcrumbList>
+                                <BreadcrumbItem className="hidden md:block">
+                                    <BreadcrumbLink href="#">
+                                        Afrinexel
+                                    </BreadcrumbLink>
+                                </BreadcrumbItem>
+                                <BreadcrumbSeparator className="hidden md:block" />
+                                <BreadcrumbItem>
+                                    <BreadcrumbPage>Admin Portal</BreadcrumbPage>
+                                </BreadcrumbItem>
+                            </BreadcrumbList>
+                        </Breadcrumb>
+                    </div>
+                </header>
+                <div className="flex flex-1 flex-col gap-4 p-4 pt-0 mt-4">
+                    <Outlet />
+                </div>
+            </SidebarInset>
+        </SidebarProvider>
+    );
+}
 
 export default function PrincipalLayout() {
-    const { user, isAuthenticated, loading } = useAuth();
+    const { user, isAuthenticated, loading: authLoading } = useAuth();
 
-    // If AuthContext is still restoring the session, DO NOT render the Outlet/children
-    if (loading) {
-        return (
-            <div className="flex h-screen w-screen items-center justify-center bg-background">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-                    <p className="text-sm font-bold animate-pulse text-primary tracking-[0.2em]">
-                        Loading your dashboard...
-                    </p>
-                </div>
-            </div>
-        );
+    if (authLoading) {
+        return <PortalLoadingScreen message="Verifying session..." />;
     }
 
     if (!isAuthenticated || user?.role !== 'principal') {
@@ -44,33 +87,11 @@ export default function PrincipalLayout() {
         <SubjectsProvider>
             <RegistrationDataProvider>
                 <SchoolDataProvider>
-                    <SidebarProvider>
-                        <AppSidebar />
-                        <SidebarInset>
-                            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b">
-                                <div className="flex items-center gap-2 px-4">
-                                    <SidebarTrigger className="-ml-1" />
-                                    <Separator orientation="vertical" className="mr-2 h-4" />
-                                    <Breadcrumb>
-                                        <BreadcrumbList>
-                                            <BreadcrumbItem className="hidden md:block">
-                                                <BreadcrumbLink href="#">
-                                                    Afrinexel
-                                                </BreadcrumbLink>
-                                            </BreadcrumbItem>
-                                            <BreadcrumbSeparator className="hidden md:block" />
-                                            <BreadcrumbItem>
-                                                <BreadcrumbPage>Admin Portal</BreadcrumbPage>
-                                            </BreadcrumbItem>
-                                        </BreadcrumbList>
-                                    </Breadcrumb>
-                                </div>
-                            </header>
-                            <div className="flex flex-1 flex-col gap-4 p-4 pt-0 mt-4">
-                                <Outlet />
-                            </div>
-                        </SidebarInset>
-                    </SidebarProvider>
+                    <MessagingProvider>
+                        <AssignmentsProvider>
+                            <PrincipalPortalContent />
+                        </AssignmentsProvider>
+                    </MessagingProvider>
                 </SchoolDataProvider>
             </RegistrationDataProvider>
         </SubjectsProvider>

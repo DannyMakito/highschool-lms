@@ -80,28 +80,41 @@ export default function StudentRegistration() {
             return;
         }
 
-        const newStudent = await addStudent({
-            firstName: form.firstName,
-            lastName: form.lastName,
-            gender: form.gender,
-            email: form.email,
-            administrationNumber: form.administrationNumber,
-            admissionYear: form.admissionYear,
-            gradeId: form.gradeId,
-            grade: selectedGrade?.name || "",
-            registerClassId: form.registerClassId,
-            studentClass: regClass?.name || "",
-            status: "active",
-        }, { subjectIds });
-
         try {
-            const placements = await autoAssignSubjectClasses(newStudent.id, subjectIds, form.gradeId);
-            toast.success(`${form.firstName} ${form.lastName} registered successfully! Placed into ${placements.length} subject class(es).`);
-        } catch (err) {
-            toast.warning(`${form.firstName} ${form.lastName} registered, but subject class placement failed. You can add them manually in Classes.`);
-            console.error("Subject class placement error:", err);
+            const newStudent = await addStudent({
+                firstName: form.firstName,
+                lastName: form.lastName,
+                gender: form.gender,
+                email: form.email,
+                administrationNumber: form.administrationNumber,
+                admissionYear: form.admissionYear,
+                gradeId: form.gradeId,
+                grade: selectedGrade?.name || "",
+                registerClassId: form.registerClassId,
+                studentClass: regClass?.name || "",
+                status: "active",
+            }, { subjectIds });
+
+            try {
+                const placements = await autoAssignSubjectClasses(newStudent.id, subjectIds, form.gradeId);
+                toast.success(`${form.firstName} ${form.lastName} registered successfully! Placed into ${placements.length} subject class(es).`);
+            } catch (err) {
+                toast.warning(`${form.firstName} ${form.lastName} registered, but subject class placement failed. You can add them manually in Classes.`);
+                console.error("Subject class placement error:", err);
+            }
+            resetForm();
+        } catch (err: any) {
+            console.error("Student registration error:", err);
+            
+            // Handle specific error types
+            if (err?.message?.includes("Email already registered") || err?.message?.includes("email_exists")) {
+                toast.error(`Email "${form.email}" is already registered. Please use a different email address.`);
+            } else if (err?.message?.includes("Already exists")) {
+                toast.error(`A student with email "${form.email}" already exists in the system.`);
+            } else {
+                toast.error(err?.message || "Failed to register student. Please try again.");
+            }
         }
-        resetForm();
     };
 
     const toggleSubject = (subjectId: string) => {

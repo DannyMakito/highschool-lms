@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSubjects } from "@/hooks/useSubjects";
+import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -23,6 +24,7 @@ import { toast } from "sonner";
 export default function TakeQuiz() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const { quizzes, addSubmission } = useSubjects();
 
     const quiz = useMemo(() => quizzes.find(q => q.id === id), [quizzes, id]);
@@ -110,18 +112,33 @@ export default function TakeQuiz() {
         const accuracy = Math.round((correctCount / totalQuestions) * 100);
         const timeSpent = Math.round((Date.now() - startTime) / 1000);
 
+        const totalPoints = quiz.questions.reduce((acc, q) => acc + q.points, 0);
+
         const submission = {
             id: crypto.randomUUID(),
             quizId: quiz.id,
-            learnerId: "current-user-id", // In real app
-            learnerName: "Current User",
+            studentId: user?.id || "anonymous",
+            studentName: user?.name || "Student",
             score,
-            totalPoints: quiz.questions.reduce((acc, q) => acc + q.points, 0),
+            totalPoints,
             accuracy,
             timeSpent,
-            submittedAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
             status: "completed" as const,
-            responses: selectedAnswers
+            answers: quiz.questions.map(q => {
+                const userAnswers = selectedAnswers[q.id] || [];
+                const correctIds = q.options.filter(opt => opt.isCorrect).map(opt => opt.id);
+                const isCorrect = userAnswers.length === correctIds.length &&
+                    userAnswers.every(id => correctIds.includes(id));
+
+                return {
+                    questionId: q.id,
+                    answer: userAnswers,
+                    isCorrect,
+                    pointsEarned: isCorrect ? q.points : 0,
+                    timeSpent: 0 // Could potentially track per-question time if needed
+                };
+            })
         };
 
         addSubmission(submission);
@@ -264,14 +281,14 @@ export default function TakeQuiz() {
                                 Question {currentQuestionIndex + 1} of {totalQuestions}
                             </h3>
                             <p className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 leading-tight">
-                                {currentQuestion.text}
+                                {currentQuestion?.text}
                             </p>
                         </div>
 
                         {/* Options (Image 1 & 3 Ref) */}
                         <div className="space-y-4">
-                            {currentQuestion.options.map((option, idx) => {
-                                const isSelected = selectedAnswers[currentQuestion.id]?.includes(option.id);
+                            {currentQuestion?.options.map((option, idx) => {
+                                const isSelected = currentQuestion && selectedAnswers[currentQuestion.id]?.includes(option.id);
                                 const letter = String.fromCharCode(65 + idx);
 
                                 return (

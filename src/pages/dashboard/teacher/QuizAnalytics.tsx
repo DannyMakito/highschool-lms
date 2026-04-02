@@ -71,13 +71,14 @@ export default function QuizAnalytics() {
     };
 
     // Calculate Question aggregated data
-    const questionStats = quiz.questions.map(q => {
+    const questionStats = quiz?.questions.map(q => {
         const responsesCount = quizSubmissions.length;
         const correctCount = quizSubmissions.filter(s => {
-            const userAnswers = s.responses[q.id] || [];
+            const answerObj = s.answers.find(a => a.questionId === q.id);
+            const userAnswers = answerObj?.answer || [];
             const correctOptionIds = q.options.filter(opt => opt.isCorrect).map(opt => opt.id);
             return userAnswers.length === correctOptionIds.length &&
-                userAnswers.every(id => correctOptionIds.includes(id));
+                (userAnswers as string[]).every(id => correctOptionIds.includes(id));
         }).length;
 
         return {
@@ -329,10 +330,10 @@ export default function QuizAnalytics() {
                                                 <td className="p-4">
                                                     <div className="flex items-center gap-3">
                                                         <Avatar className="h-9 w-9 ring-1 ring-slate-100">
-                                                            <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${s.learnerId}`} />
-                                                            <AvatarFallback>{s.learnerName[0]}</AvatarFallback>
+                                                            <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${s.studentId}`} />
+                                                            <AvatarFallback>{s.studentName[0]}</AvatarFallback>
                                                         </Avatar>
-                                                        <span className="font-bold text-slate-800">{s.learnerName}</span>
+                                                        <span className="font-bold text-slate-800">{s.studentName}</span>
                                                     </div>
                                                 </td>
                                                 <td className="p-4">
@@ -346,7 +347,7 @@ export default function QuizAnalytics() {
                                                 </td>
                                                 <td className="p-4 font-black text-slate-700">{s.score}/{s.totalPoints}</td>
                                                 <td className="p-4 font-bold text-slate-500 tabular-nums">{formatTime(s.timeSpent)}</td>
-                                                <td className="p-4 text-xs font-bold text-slate-400">{new Date(s.submittedAt).toLocaleDateString()}</td>
+                                                <td className="p-4 text-xs font-bold text-slate-400">{new Date(s.completedAt).toLocaleDateString()}</td>
                                                 <td className="p-4 pr-8 text-right text-indigo-600">
                                                     <Button
                                                         variant="ghost"
@@ -375,11 +376,11 @@ export default function QuizAnalytics() {
                         <div className="flex items-start justify-between">
                             <div className="flex items-center gap-4">
                                 <Avatar className="h-14 w-14 ring-4 ring-indigo-50">
-                                    <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedStudent?.learnerId}`} />
-                                    <AvatarFallback>{selectedStudent?.learnerName?.[0]}</AvatarFallback>
+                                    <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedStudent?.studentId}`} />
+                                    <AvatarFallback>{selectedStudent?.studentName?.[0]}</AvatarFallback>
                                 </Avatar>
                                 <div>
-                                    <h2 className="text-2xl font-black text-slate-900">{selectedStudent?.learnerName}</h2>
+                                    <h2 className="text-2xl font-black text-slate-900">{selectedStudent?.studentName}</h2>
                                     <p className="text-sm font-bold text-slate-400">Student Submission Profile</p>
                                 </div>
                             </div>
@@ -410,9 +411,9 @@ export default function QuizAnalytics() {
                         <div className="space-y-4">
                             <h3 className="text-2xl font-black text-slate-900 leading-tight">{quiz.title}</h3>
                             <div className="flex items-center gap-4 text-sm font-bold text-slate-400">
-                                <span>Submitted {selectedStudent ? new Date(selectedStudent.submittedAt).toLocaleDateString() : '--'}</span>
+                                <span>Submitted {selectedStudent ? new Date(selectedStudent.completedAt).toLocaleDateString() : '--'}</span>
                                 <span>•</span>
-                                <span>{selectedStudent ? new Date(selectedStudent.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}</span>
+                                <span>{selectedStudent ? new Date(selectedStudent.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}</span>
                                 <span>•</span>
                                 <span className="flex items-center gap-1.5"><HelpCircle className="h-4 w-4" /> {quiz.questions.length} Questions</span>
                             </div>
@@ -421,10 +422,11 @@ export default function QuizAnalytics() {
                         {/* Question Grid */}
                         <div className="grid grid-cols-5 md:grid-cols-10 gap-3">
                             {quiz.questions.map((q, i) => {
-                                const userAnswers = selectedStudent?.responses[q.id] || [];
+                                const answerObj = selectedStudent?.answers.find((a: any) => a.questionId === q.id);
+                                const userAnswers = answerObj?.answer || [];
                                 const correctOptionIds = q.options.filter(opt => opt.isCorrect).map(opt => opt.id);
                                 const isCorrect = userAnswers.length === correctOptionIds.length &&
-                                    userAnswers.every(id => correctOptionIds.includes(id));
+                                    (userAnswers as string[]).every(id => correctOptionIds.includes(id));
 
                                 return (
                                     <div key={q.id} className="relative">
@@ -450,9 +452,10 @@ export default function QuizAnalytics() {
                                     Correct
                                     <span className="text-slate-400">
                                         {quiz.questions.filter(q => {
-                                            const userAnswers = selectedStudent?.responses[q.id] || [];
+                                            const answerObj = selectedStudent?.answers.find((a: any) => a.questionId === q.id);
+                                            const userAnswers = answerObj?.answer || [];
                                             const correctIds = q.options.filter(opt => opt.isCorrect).map(opt => opt.id);
-                                            return userAnswers.length === correctIds.length && userAnswers.every(id => correctIds.includes(id));
+                                            return userAnswers.length === correctIds.length && (userAnswers as string[]).every(id => correctIds.includes(id));
                                         }).length}
                                     </span>
                                 </div>
@@ -461,22 +464,23 @@ export default function QuizAnalytics() {
                                     Incorrect
                                     <span className="text-slate-400">
                                         {quiz.questions.length - quiz.questions.filter(q => {
-                                            const userAnswers = selectedStudent?.responses[q.id] || [];
+                                            const answerObj = selectedStudent?.answers.find((a: any) => a.questionId === q.id);
+                                            const userAnswers = answerObj?.answer || [];
                                             const correctIds = q.options.filter(opt => opt.isCorrect).map(opt => opt.id);
-                                            return userAnswers.length === correctIds.length && userAnswers.every(id => correctIds.includes(id));
+                                            return userAnswers.length === correctIds.length && (userAnswers as string[]).every(id => correctIds.includes(id));
                                         }).length}
                                     </span>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Detailed Question Breakdown */}
-                        <div className="space-y-6">
+                        <div className="detailed-breakdown space-y-6">
                             {quiz.questions.map((q, idx) => {
-                                const userAnswers = selectedStudent?.responses[q.id] || [];
+                                const answerObj = selectedStudent?.answers.find((a: any) => a.questionId === q.id);
+                                const userAnswers = answerObj?.answer || [];
                                 const correctOptionIds = q.options.filter(opt => opt.isCorrect).map(opt => opt.id);
                                 const isCorrect = userAnswers.length === correctOptionIds.length &&
-                                    userAnswers.every(id => correctOptionIds.includes(id));
+                                    (userAnswers as string[]).every(id => correctOptionIds.includes(id));
 
                                 return (
                                     <div key={q.id} className="p-8 rounded-[2rem] border border-slate-100 space-y-6 hover:border-indigo-100 transition-all">

@@ -96,6 +96,15 @@ export function RegistrationDataProvider({ children }: { children: ReactNode }) 
 
         const fetchRegistrationData = async () => {
             setLoading(true);
+
+            // Failsafe timer
+            const timer = setTimeout(() => {
+                if (!cancelled && loading) {
+                    console.warn("Registration data fetch timed out, forcing loading to false");
+                    setLoading(false);
+                }
+            }, 5000);
+
             try {
                 // Fire all queries in parallel for maximum speed
                 const [gradesRes, rcRes, scRes, studentsDirectRes, ssRes, sscRes] = await Promise.all([
@@ -192,6 +201,7 @@ export function RegistrationDataProvider({ children }: { children: ReactNode }) 
             } catch (error) {
                 console.error("Error fetching registration data:", error);
             } finally {
+                clearTimeout(timer);
                 if (!cancelled) setLoading(false);
             }
         };
@@ -329,7 +339,12 @@ export function RegistrationDataProvider({ children }: { children: ReactNode }) 
             }
         });
 
-        if (error) throw error;
+        if (error) {
+            // Create a more descriptive error
+            const errorMessage = (data as any)?.details || (data as any)?.error || error.message;
+            const err = new Error(errorMessage);
+            throw err;
+        }
 
         const created = data as { id: string; created_at?: string; pin: string };
 

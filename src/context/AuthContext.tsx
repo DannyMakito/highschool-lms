@@ -46,6 +46,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     const fetchProfile = async (uid: string, email: string): Promise<User | null> => {
+        // Eagerly use cache to avoid refresh delays if the ID matches
+        const cached = getCachedUser();
+        if (cached && cached.id === uid) {
+            setUser(cached);
+            setLoading(false);
+        }
+
         try {
             const { data: profile, error } = await supabase
                 .from('profiles')
@@ -55,6 +62,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             if (error || !profile) {
                 console.error("Profile fetch error:", error);
+                
+                // If we didn't have a cache or fetch failed, and we're still loading, we must fail
+                if (!cached) {
+                    setUser(null);
+                    setLoading(false);
+                }
                 return null;
             }
 
@@ -76,15 +89,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         let mounted = true;
 
-        // Ensure we never stay trapped in a loading state. 
-        // A 4-second fail-safe is extremely generous for getting an initial auth state.
-        const fallbackTimer = setTimeout(() => {
-            if (mounted) setLoading(false);
-        }, 4000);
+        // Fail-safe: ensure we NEVER hang on a loading screen.
+        const failSafe = setTimeout(() => {
+            if (mounted && loading) {
+                console.warn("Auth initialization timed out, forcing loading to false");
+                setLoading(false);
+            }
+        }, 15000);
 
         const handleSession = async (session: Session | null) => {
             if (!mounted) return;
-
             if (session?.user) {
                 try {
                     await fetchProfile(session.user.id, session.user.email || "");
@@ -98,42 +112,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
         };
 
-        // Immediately check for existing session (doesn't wait for event)
-        const initSession = async () => {
-            try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (mounted) {
-                    await handleSession(session);
-                }
-            } catch (error) {
-                console.error("Failed to get initial session:", error);
-                if (mounted) {
-                    setLoading(false);
-                }
-            }
-        };
-
-        // Start checking for session immediately
-        initSession();
-
-        // Also listen for auth state changes (login, logout, token refresh)
+        /**
+         * Consolidate everything into onAuthStateChange.
+         * Supabase triggers this immediately with INITIAL_SESSION or SIGNED_IN.
+         */
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event, session) => {
                 if (!mounted) return;
+                console.log(`Auth event: ${event}`);
 
-                // Skip INITIAL_SESSION since we already handled it above
-                if (event === "SIGNED_IN") {
+                if (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESH") {
                     await handleSession(session);
                 } else if (event === "SIGNED_OUT") {
                     setUser(null);
                     localStorage.removeItem("hlms_user");
+                    if (mounted) setLoading(false);
+                } else {
+                    // For other events, just ensure loading is false if we have a state
+                    if (mounted) setLoading(false);
                 }
             }
         );
 
         return () => {
             mounted = false;
-            clearTimeout(fallbackTimer);
+            clearTimeout(failSafe);
             subscription.unsubscribe();
         };
     }, []);

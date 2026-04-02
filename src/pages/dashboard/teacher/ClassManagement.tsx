@@ -46,13 +46,14 @@ import { toast } from "sonner";
 export default function SchoolClassManagement() {
     const { user, role } = useAuth();
     const { classes, students, addSchoolClass, addStudent, addStudentToSchoolClass } = useSchoolData();
-    const { grades, subjectClasses, getSubjectClassStudents, getSubjectClassEnrollment } = useRegistrationData();
+    const { grades, registerClasses, subjectClasses, getSubjectClassStudents, getSubjectClassEnrollment, getRegisterClassStudents } = useRegistrationData();
     const { subjects } = useSubjects();
 
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
     const [selectedSchoolClassId, setSelectedSchoolClassId] = useState<string | null>(null);
     const [viewingClassId, setViewingClassId] = useState<string | null>(null);
+    const [viewingClassType, setViewingClassType] = useState<'subject' | 'register'>('subject');
 
     const [newSchoolClass, setNewSchoolClass] = useState({
         name: "",
@@ -68,7 +69,12 @@ export default function SchoolClassManagement() {
     });
 
     const isTeacher = role === "teacher";
-    const teacherAssignedClasses = subjectClasses.filter(sc => sc.teacherId === user?.id);
+    const teacherAssignedSubjectClasses = subjectClasses.filter(sc => sc.teacherId === user?.id);
+    const teacherAssignedRegisterClasses = registerClasses.filter(rc => rc.classTeacherId === user?.id);
+    const allTeacherClasses = [
+        ...teacherAssignedSubjectClasses.map(sc => ({ ...sc, type: 'subject' as const })),
+        ...teacherAssignedRegisterClasses.map(rc => ({ ...rc, type: 'register' as const }))
+    ];
 
     const handleCreateSchoolClass = () => {
         if (!newSchoolClass.name || !newSchoolClass.subjectId) {
@@ -161,19 +167,19 @@ export default function SchoolClassManagement() {
                         <TableHeader className="bg-muted/50">
                             <TableRow>
                                 <TableHead className="font-black">Class Name</TableHead>
-                                <TableHead className="font-black">Subject</TableHead>
-                                <TableHead className="font-black">Grade</TableHead>
+                                <TableHead className="font-black">Type</TableHead>
+                                <TableHead className="font-black">Subject/Grade</TableHead>
                                 <TableHead className="font-black">Students</TableHead>
                                 <TableHead className="font-black text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {teacherAssignedClasses.map((sc) => {
+                            {teacherAssignedSubjectClasses.map((sc) => {
                                 const subject = subjects.find(s => s.id === sc.subjectId);
                                 const grade = grades.find(g => g.id === sc.gradeId);
                                 const enrolled = getSubjectClassEnrollment(sc.id);
                                 return (
-                                    <TableRow key={sc.id} className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => setViewingClassId(sc.id)}>
+                                    <TableRow key={`subject-${sc.id}`} className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => { setViewingClassId(sc.id); setViewingClassType('subject'); }}>
                                         <TableCell>
                                             <div className="flex items-center gap-3">
                                                 <div className="p-2 rounded bg-indigo-500/10 text-indigo-500">
@@ -183,13 +189,13 @@ export default function SchoolClassManagement() {
                                             </div>
                                         </TableCell>
                                         <TableCell>
+                                            <Badge variant="secondary" className="bg-blue-500/10 text-blue-700 border-blue-200">Subject Class</Badge>
+                                        </TableCell>
+                                        <TableCell>
                                             <div className="flex items-center gap-2 text-muted-foreground">
                                                 <BookOpen className="h-4 w-4" />
                                                 {subject?.name || "Regular Subject"}
                                             </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline" className="font-medium">{grade?.name}</Badge>
                                         </TableCell>
                                         <TableCell>
                                             <Badge variant="secondary" className="font-mono bg-primary/10 text-primary border-none">
@@ -204,7 +210,39 @@ export default function SchoolClassManagement() {
                                     </TableRow>
                                 );
                             })}
-                            {teacherAssignedClasses.length === 0 && (
+                            {teacherAssignedRegisterClasses.map((rc) => {
+                                const grade = grades.find(g => g.id === rc.gradeId);
+                                const enrolled = getRegisterClassStudents(rc.id).length;
+                                return (
+                                    <TableRow key={`register-${rc.id}`} className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => { setViewingClassId(rc.id); setViewingClassType('register'); }}>
+                                        <TableCell>
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 rounded bg-green-500/10 text-green-500">
+                                                    <GraduationCap className="h-4 w-4" />
+                                                </div>
+                                                <span className="font-bold">{rc.name}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant="secondary" className="bg-green-500/10 text-green-700 border-green-200">Home Class</Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline" className="font-medium">{grade?.name}</Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant="secondary" className="font-mono bg-primary/10 text-primary border-none">
+                                                {enrolled} / {rc.maxStudents}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <Button size="icon" variant="ghost">
+                                                <ChevronRight className="h-4 w-4" />
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                            {teacherAssignedSubjectClasses.length === 0 && teacherAssignedRegisterClasses.length === 0 && (
                                 <TableRow>
                                     <TableCell colSpan={5} className="h-48 text-center text-muted-foreground italic">
                                         No assigned classes found. Please contact the principal.
@@ -223,10 +261,13 @@ export default function SchoolClassManagement() {
                         </Button>
                         <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
                             <h2 className="text-2xl font-black">
-                                {subjectClasses.find(sc => sc.id === viewingClassId)?.name}
+                                {viewingClassType === 'subject' 
+                                    ? subjectClasses.find(sc => sc.id === viewingClassId)?.name
+                                    : registerClasses.find(rc => rc.id === viewingClassId)?.name
+                                }
                             </h2>
                             <Badge variant="outline">
-                                {getSubjectClassEnrollment(viewingClassId || "")} Students Enrolled
+                                {viewingClassType === 'subject' ? getSubjectClassEnrollment(viewingClassId || "") : getRegisterClassStudents(viewingClassId || "").length} Students Enrolled
                             </Badge>
                         </div>
                     </div>
@@ -243,7 +284,7 @@ export default function SchoolClassManagement() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {getSubjectClassStudents(viewingClassId || "").map((student) => {
+                                {(viewingClassType === 'subject' ? getSubjectClassStudents(viewingClassId || "") : getRegisterClassStudents(viewingClassId || "")).map((student) => {
                                     return (
                                         <TableRow key={student.id}>
                                             <TableCell className="font-medium">
@@ -267,10 +308,10 @@ export default function SchoolClassManagement() {
                                         </TableRow>
                                     );
                                 })}
-                                {(getSubjectClassStudents(viewingClassId || "").length === 0) && (
+                                {((viewingClassType === 'subject' ? getSubjectClassStudents(viewingClassId || "") : getRegisterClassStudents(viewingClassId || "")).length === 0) && (
                                     <TableRow>
                                         <TableCell colSpan={5} className="h-48 text-center text-muted-foreground italic">
-                                            No students enrolled in this subject class yet.
+                                            No students enrolled in this class yet.
                                         </TableCell>
                                     </TableRow>
                                 )}

@@ -75,23 +75,35 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: callerProfile, error: profileFetchErr } = await admin
-      .from("profiles")
-      .select("role")
-      .eq("id", caller.id)
-      .maybeSingle(); // Use maybeSingle to avoid 406 if missing
+    // Check role from JWT metadata first (most reliable)
+    const jwtRole = caller.user_metadata?.role || 
+                   (caller.app_metadata?.role as string) ||
+                   null;
 
-    if (profileFetchErr) {
-      console.error("Profile Fetch Error:", profileFetchErr);
-      return new Response(JSON.stringify({ error: "Failed to fetch caller profile", details: profileFetchErr.message }), {
-        status: 500,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-      });
+    let callerRole = jwtRole;
+
+    // If not in JWT, try to fetch from profiles table
+    if (!callerRole) {
+      const { data: callerProfile, error: profileFetchErr } = await admin
+        .from("profiles")
+        .select("role")
+        .eq("id", caller.id)
+        .maybeSingle(); // Use maybeSingle to avoid 406 if missing
+
+      if (profileFetchErr) {
+        console.error("Profile Fetch Error:", profileFetchErr);
+        return new Response(JSON.stringify({ error: "Failed to fetch caller profile", details: profileFetchErr.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "content-type": "application/json" },
+        });
+      }
+
+      callerRole = callerProfile?.role || null;
     }
 
-    if (!callerProfile || callerProfile.role !== "principal") {
-      console.error("Forbidden access attempt by:", caller.id, "Role:", callerProfile?.role);
-      return new Response(JSON.stringify({ error: "Forbidden: Principal access only", role: callerProfile?.role }), {
+    if (!callerRole || callerRole !== "principal") {
+      console.error("Forbidden access attempt by:", caller.id, "Role:", callerRole);
+      return new Response(JSON.stringify({ error: "Forbidden: Principal access only", role: callerRole }), {
         status: 403,
         headers: { ...corsHeaders, "content-type": "application/json" },
       });
@@ -118,6 +130,18 @@ Deno.serve(async (req) => {
 
     if (createErr || !created?.user) {
       console.error("Auth Create Error:", createErr);
+      
+      // Handle specific errors with user-friendly messages
+      if ((createErr as any)?.code === 'email_exists') {
+        return new Response(JSON.stringify({ 
+          error: "Email already registered", 
+          details: `A user with email ${body.email} already exists in the system. Please use a different email address or contact the principal if this is a duplicate.` 
+        }), {
+          status: 409,
+          headers: { ...corsHeaders, "content-type": "application/json" },
+        });
+      }
+      
       return new Response(JSON.stringify({ error: "Auth creation failed", details: createErr?.message }), {
         status: 400,
         headers: { ...corsHeaders, "content-type": "application/json" },
