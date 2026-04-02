@@ -108,6 +108,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             } catch (error) {
                 console.error("Failed to get initial session:", error);
                 if (mounted) {
+                    setUser(null);
+                    localStorage.removeItem("hlms_user");
                     setLoading(false);
                 }
             }
