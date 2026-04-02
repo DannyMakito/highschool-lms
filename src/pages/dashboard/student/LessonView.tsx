@@ -26,6 +26,12 @@ export default function LessonView() {
     const navigate = useNavigate();
     const { subjects, getSubjectTopics, getTopicLessons, isLessonCompleted, toggleLessonCompletion, setLastLesson } = useSubjects();
 
+    React.useEffect(() => {
+        if (subjectId && lessonId) {
+            setLastLesson(subjectId, lessonId);
+        }
+    }, [subjectId, lessonId, setLastLesson]);
+
     const subject = subjects.find(s => s.id === subjectId);
     if (!subject) return <div>Subject not found</div>;
 
@@ -33,12 +39,6 @@ export default function LessonView() {
     const currentTopicId = topics.find(t => getTopicLessons(t.id).some(l => l.id === lessonId))?.id;
     const currentLessons = currentTopicId ? getTopicLessons(currentTopicId) : [];
     const currentLesson = currentLessons.find(l => l.id === lessonId);
-
-    React.useEffect(() => {
-        if (subjectId && lessonId) {
-            setLastLesson(subjectId, lessonId);
-        }
-    }, [subjectId, lessonId, setLastLesson]);
 
     if (!currentLesson) return <div>Lesson not found</div>;
 

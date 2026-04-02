@@ -15,17 +15,27 @@ import { useMemo } from "react";
 
 export default function StudentAssignments() {
     const { user } = useAuth();
-    const { studentSubjects } = useRegistrationData();
+    const { studentSubjects, studentSubjectClasses, subjectClasses } = useRegistrationData();
     const { assignments: allAssignments, submissions } = useAssignments();
     const { subjects: allSubjects } = useSubjects();
     const navigate = useNavigate();
 
     const assignments = useMemo(() => {
-        const assignedIds = studentSubjects
+        const directAssignedIds = studentSubjects
             .filter(ss => ss.studentId === user?.id)
             .map(ss => ss.subjectId);
+            
+        const classAssignedIds = studentSubjectClasses
+            .filter(ssc => ssc.studentId === user?.id)
+            .map(ssc => {
+                const sc = subjectClasses.find(c => c.id === ssc.subjectClassId);
+                return sc?.subjectId;
+            })
+            .filter(Boolean) as string[];
+
+        const assignedIds = Array.from(new Set([...directAssignedIds, ...classAssignedIds]));
         return allAssignments.filter(a => assignedIds.includes(a.subjectId));
-    }, [allAssignments, studentSubjects, user?.id]);
+    }, [allAssignments, studentSubjects, studentSubjectClasses, subjectClasses, user?.id]);
 
     const subjects = allSubjects; // mapping help for the loop below if needed, but the loop uses `subjects.find`
     const studentSubmissions = submissions.filter(s => s.studentId === user?.id);

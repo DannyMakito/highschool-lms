@@ -67,15 +67,25 @@ export default function StudentDashboard() {
         getSubjectCompletedLessonsCount,
         lastLesson
     } = useSubjects();
-    const { studentSubjects } = useRegistrationData();
+    const { studentSubjects, studentSubjectClasses, subjectClasses } = useRegistrationData();
 
     // Filtered subjects for this student
     const subjects = React.useMemo(() => {
-        const assignedIds = studentSubjects
+        const directAssignedIds = studentSubjects
             .filter(ss => ss.studentId === user?.id)
             .map(ss => ss.subjectId);
+            
+        const classAssignedIds = studentSubjectClasses
+            .filter(ssc => ssc.studentId === user?.id)
+            .map(ssc => {
+                const sc = subjectClasses.find(c => c.id === ssc.subjectClassId);
+                return sc?.subjectId;
+            })
+            .filter(Boolean) as string[];
+
+        const assignedIds = Array.from(new Set([...directAssignedIds, ...classAssignedIds]));
         return allSubjects.filter(s => assignedIds.includes(s.id));
-    }, [allSubjects, studentSubjects, user?.id]);
+    }, [allSubjects, studentSubjects, studentSubjectClasses, subjectClasses, user?.id]);
 
     const { assignments: allAssignments, submissions: assignmentSubmissions } = useAssignments();
     const { announcements } = useAnnouncements();

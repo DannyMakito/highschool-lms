@@ -1,12 +1,74 @@
 
-import { useRegistrationDataContext } from '@/context/RegistrationDataContext';
+import { createContext, useContext } from 'react';
+import type { ReactNode } from 'react';
+import type {
+    Grade, RegisterClass, SubjectClass,
+    Student, StudentAssignedSubject, StudentSubject, StudentSubjectClass
+} from '../types';
+import { useState, useEffect, useCallback } from 'react';
+import supabase from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
+import { useSubjects } from '@/hooks/useSubjects';
 
-/**
- * Thin wrapper around RegistrationDataContext.
- * Data is fetched ONCE at the layout level and shared across all pages.
- */
-export function useRegistrationData() {
-    const { user } = useAuth();
+type StudentsWithSubjectsRow = Student & {
+    full_name?: string;
+    email?: string;
+    pin?: string;
+    created_at?: string;
+    subjects?: StudentAssignedSubject[];
+    student_subjects?: Array<{ id: string; student_id: string; subject_id: string }>;
+};
+
+const normalizeAssignedSubject = (
+    item: Partial<StudentAssignedSubject> & {
+        id?: string;
+        subject_id?: string;
+        subjectId?: string;
+        subject_name?: string;
+        grade_tier?: string;
+        subjects?: { name?: string | null } | null;
+    }
+): StudentAssignedSubject => ({
+    id: item.id,
+    subjectId: item.subjectId ?? item.subject_id ?? '',
+    subject_id: item.subject_id ?? item.subjectId ?? '',
+    subject_name: item.subject_name ?? item.subjects?.name ?? '',
+    grade_tier: item.grade_tier ?? '',
+});
+
+interface RegistrationDataContextType {
+    grades: Grade[];
+    registerClasses: RegisterClass[];
+    subjectClasses: SubjectClass[];
+    students: Student[];
+    studentSubjects: StudentSubject[];
+    studentSubjectClasses: StudentSubjectClass[];
+    loading: boolean;
+    addGrade: (grade: Omit<Grade, 'id'>) => Promise<any>;
+    addRegisterClass: (rc: Omit<RegisterClass, 'id' | 'createdAt'>) => Promise<any>;
+    updateRegisterClass: (id: string, updates: Partial<RegisterClass>) => Promise<void>;
+    deleteRegisterClass: (id: string) => Promise<void>;
+    addSubjectClass: (sc: Omit<SubjectClass, 'id' | 'createdAt'>) => Promise<any>;
+    updateSubjectClass: (id: string, updates: Partial<SubjectClass>) => Promise<void>;
+    deleteSubjectClass: (id: string) => Promise<void>;
+    addStudent: (student: Omit<Student, 'id' | 'createdAt' | 'name' | 'pin'>, options?: { subjectIds?: string[] }) => Promise<any>;
+    updateStudent: (id: string, updates: Partial<Student>) => Promise<void>;
+    deleteStudent: (id: string) => Promise<void>;
+    assignSubjectsToStudent: (studentId: string, subjectIds: string[]) => Promise<void>;
+    getStudentSubjects: (studentId: string) => StudentSubject[];
+    autoAssignSubjectClasses: (studentId: string, subjectIds: string[], gradeId: string) => Promise<any>;
+    manualAssignSubjectClass: (studentId: string, subjectClassId: string) => Promise<void>;
+    removeStudentFromSubjectClass: (studentId: string, subjectClassId: string) => Promise<void>;
+    getStudentSubjectClasses: (studentId: string) => StudentSubjectClass[];
+    getSubjectClassStudents: (subjectClassId: string) => Student[];
+    getRegisterClassStudents: (registerClassId: string) => Student[];
+    getSubjectClassEnrollment: (subjectClassId: string) => number;
+}
+
+const RegistrationDataContext = createContext<RegistrationDataContextType | undefined>(undefined);
+
+export function RegistrationDataProvider({ children }: { children: ReactNode }) {
+    const { user, loading: authLoading } = useAuth();
     const { subjects } = useSubjects();
     const [grades, setGrades] = useState<Grade[]>([]);
     const [registerClasses, setRegisterClasses] = useState<RegisterClass[]>([]);
@@ -17,7 +79,15 @@ export function useRegistrationData() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (authLoading) return;
+
         if (!user) {
+            setGrades([]);
+            setRegisterClasses([]);
+            setSubjectClasses([]);
+            setStudents([]);
+            setStudentSubjects([]);
+            setStudentSubjectClasses([]);
             setLoading(false);
             return;
         }
@@ -27,51 +97,44 @@ export function useRegistrationData() {
         const fetchRegistrationData = async () => {
             setLoading(true);
             try {
+                // Fire all queries in parallel for maximum speed
+                const [gradesRes, rcRes, scRes, studentsDirectRes, ssRes, sscRes] = await Promise.all([
+                    supabase.from('grades').select('*'),
+                    supabase.from('register_classes').select('*'),
+                    supabase.from('subject_classes').select('*'),
+                    supabase.from('students').select(`*, profiles(*)`),
+                    supabase.from('student_subjects').select(`*, subjects(name)`),
+                    supabase.from('student_subject_classes').select('*'),
+                ]);
 
-                const gradesRes = await supabase.from('grades').select('*');
-                const rcRes = await supabase.from('register_classes').select('*');
-                const scRes = await supabase.from('subject_classes').select('*');
-                // Use the new view or RPC to get students together with their assigned subjects.
-                // This reduces client-side joins & ensures we rely on the DB to enforce RLS.
-                const { data: studentsRpc, error: studentsRpcErr } = await supabase.rpc<StudentsWithSubjectsRow[]>('get_students_with_subjects');
-                const studentsViewRes = await supabase.from<StudentsWithSubjectsRow>('students_with_subjects').select('*');
-
-                // Fallback path: fetch directly from students + profile relations (for environments where RPC/View may be missing or incomplete)
-                // Avoid relying on implicit FK relationship to student_subjects from students, as some schemas may not have it configured.
-                const studentsDirectRes = await supabase.from('students').select(`
-                    *,
-                    profiles(*)
-                `);
-
-                const ssRes = await supabase.from('student_subjects').select(`
-                    *,
-                    subjects(name)
-                `);
-                const sscRes = await supabase.from('student_subject_classes').select('*');
+                // Fire RPC/view in parallel as fallback (non-blocking)
+                const [studentsRpcRes, studentsViewRes] = await Promise.all([
+                    supabase.rpc<StudentsWithSubjectsRow[]>('get_students_with_subjects').then(r => r).catch(() => ({ data: null, error: null })),
+                    supabase.from<StudentsWithSubjectsRow>('students_with_subjects').select('*').then(r => r).catch(() => ({ data: null, error: null })),
+                ]);
 
                 if (gradesRes.error) console.error("Grades Error:", gradesRes.error);
                 if (rcRes.error) console.error("RC Error:", rcRes.error);
                 if (scRes.error) console.error("SC Error:", scRes.error);
-                if (studentsRpcErr) console.warn("Students RPC error (falling back to view):", studentsRpcErr);
-                if (studentsViewRes.error) console.error("Students View Error:", studentsViewRes.error);
+                if (ssRes.error) console.error("SS Error:", ssRes.error);
+                if (sscRes.error) console.error("SSC Error:", sscRes.error);
+
+                if (cancelled) return;
 
                 const gradesData = gradesRes.data;
                 const rcData = rcRes.data;
                 const scData = scRes.data;
 
-                const studentsRpcData = Array.isArray(studentsRpc) ? studentsRpc : [];
-                const studentsViewData = Array.isArray(studentsViewRes.data) ? studentsViewRes.data : [];
                 const studentsDirectData = Array.isArray(studentsDirectRes.data) ? studentsDirectRes.data : [];
+                const studentsRpcData = Array.isArray(studentsRpcRes.data) ? studentsRpcRes.data : [];
+                const studentsViewData = Array.isArray(studentsViewRes.data) ? studentsViewRes.data : [];
 
-                // Prioritize direct joined student data to avoid view/RPC mismatch in deployed env.
-                // Fall back to RPC/view only when direct results are unavailable.
                 const studentsData = studentsDirectData.length > 0 ? studentsDirectData :
                     (studentsRpcData.length > 0 ? studentsRpcData : studentsViewData);
 
                 const ssData = ssRes.data;
                 const sscData = sscRes.data;
 
-                // Normalize grades: ensure `level` exists (from level, sort_order, or derived from name)
                 setGrades((gradesData || []).map((g: { level?: number; sort_order?: number; name?: string }) => ({
                     ...g,
                     level: g.level ?? g.sort_order ?? (parseInt(String(g.name || '').replace(/\D/g, ''), 10) || 0),
@@ -136,7 +199,7 @@ export function useRegistrationData() {
         fetchRegistrationData();
 
         return () => { cancelled = true; };
-    }, [user]);
+    }, [user, authLoading]);
 
     // === Grade CRUD ===
     const addGrade = async (grade: Omit<Grade, 'id'>) => {
@@ -369,7 +432,6 @@ export function useRegistrationData() {
             return !!subjectClass && !subjectIds.includes(subjectClass.subjectId);
         });
 
-        // Delete all old assignments for this student in DB
         const { error: delError } = await supabase
             .from('student_subjects')
             .delete()
@@ -377,7 +439,6 @@ export function useRegistrationData() {
 
         if (delError) throw delError;
 
-        // Insert new assignments
         const newAssignments = subjectIds.map(subjectId => ({
             student_id: studentId,
             subject_id: subjectId
@@ -457,10 +518,6 @@ export function useRegistrationData() {
             }
         }
 
-        // Cleanup old placements for these subjects
-        // In Supabase, we might want to be careful about not deleting placements for subjects not in our list
-        // but the original logic was to replace all subject class placements for the student if we re-run auto-assign.
-
         const { error: delError } = await supabase
             .from('student_subject_classes')
             .delete()
@@ -493,7 +550,6 @@ export function useRegistrationData() {
         const targetClass = subjectClasses.find(sc => sc.id === subjectClassId);
         if (!targetClass) return;
 
-        // Ensure student has the subject in student_subjects (for student dashboard visibility)
         const hasSubject = studentSubjects.some(ss => ss.studentId === studentId && ss.subjectId === targetClass.subjectId);
         if (!hasSubject) {
             const { error: ssErr } = await supabase
@@ -504,7 +560,6 @@ export function useRegistrationData() {
             }
         }
 
-        // Find existing for same subject to replace
         const existingPlacements = studentSubjectClasses.filter(ssc => {
             const sc = subjectClasses.find(c => c.id === ssc.subjectClassId);
             return ssc.studentId === studentId && sc?.subjectId === targetClass.subjectId;
@@ -562,7 +617,7 @@ export function useRegistrationData() {
         return students.filter(s => s.registerClassId === registerClassId);
     };
 
-    return {
+    const value: RegistrationDataContextType = {
         grades,
         registerClasses,
         subjectClasses,
@@ -590,4 +645,14 @@ export function useRegistrationData() {
         getRegisterClassStudents,
         getSubjectClassEnrollment,
     };
+
+    return <RegistrationDataContext.Provider value={value}>{children}</RegistrationDataContext.Provider>;
+}
+
+export function useRegistrationDataContext() {
+    const context = useContext(RegistrationDataContext);
+    if (context === undefined) {
+        throw new Error("useRegistrationDataContext must be used within a RegistrationDataProvider");
+    }
+    return context;
 }
