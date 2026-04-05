@@ -8,16 +8,181 @@ import TinyMCEEditor from '@/components/shared/TinyMCEEditor';
 import {
     Reply as ReplyIcon,
     ThumbsUp,
+    ThumbsDown,
+    MessageSquare,
     Settings,
-    MoreVertical,
+    MoreHorizontal,
     CheckCircle,
     Bell,
     ChevronLeft
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Discussion, DiscussionReply } from '@/types';
+
+interface ReplyItemProps {
+    reply: DiscussionReply;
+    discussionReplies: DiscussionReply[];
+    replyToId: string | null;
+    replyContent: string;
+    setReplyToId: (id: string | null) => void;
+    setReplyContent: (content: string) => void;
+    user: any;
+    toggleLike: (replyId: string, userId: string) => Promise<void>;
+    handlePostReply: (parentId?: string) => void;
+    depth?: number;
+}
+
+const ReplyItem = ({ 
+    reply, 
+    discussionReplies, 
+    replyToId, 
+    replyContent, 
+    setReplyToId, 
+    setReplyContent, 
+    user, 
+    toggleLike, 
+    handlePostReply, 
+    depth = 0 
+}: ReplyItemProps) => {
+    const childReplies = discussionReplies.filter(r => r.parentId === reply.id);
+    const isEditing = replyToId === reply.id;
+    const hasLiked = user && reply.likes.includes(user.id);
+
+    return (
+        <div className={cn("relative group", depth > 0 ? "ml-8 md:ml-12 mt-6" : "mt-8")}>
+            {/* Thread Line (Elbow Catch) */}
+            {depth > 0 && (
+                <div className="absolute top-[-36px] bottom-4 pointer-events-none" 
+                     style={{ 
+                         left: depth === 1 ? '-29px' : '-33px', // Aligned with parent drop (19px/15px) - indent (48px/etc? ml-12 is 3rem=48px)
+                         width: depth === 1 ? '30px' : '34px'
+                     }}>
+                    <div className="absolute left-0 top-0 bottom-[14px] w-[1.5px] bg-slate-200" />
+                    <div className="absolute left-0 bottom-[14px] h-[16px] w-full border-l-[1.5px] border-b-[1.5px] border-slate-200 rounded-bl-xl" />
+                </div>
+            )}
+
+            {/* Continuation Line (Vertical Drop for Children) */}
+            {childReplies.length > 0 && (
+                <div 
+                    className="absolute top-10 bottom-0 w-[1.5px] bg-slate-200 pointer-events-none" 
+                    style={{ left: depth === 0 ? '19px' : '15px' }} 
+                />
+            )}
+
+            <div className="flex gap-3 md:gap-4 items-start">
+                <Avatar className={cn("shrink-0 shadow-sm transition-transform group-hover:scale-105", depth === 0 ? "w-10 h-10" : "w-8 h-8")}>
+                    <AvatarImage src={reply.authorAvatar || ''} />
+                    <AvatarFallback className="bg-slate-100 text-slate-500 font-bold text-xs">
+                        {(reply.authorName || 'U').charAt(0)}
+                    </AvatarFallback>
+                </Avatar>
+
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="font-bold text-slate-900 text-sm hover:underline cursor-pointer tracking-tight">
+                            {reply.authorName || 'Student'}
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-medium">
+                            {formatDistanceToNow(new Date(reply.createdAt), { addSuffix: true })}
+                        </span>
+                    </div>
+
+                    <div
+                        className="text-[14px] leading-relaxed text-slate-700 mb-2 discussion-content"
+                        dangerouslySetInnerHTML={{ __html: reply.content }}
+                    />
+
+                    <div className="flex items-center gap-1 -ml-2">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={cn("h-8 px-2 flex items-center gap-1.5 hover:bg-slate-100/80 rounded-full", hasLiked ? "text-blue-600" : "text-slate-500")}
+                            onClick={() => user && toggleLike(reply.id, user.id)}
+                        >
+                            <ThumbsUp className={cn("w-3.5 h-3.5", hasLiked && "fill-current")} />
+                            <span className="text-xs font-bold">{reply.likes.length || ''}</span>
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-slate-500 hover:bg-slate-100/80 rounded-full"
+                        >
+                            <ThumbsDown className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-3 text-slate-600 hover:bg-slate-100/80 rounded-full flex items-center gap-1.5"
+                            onClick={() => {
+                                setReplyToId(reply.id);
+                                setReplyContent('');
+                            }}
+                        >
+                            <span className="text-[11px] font-bold">Reply</span>
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-slate-400 hover:bg-slate-100/80 rounded-full"
+                        >
+                            <MoreHorizontal className="w-3.5 h-3.5" />
+                        </Button>
+                    </div>
+
+                    {isEditing && (
+                        <div className="mt-4 bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-inner">
+                            <TinyMCEEditor
+                                value={replyContent}
+                                onChange={setReplyContent}
+                                height={200}
+                                placeholder="Add a public reply..."
+                            />
+                            <div className="flex justify-end gap-2 mt-3">
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="font-bold text-slate-500 hover:bg-white" 
+                                    onClick={() => setReplyToId(null)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button 
+                                    size="sm" 
+                                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-full px-5" 
+                                    onClick={() => handlePostReply(reply.id)}
+                                >
+                                    Reply
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Nested Replies Render */}
+                    <div className="space-y-2">
+                        {childReplies.map(child => (
+                            <ReplyItem 
+                                key={child.id} 
+                                reply={child} 
+                                depth={depth + 1}
+                                discussionReplies={discussionReplies}
+                                replyToId={replyToId}
+                                replyContent={replyContent}
+                                setReplyToId={setReplyToId}
+                                setReplyContent={setReplyContent}
+                                user={user}
+                                toggleLike={toggleLike}
+                                handlePostReply={handlePostReply}
+                            />
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const DiscussionView: React.FC = () => {
     const { id: subjectId, discussionId } = useParams();
@@ -73,148 +238,77 @@ const DiscussionView: React.FC = () => {
         toast.success('Reply posted');
     };
 
-    const ReplyItem = ({ reply, depth = 0 }: { reply: DiscussionReply, depth?: number }) => {
-        const childReplies = discussionReplies.filter(r => r.parentId === reply.id);
-        const isEditing = replyToId === reply.id;
-        const hasLiked = user && reply.likes.includes(user.id);
-
-        return (
-            <div className={cn("mt-4", depth > 0 && "ml-12 border-l-2 pl-6")}>
-                <div className="bg-white border rounded-sm p-6 shadow-sm relative">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="flex gap-4 items-center">
-                            <Avatar className="w-12 h-12">
-                                <AvatarImage src={reply.authorAvatar} />
-                                <AvatarFallback className="bg-slate-200 text-slate-500 font-bold">
-                                    {reply.authorName.charAt(0)}
-                                </AvatarFallback>
-                            </Avatar>
-                            <div>
-                                <h4 className="font-bold text-blue-600 hover:underline cursor-pointer">{reply.authorName}</h4>
-                                <p className="text-xs text-slate-500">{format(new Date(reply.createdAt), 'MMM d, yyyy h:mm a')}</p>
-                            </div>
-                        </div>
-                        <Button variant="ghost" size="icon" className="text-slate-400">
-                            <MoreVertical className="w-4 h-4" />
-                        </Button>
-                    </div>
-
-                    <div
-                        className="prose prose-slate max-w-none text-slate-700 mb-6"
-                        dangerouslySetInnerHTML={{ __html: reply.content }}
-                    />
-
-                    <div className="flex items-center gap-6 pt-4 border-t">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-slate-500 h-8 hover:bg-slate-50 flex items-center gap-2"
-                            onClick={() => {
-                                setReplyToId(reply.id);
-                                setReplyContent('');
-                            }}
-                        >
-                            <ReplyIcon className="w-4 h-4 rotate-180" />
-                            Reply
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className={cn("h-8 flex items-center gap-2", hasLiked ? "text-blue-600" : "text-slate-500")}
-                            onClick={() => user && toggleLike(reply.id, user.id)}
-                        >
-                            <ThumbsUp className={cn("w-4 h-4", hasLiked && "fill-current")} />
-                            {reply.likes.length > 0 && <span>({reply.likes.length} likes)</span>}
-                        </Button>
-                    </div>
-
-                    {isEditing && (
-                        <div className="mt-6 space-y-4 animate-in fade-in slide-in-from-top-2">
-                            <TinyMCEEditor
-                                value={replyContent}
-                                onChange={setReplyContent}
-                                height={200}
-                                placeholder="Write a reply..."
-                            />
-                            <div className="flex justify-end gap-2">
-                                <Button variant="outline" size="sm" onClick={() => setReplyToId(null)}>Cancel</Button>
-                                <Button size="sm" className="bg-blue-600" onClick={() => handlePostReply(reply.id)}>Post Reply</Button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {childReplies.map(child => (
-                    <ReplyItem key={child.id} reply={child} depth={depth + 1} />
-                ))}
-            </div>
-        );
-    };
-
     return (
         <div className="w-full px-4 md:px-8 lg:px-12 py-6 font-sans bg-white min-h-screen">
             <Button
                 variant="ghost"
                 className="mb-6 -ml-2 text-slate-500 hover:text-blue-600"
-                onClick={() => navigate(`/teacher/subjects/${subjectId}/discussions`)}
+                onClick={() => {
+                    const prefix = role === 'learner' ? '/student' : '/teacher';
+                    if (subjectId) {
+                        navigate(`${prefix}/subjects/${subjectId}/discussions`);
+                    } else if (discussion?.subjectId) {
+                        navigate(`${prefix}/subjects/${discussion.subjectId}/discussions`);
+                    } else {
+                        navigate(`${prefix}/discussions`);
+                    }
+                }}
             >
                 <ChevronLeft className="w-4 h-4 mr-1" />
                 Back to Discussions
             </Button>
 
             {/* Topic Header */}
-            <div className="border rounded-sm mb-8 overflow-hidden shadow-sm">
-                <div className="p-8 bg-white">
-                    <div className="flex justify-between items-start mb-6">
-                        <div className="flex gap-6 items-center">
-                            <Avatar className="w-16 h-16 border-2 border-slate-100 shadow-sm">
-                                <AvatarImage src={discussion.authorAvatar} />
-                                <AvatarFallback className="bg-blue-600 text-white font-bold text-xl">
-                                    {discussion.authorName.charAt(0)}
-                                </AvatarFallback>
-                            </Avatar>
-                            <div>
-                                <h1 className="text-2xl font-bold text-blue-600 mb-1">{discussion.title}</h1>
-                                <div className="flex items-center gap-3">
-                                    <span className="font-bold text-slate-700">{discussion.authorName}</span>
-                                    <span className="text-slate-400">|</span>
-                                    <span className="text-slate-500">{format(new Date(discussion.createdAt), 'MMM d, yyyy h:mm a')}</span>
-                                </div>
+            <div className="mb-12 pb-10 border-b border-slate-100">
+                <div className="flex justify-between items-start mb-6">
+                    <div className="flex gap-4 md:gap-6 items-center">
+                        <Avatar className="w-12 h-12 md:w-14 md:h-14 ring-2 ring-blue-50 ring-offset-2">
+                            <AvatarImage src={discussion.authorAvatar || ''} />
+                            <AvatarFallback className="bg-blue-600 text-white font-bold text-xl">
+                                {(discussion.authorName || 'U').charAt(0)}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div>
+                            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 mb-1 tracking-tight">{discussion.title}</h1>
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold text-blue-600 text-sm">{discussion.authorName || 'Instructor'}</span>
+                                <span className="text-slate-300">·</span>
+                                <span className="text-xs text-slate-400 font-medium">{formatDistanceToNow(new Date(discussion.createdAt), { addSuffix: true })}</span>
                             </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                            <Button
-                                variant={isSubscribed ? "secondary" : "outline"}
-                                className={cn("h-10", isSubscribed && "bg-green-50 text-green-700 border-green-200 hover:bg-green-100")}
-                                onClick={() => user && toggleSubscription(discussion.id, user.id)}
-                            >
-                                <CheckCircle className={cn("w-4 h-4 mr-2", isSubscribed ? "text-green-600" : "text-slate-300")} />
-                                {isSubscribed ? "Subscribed" : "Subscribe"}
-                            </Button>
-                            <Button variant="outline" size="icon" className="h-10 w-10">
-                                <Settings className="w-4 h-4 text-slate-600" />
-                            </Button>
-                        </div>
                     </div>
-
-                    <div
-                        className="prose prose-lg dark:prose-invert max-w-none text-slate-800 mb-10 leading-relaxed"
-                        dangerouslySetInnerHTML={{ __html: discussion.content }}
-                    />
-
-                    {!discussion.isClosed && (
-                        <div className="flex justify-between items-center pt-8 border-t border-slate-100 mt-10">
-                            <Button
-                                variant="outline"
-                                className="h-10 px-8 text-blue-600 border-blue-200 hover:bg-blue-50 font-bold"
-                                onClick={() => setIsTopicReplyOpen(true)}
-                            >
-                                <ReplyIcon className="w-4 h-4 mr-2 rotate-180" />
-                                Reply
-                            </Button>
-                        </div>
-                    )}
+                    <div className="flex items-center gap-2 md:gap-3">
+                        <Button
+                            variant={isSubscribed ? "secondary" : "outline"}
+                            className={cn("h-9 rounded-full px-4 text-xs font-bold transition-all", isSubscribed && "bg-green-50 text-green-700 border-green-200 hover:bg-green-100")}
+                            onClick={() => user && toggleSubscription(discussion.id, user.id)}
+                        >
+                            <Bell className={cn("w-3.5 h-3.5 mr-2", isSubscribed ? "text-green-600 fill-current" : "text-slate-400")} />
+                            {isSubscribed ? "Subscribed" : "Notify Me"}
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-slate-400 hover:bg-slate-100">
+                            <MoreHorizontal className="w-4 h-4" />
+                        </Button>
+                    </div>
                 </div>
+
+                <div
+                    className="text-[16px] leading-relaxed text-slate-800 mb-8 max-w-none discussion-content prose-headings:text-slate-900 prose-strong:text-slate-900"
+                    dangerouslySetInnerHTML={{ __html: discussion.content }}
+                />
+
+                {!discussion.isClosed && (
+                    <div className="flex items-center gap-4">
+                        <Button
+                            variant="default"
+                            className="h-10 rounded-full px-8 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-200/50 flex items-center gap-2 transition-all active:scale-95"
+                            onClick={() => setIsTopicReplyOpen(true)}
+                        >
+                            <ReplyIcon className="w-4 h-4 rotate-180" />
+                            Post a Reply
+                        </Button>
+                    </div>
+                )}
             </div>
 
             {/* Replies Section */}
@@ -247,7 +341,18 @@ const DiscussionView: React.FC = () => {
                 ) : (
                     <div className="pb-20">
                         {discussionReplies.filter(r => !r.parentId).map(reply => (
-                            <ReplyItem key={reply.id} reply={reply} />
+                            <ReplyItem 
+                                key={reply.id} 
+                                reply={reply} 
+                                discussionReplies={discussionReplies}
+                                replyToId={replyToId}
+                                replyContent={replyContent}
+                                setReplyToId={setReplyToId}
+                                setReplyContent={setReplyContent}
+                                user={user}
+                                toggleLike={toggleLike}
+                                handlePostReply={handlePostReply}
+                            />
                         ))}
                         {discussionReplies.length === 0 && !isTopicReplyOpen && (
                             <p className="text-center py-20 text-slate-400">No replies yet. Be the first to respond!</p>

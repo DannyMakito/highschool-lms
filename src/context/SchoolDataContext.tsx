@@ -43,14 +43,6 @@ export function SchoolDataProvider({ children }: { children: ReactNode }) {
         const fetchSchoolData = async () => {
             setLoading(true);
 
-            // Failsafe timer
-            const timer = setTimeout(() => {
-                if (!cancelled && loading) {
-                    console.warn("School data fetch timed out, forcing loading to false");
-                    setLoading(false);
-                }
-            }, 5000);
-
             try {
                 // Fire all queries in parallel
                 const [profilesRes, assignmentsRes, classesRes, studentsRes, sscRes] = await Promise.all([
@@ -104,7 +96,6 @@ export function SchoolDataProvider({ children }: { children: ReactNode }) {
             } catch (error) {
                 console.error("Error fetching school data:", error);
             } finally {
-                clearTimeout(timer);
                 if (!cancelled) setLoading(false);
             }
         };

@@ -7,31 +7,13 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error('Missing Supabase environment variables. Please check your .env file.');
 }
 
-const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
-
-const fetchWithTimeout: typeof fetch = async (input, init) => {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
-
-  // If caller already provided a signal, forward abort to ours
-  const externalSignal = init?.signal;
-  if (externalSignal) {
-    if (externalSignal.aborted) controller.abort();
-    else externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
-  }
-
-  try {
-    return await fetch(input, { ...init, signal: controller.signal });
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
-};
-
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    // Store session in localStorage for better persistence across tab switches
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
   },
   realtime: {
     params: {
@@ -39,7 +21,9 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
     }
   },
   global: {
-    fetch: fetchWithTimeout
+    headers: {
+      'x-application-name': 'highschool-lms'
+    }
   }
 });
 

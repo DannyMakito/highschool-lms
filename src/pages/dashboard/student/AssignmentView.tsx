@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import supabase from "@/lib/supabase";
 
 export default function AssignmentView() {
     const { id: assignmentId } = useParams();
@@ -35,7 +36,7 @@ export default function AssignmentView() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         const hasText = content.trim().length > 0;
         const hasFile = !!selectedFile;
 
@@ -55,18 +56,89 @@ export default function AssignmentView() {
         }
 
         setIsSubmitting(true);
-        // Simulate upload delay
-        setTimeout(() => {
+        try {
+            let submissionContent = content;
+            let submissionFileType: "pdf" | "text" = "text";
+
+            // Upload PDF to Supabase Storage if file is selected
+            if (selectedFile) {
+                toast.loading("📤 Uploading PDF file...", { duration: 999999 });
+                
+                try {
+                    const fileName = `${assignmentId}/${user?.id}/${Date.now()}_${selectedFile.name}`;
+                    console.log('[AssignmentView] Starting PDF upload:', { 
+                        fileName, 
+                        fileSize: selectedFile.size, 
+                        fileType: selectedFile.type 
+                    });
+
+                    const { data: uploadData, error: uploadError } = await supabase.storage
+                        .from('assignment-submissions')
+                        .upload(fileName, selectedFile, {
+                            cacheControl: '3600',
+                            upsert: false
+                        });
+
+                    if (uploadError) {
+                        console.error('[AssignmentView] Upload error:', uploadError);
+                        toast.dismiss();
+                        toast.error(`❌ Upload failed: ${uploadError.message}`);
+                        setIsSubmitting(false);
+                        return;
+                    }
+
+                    // Get public URL of uploaded file
+                    const { data: publicUrlData } = supabase.storage
+                        .from('assignment-submissions')
+                        .getPublicUrl(fileName);
+
+                    submissionContent = publicUrlData.publicUrl;
+                    submissionFileType = "pdf";
+                    
+                    console.log('[AssignmentView] PDF uploaded successfully:', { 
+                        fileName, 
+                        publicUrl: submissionContent 
+                    });
+                    
+                    toast.dismiss();
+                    toast.success("✅ PDF uploaded successfully!");
+                } catch (uploadException: any) {
+                    console.error('[AssignmentView] Unexpected upload error:', uploadException);
+                    toast.dismiss();
+                    
+                    // Check if issue is bucket not found
+                    if (uploadException?.message?.includes('not found') || uploadException?.status === 400) {
+                        toast.error("❌ Storage not configured. Please contact your administrator.");
+                    } else {
+                        toast.error(`❌ Upload failed: ${uploadException?.message || 'Unknown error'}`);
+                    }
+                    setIsSubmitting(false);
+                    return;
+                }
+            }
+
+            // Submit work with uploaded file URL or text content
+            toast.loading("📝 Submitting assignment...", { duration: 999999 });
+            
             submitWork({
                 assignmentId: assignmentId || "",
                 studentId: user?.id || "",
                 studentName: user?.name || "Student",
-                content: selectedFile ? selectedFile.name : content,
-                fileType: selectedFile ? "pdf" : "text",
+                content: submissionContent,
+                fileType: submissionFileType,
             });
+
+            toast.dismiss();
+            toast.success("✅ Assignment submitted successfully!");
+            setContent("");
+            setSelectedFile(null);
+        } catch (error) {
+            console.error('[AssignmentView] Submission error:', error);
+            toast.dismiss();
+            toast.error("❌ Error submitting assignment. Please try again.");
+        } finally {
             setIsSubmitting(false);
-            toast.success("Assignment submitted successfully!");
-        }, 1500);
+        }
     };
 
     if (!assignment) return <div>Assignment not found</div>;
@@ -185,7 +257,7 @@ export default function AssignmentView() {
                                                         {rubric.criteria.map(c => (
                                                             <div key={c.id} className="flex items-center justify-between text-sm py-2 border-b border-primary/10">
                                                                 <span className="font-bold">{c.title}</span>
-                                                                <span className="font-black">{submission.rubricGrades[c.id] || 0} / {c.maxPoints}</span>
+                                                                <span className="font-black">{(submission.rubricGrades?.[c.id]) || 0} / {c.maxPoints || 0}</span>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -222,12 +294,12 @@ export default function AssignmentView() {
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
                                     <span>Total Points</span>
-                                    <span>{assignment.totalMarks}</span>
+                                    <span>{assignment.totalMarks || 0}</span>
                                 </div>
                                 {isGraded && (
                                     <div className="flex justify-between items-center text-primary text-xl font-black pt-2">
                                         <span>Your Grade</span>
-                                        <span>{submission.totalGrade}</span>
+                                        <span>{submission.totalGrade || 0}</span>
                                     </div>
                                 )}
                             </div>
@@ -254,3 +326,4 @@ export default function AssignmentView() {
         </div>
     );
 }
+ 

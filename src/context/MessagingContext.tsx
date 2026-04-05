@@ -49,28 +49,21 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         const fetchMessagingData = async () => {
             setLoading(true);
 
-            // Failsafe timer
-            const timer = setTimeout(() => {
-                if (!cancelled && loading) {
-                    console.warn("Messaging data fetch timed out, forcing loading to false");
-                    setLoading(false);
-                }
-            }, 5000);
-
             try {
                 // Fetch all in parallel
                 const [annRes, discRes, repliesRes] = await Promise.all([
-                    supabase.from('announcements').select('*').order('created_at', { ascending: false }),
-                    supabase.from('discussions').select('*').order('updated_at', { ascending: false }),
-                    supabase.from('discussion_replies').select('*').order('created_at', { ascending: true }),
+                    supabase.from('announcements').select('*, profiles!author_id(full_name, role, avatar_url)').order('created_at', { ascending: false }),
+                    supabase.from('discussions').select('*, profiles!author_id(full_name, role, avatar_url)').order('updated_at', { ascending: false }),
+                    supabase.from('discussion_replies').select('*, profiles!author_id(full_name, role, avatar_url)').order('created_at', { ascending: true }),
                 ]);
 
                 if (cancelled) return;
 
                 setAnnouncements((annRes.data || []).map(a => ({
                     ...a,
-                    authorName: a.author_id,
-                    authorRole: 'Admin',
+                    authorName: (a as any).profiles?.full_name || 'System',
+                    authorRole: (a as any).profiles?.role || 'Admin',
+                    authorAvatar: (a as any).profiles?.avatar_url || '',
                     targetGrades: a.target_grades,
                     createdAt: a.created_at
                 })));
@@ -79,6 +72,9 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
                     ...d,
                     subjectId: d.subject_id,
                     authorId: d.author_id,
+                    authorName: (d as any).profiles?.full_name || 'Anonymous Instructor',
+                    authorRole: (d as any).profiles?.role || 'teacher',
+                    authorAvatar: (d as any).profiles?.avatar_url || '',
                     readByUsers: d.read_by_users || [],
                     subscribedUserIds: d.subscribed_user_ids || [],
                     createdAt: d.created_at,
@@ -89,6 +85,9 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
                     ...r,
                     discussionId: r.discussion_id,
                     authorId: r.author_id,
+                    authorName: (r as any).profiles?.full_name || 'User',
+                    authorRole: (r as any).profiles?.role || 'learner',
+                    authorAvatar: (r as any).profiles?.avatar_url || '',
                     likes: r.likes || [],
                     readByUsers: r.read_by_users || [],
                     createdAt: r.created_at
@@ -97,7 +96,6 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
             } catch (error) {
                 console.error("Error fetching messaging data:", error);
             } finally {
-                clearTimeout(timer);
                 if (!cancelled) setLoading(false);
             }
         };

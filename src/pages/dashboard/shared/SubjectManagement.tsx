@@ -38,7 +38,12 @@ export default function SubjectManagement() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [newSubject, setNewSubject] = useState({
+    const [newSubject, setNewSubject] = useState<{
+        name: string;
+        description: string;
+        gradeTier: "8" | "9" | "10" | "11" | "12";
+        thumbnail: string;
+    }>({
         name: "",
         description: "",
         gradeTier: "8",

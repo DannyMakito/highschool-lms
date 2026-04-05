@@ -48,6 +48,24 @@ export default function QuizAnalytics() {
     const [selectedStudent, setSelectedStudent] = useState<any>(null);
 
     const quiz = quizzes.find(q => q.id === id);
+
+    if (!quiz) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full bg-slate-50">
+                <div className="text-center space-y-4">
+                    <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto">
+                        <HelpCircle className="h-8 w-8 text-slate-400" />
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-900">Quiz not found</h2>
+                    <p className="text-slate-500">The quiz you're looking for doesn't exist or has been deleted.</p>
+                    <Button onClick={() => navigate("/teacher/assignments/quizzes")} className="rounded-xl">
+                        Back to Quizzes
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
     const subject = subjects.find(s => s.id === quiz?.subjectId);
     const quizSubmissions = submissions.filter(s => s.quizId === id);
 
@@ -71,12 +89,18 @@ export default function QuizAnalytics() {
     };
 
     // Calculate Question aggregated data
-    const questionStats = quiz?.questions.map(q => {
+    const questionStats = (quiz.questions || []).map(q => {
         const responsesCount = quizSubmissions.length;
         const correctCount = quizSubmissions.filter(s => {
             const answerObj = s.answers.find(a => a.questionId === q.id);
             const userAnswers = answerObj?.answer || [];
-            const correctOptionIds = q.options.filter(opt => opt.isCorrect).map(opt => opt.id);
+            
+            if (q.type === 'fill-in-the-blank') {
+                const userAnswer = userAnswers[0] || "";
+                return userAnswer.toLowerCase().trim() === (q.correctAnswer || "").toLowerCase().trim();
+            }
+            
+            const correctOptionIds = (q.options || []).filter(opt => opt.isCorrect).map(opt => opt.id);
             return userAnswers.length === correctOptionIds.length &&
                 (userAnswers as string[]).every(id => correctOptionIds.includes(id));
         }).length;
@@ -88,23 +112,6 @@ export default function QuizAnalytics() {
             totalCount: responsesCount
         };
     });
-
-    if (!quiz) {
-        return (
-            <div className="flex flex-col items-center justify-center h-full bg-slate-50">
-                <div className="text-center space-y-4">
-                    <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto">
-                        <HelpCircle className="h-8 w-8 text-slate-400" />
-                    </div>
-                    <h2 className="text-xl font-bold text-slate-900">Quiz not found</h2>
-                    <p className="text-slate-500">The quiz you're looking for doesn't exist or has been deleted.</p>
-                    <Button onClick={() => navigate("/teacher/assignments/quizzes")} className="rounded-xl">
-                        Back to Quizzes
-                    </Button>
-                </div>
-            </div>
-        );
-    }
 
 
     return (
@@ -179,7 +186,7 @@ export default function QuizAnalytics() {
                                 </Badge>
                             </div>
                             <div className="flex items-center gap-4 text-[11px] font-black uppercase tracking-widest text-slate-400">
-                                <span className="flex items-center gap-1.5"><HelpCircle className="h-4 w-4" /> {quiz.questions.length} Questions</span>
+                                <span className="flex items-center gap-1.5"><HelpCircle className="h-4 w-4" /> {(quiz.questions || []).length} Questions</span>
                                 <span>•</span>
                                 <span>Created {new Date(quiz.createdAt).toLocaleDateString()}</span>
                             </div>
@@ -331,9 +338,9 @@ export default function QuizAnalytics() {
                                                     <div className="flex items-center gap-3">
                                                         <Avatar className="h-9 w-9 ring-1 ring-slate-100">
                                                             <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${s.studentId}`} />
-                                                            <AvatarFallback>{s.studentName[0]}</AvatarFallback>
+                                                            <AvatarFallback>{(s.studentName || 'S')[0]}</AvatarFallback>
                                                         </Avatar>
-                                                        <span className="font-bold text-slate-800">{s.studentName}</span>
+                                                        <span className="font-bold text-slate-800">{s.studentName || 'Anonymous Student'}</span>
                                                     </div>
                                                 </td>
                                                 <td className="p-4">
@@ -415,18 +422,25 @@ export default function QuizAnalytics() {
                                 <span>•</span>
                                 <span>{selectedStudent ? new Date(selectedStudent.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}</span>
                                 <span>•</span>
-                                <span className="flex items-center gap-1.5"><HelpCircle className="h-4 w-4" /> {quiz.questions.length} Questions</span>
+                                <span className="flex items-center gap-1.5"><HelpCircle className="h-4 w-4" /> {(quiz.questions || []).length} Questions</span>
                             </div>
                         </div>
 
                         {/* Question Grid */}
                         <div className="grid grid-cols-5 md:grid-cols-10 gap-3">
-                            {quiz.questions.map((q, i) => {
+                            {(quiz.questions || []).map((q, i) => {
                                 const answerObj = selectedStudent?.answers.find((a: any) => a.questionId === q.id);
                                 const userAnswers = answerObj?.answer || [];
-                                const correctOptionIds = q.options.filter(opt => opt.isCorrect).map(opt => opt.id);
-                                const isCorrect = userAnswers.length === correctOptionIds.length &&
-                                    (userAnswers as string[]).every(id => correctOptionIds.includes(id));
+                                let isCorrect = false;
+
+                                if (q.type === 'fill-in-the-blank') {
+                                    const userAnswer = userAnswers[0] || "";
+                                    isCorrect = userAnswer.toLowerCase().trim() === (q.correctAnswer || "").toLowerCase().trim();
+                                } else {
+                                    const correctOptionIds = (q.options || []).filter(opt => opt.isCorrect).map(opt => opt.id);
+                                    isCorrect = userAnswers.length === correctOptionIds.length &&
+                                        (userAnswers as string[]).every(id => correctOptionIds.includes(id));
+                                }
 
                                 return (
                                     <div key={q.id} className="relative">
@@ -451,9 +465,13 @@ export default function QuizAnalytics() {
                                     <div className="w-2 h-2 rounded-full bg-emerald-500" />
                                     Correct
                                     <span className="text-slate-400">
-                                        {quiz.questions.filter(q => {
+                                        {(quiz.questions || []).filter(q => {
                                             const answerObj = selectedStudent?.answers.find((a: any) => a.questionId === q.id);
                                             const userAnswers = answerObj?.answer || [];
+                                            if (q.type === 'fill-in-the-blank') {
+                                                const userAnswer = userAnswers[0] || "";
+                                                return userAnswer.toLowerCase().trim() === (q.correctAnswer || "").toLowerCase().trim();
+                                            }
                                             const correctIds = q.options.filter(opt => opt.isCorrect).map(opt => opt.id);
                                             return userAnswers.length === correctIds.length && (userAnswers as string[]).every(id => correctIds.includes(id));
                                         }).length}
@@ -463,9 +481,13 @@ export default function QuizAnalytics() {
                                     <div className="w-2 h-2 rounded-full bg-red-500" />
                                     Incorrect
                                     <span className="text-slate-400">
-                                        {quiz.questions.length - quiz.questions.filter(q => {
+                                        {(quiz.questions || []).length - (quiz.questions || []).filter(q => {
                                             const answerObj = selectedStudent?.answers.find((a: any) => a.questionId === q.id);
                                             const userAnswers = answerObj?.answer || [];
+                                            if (q.type === 'fill-in-the-blank') {
+                                                const userAnswer = userAnswers[0] || "";
+                                                return userAnswer.toLowerCase().trim() === (q.correctAnswer || "").toLowerCase().trim();
+                                            }
                                             const correctIds = q.options.filter(opt => opt.isCorrect).map(opt => opt.id);
                                             return userAnswers.length === correctIds.length && (userAnswers as string[]).every(id => correctIds.includes(id));
                                         }).length}
@@ -475,12 +497,19 @@ export default function QuizAnalytics() {
                         </div>
 
                         <div className="detailed-breakdown space-y-6">
-                            {quiz.questions.map((q, idx) => {
+                            {(quiz.questions || []).map((q, idx) => {
                                 const answerObj = selectedStudent?.answers.find((a: any) => a.questionId === q.id);
                                 const userAnswers = answerObj?.answer || [];
-                                const correctOptionIds = q.options.filter(opt => opt.isCorrect).map(opt => opt.id);
-                                const isCorrect = userAnswers.length === correctOptionIds.length &&
-                                    (userAnswers as string[]).every(id => correctOptionIds.includes(id));
+                                let isCorrect = false;
+
+                                if (q.type === 'fill-in-the-blank') {
+                                    const userAnswer = userAnswers[0] || "";
+                                    isCorrect = userAnswer.toLowerCase().trim() === (q.correctAnswer || "").toLowerCase().trim();
+                                } else {
+                                    const correctOptionIds = (q.options || []).filter(opt => opt.isCorrect).map(opt => opt.id);
+                                    isCorrect = userAnswers.length === correctOptionIds.length &&
+                                        (userAnswers as string[]).every(id => correctOptionIds.includes(id));
+                                }
 
                                 return (
                                     <div key={q.id} className="p-8 rounded-[2rem] border border-slate-100 space-y-6 hover:border-indigo-100 transition-all">
@@ -504,33 +533,54 @@ export default function QuizAnalytics() {
                                         </div>
                                         <div className="space-y-4">
                                             <p className="text-lg font-black text-slate-900">{q.text}</p>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                {q.options.map((opt) => {
-                                                    const isSelected = userAnswers.includes(opt.id);
-                                                    const isCorrectOpt = opt.isCorrect;
+                                            
+                                            {q.type === 'fill-in-the-blank' ? (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col gap-2">
+                                                        <span className="text-[10px] font-black uppercase text-slate-400">Student's Answer</span>
+                                                        <p className={cn(
+                                                            "text-lg font-bold",
+                                                            isCorrect ? "text-emerald-600" : "text-rose-600"
+                                                        )}>
+                                                            {userAnswers[0] || <span className="italic text-slate-300">No answer provided</span>}
+                                                        </p>
+                                                    </div>
+                                                    <div className="p-5 rounded-2xl bg-emerald-50/30 border border-emerald-100/50 flex flex-col gap-2">
+                                                        <span className="text-[10px] font-black uppercase text-emerald-600/60">Correct Answer</span>
+                                                        <p className="text-lg font-bold text-emerald-700">
+                                                            {q.correctAnswer}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                    {(q.options || []).map((opt) => {
+                                                        const isSelected = userAnswers.includes(opt.id);
+                                                        const isCorrectOpt = opt.isCorrect;
 
-                                                    return (
-                                                        <div
-                                                            key={opt.id}
-                                                            className={cn(
-                                                                "p-4 rounded-xl border-2 flex items-center justify-between transition-all",
-                                                                isSelected && isCorrectOpt ? "bg-emerald-50 border-emerald-500/20" :
-                                                                    isSelected && !isCorrectOpt ? "bg-red-50 border-red-500/20" :
-                                                                        !isSelected && isCorrectOpt ? "bg-slate-50 border-emerald-500/10 border-dashed" :
-                                                                            "bg-white border-slate-50"
-                                                            )}
-                                                        >
-                                                            <span className={cn(
-                                                                "text-sm font-bold",
-                                                                isSelected ? "text-slate-900" : "text-slate-500"
-                                                            )}>{opt.text}</span>
-                                                            {isSelected && isCorrectOpt && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
-                                                            {isSelected && !isCorrectOpt && <XCircle className="h-4 w-4 text-red-500" />}
-                                                            {!isSelected && isCorrectOpt && <CheckCircle2 className="h-4 w-4 text-emerald-300 opacity-50" />}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
+                                                        return (
+                                                            <div
+                                                                key={opt.id}
+                                                                className={cn(
+                                                                    "p-4 rounded-xl border-2 flex items-center justify-between transition-all",
+                                                                    isSelected && isCorrectOpt ? "bg-emerald-50 border-emerald-500/20" :
+                                                                        isSelected && !isCorrectOpt ? "bg-red-50 border-red-500/20" :
+                                                                            !isSelected && isCorrectOpt ? "bg-slate-50 border-emerald-500/10 border-dashed" :
+                                                                                "bg-white border-slate-50"
+                                                                )}
+                                                            >
+                                                                <span className={cn(
+                                                                    "text-sm font-bold",
+                                                                    isSelected ? "text-slate-900" : "text-slate-500"
+                                                                )}>{opt.text}</span>
+                                                                {isSelected && isCorrectOpt && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
+                                                                {isSelected && !isCorrectOpt && <XCircle className="h-4 w-4 text-red-500" />}
+                                                                {!isSelected && isCorrectOpt && <CheckCircle2 className="h-4 w-4 text-emerald-300 opacity-50" />}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 );

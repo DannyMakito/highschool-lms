@@ -88,6 +88,7 @@ export function App() {
             <Route path="subjects/:id/discussions/create" element={<DiscussionForm />} />
             <Route path="subjects/:id/discussions/edit/:discussionId" element={<DiscussionForm />} />
             <Route path="discussions" element={<Discussions />} />
+            <Route path="discussions/create" element={<DiscussionForm />} />
             <Route path="subjects/:id/discussions/view/:discussionId" element={<DiscussionView />} />
 
             <Route index element={<Navigate to="dashboard" replace />} />

@@ -152,7 +152,8 @@ export default function CreateQuiz() {
         return {
             ...defaultQuiz,
             ...existingQuiz,
-            settings: existingQuiz.settings ? { ...defaultQuiz.settings, ...existingQuiz.settings } : defaultQuiz.settings
+            settings: existingQuiz.settings ? { ...defaultQuiz.settings, ...existingQuiz.settings } : defaultQuiz.settings,
+            questions: existingQuiz.questions && existingQuiz.questions.length > 0 ? existingQuiz.questions : defaultQuiz.questions
         };
     });
 
@@ -238,12 +239,20 @@ export default function CreateQuiz() {
         });
     };
 
-    const saveDraft = () => {
-        addQuiz({ ...quiz, status: "draft" });
-        alert("Draft saved!");
+    const saveDraft = async () => {
+        try {
+            await addQuiz({ ...quiz, status: "draft" });
+            toast.success("Draft Saved", {
+                description: "Your quiz draft has been updated."
+            });
+        } catch (error: any) {
+            toast.error("Save Failed", {
+                description: error.message || "Failed to save your draft."
+            });
+        }
     };
 
-    const publishQuiz = () => {
+    const publishQuiz = async () => {
         if (!quiz.settingsConfigured) {
             toast.error("Settings Required", {
                 description: "Please review and save your quiz settings before publishing.",
@@ -255,11 +264,17 @@ export default function CreateQuiz() {
             return;
         }
 
-        addQuiz({ ...quiz, status: "published" });
-        toast.success("Quiz Published", {
-            description: "Your quiz is now live for students."
-        });
-        navigate(`/teacher/subjects/${subjectId}`);
+        try {
+            await addQuiz({ ...quiz, status: "published" });
+            toast.success("Quiz Published", {
+                description: "Your quiz is now live for students."
+            });
+            navigate(`/teacher/subjects/${subjectId}`);
+        } catch (error: any) {
+            toast.error("Publish Failed", {
+                description: error.message || "Could not publish your quiz."
+            });
+        }
     };
 
 

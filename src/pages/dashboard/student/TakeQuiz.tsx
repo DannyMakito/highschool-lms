@@ -25,14 +25,15 @@ export default function TakeQuiz() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { quizzes, addSubmission } = useSubjects();
+    const { quizzes, addSubmission, loading } = useSubjects();
 
     const quiz = useMemo(() => quizzes.find(q => q.id === id), [quizzes, id]);
 
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string[]>>({});
-    const [timeLeft, setTimeLeft] = useState(quiz ? quiz.settings.timeLimit * 60 : 0);
+    const [timeLeft, setTimeLeft] = useState(0);
     const [isFinished, setIsFinished] = useState(false);
+    const [showSecurityShield, setShowSecurityShield] = useState(false);
     const [startTime] = useState(Date.now());
     const [quizResult, setQuizResult] = useState<{
         score: number;
@@ -42,9 +43,99 @@ export default function TakeQuiz() {
         timeSpent: number;
     } | null>(null);
 
+    // Memoize and shuffle questions if needed
+    const questions = useMemo(() => {
+        if (!quiz?.questions) return [];
+        let items = [...quiz.questions];
+        if (quiz.settings?.shuffleQuestions) {
+            // Fisher-Yates Shuffle
+            for (let i = items.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [items[i], items[j]] = [items[j], items[i]];
+            }
+        }
+        return items;
+    }, [quiz?.id]); // Only reshuffle if the quiz ID changes
+
+    // Security & Anti-screenshot logic
+    useEffect(() => {
+        if (!quiz?.settings?.proctoring) return;
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!quiz.settings.proctoring.preventScreenshots) return;
+            // Block common screenshot/print keys
+            const blockedKeys = ['PrintScreen', 'F12', 'p', 's'];
+            if (blockedKeys.includes(e.key) || (e.ctrlKey && (e.key === 'p' || e.key === 's' || e.key === 'shift' && e.key === 'i'))) {
+                if (e.key === 'PrintScreen' || (e.ctrlKey && e.key === 'p')) {
+                    e.preventDefault();
+                    toast.error("Action Blocked", { description: "Screenshots and Printing are disabled for this assessment." });
+                }
+            }
+        };
+
+        const handleContextMenu = (e: MouseEvent) => {
+            if (!quiz.settings.proctoring.preventScreenshots) return;
+            e.preventDefault();
+            toast.error("Disabled", { description: "Right-click is disabled during the assessment." });
+        };
+
+        const handleVisibilityChange = () => {
+            if (quiz.settings.proctoring.tabSwitchDetection && document.visibilityState === 'hidden') {
+                setShowSecurityShield(true);
+                toast.warning("Tab Switch Detected", { 
+                    description: "Switching tabs is recorded and may invalidate your assessment.",
+                    duration: 5000
+                });
+            }
+        };
+
+        const handleBlur = () => {
+            if (quiz.settings.proctoring.tabSwitchDetection) {
+                setShowSecurityShield(true);
+            }
+        };
+
+        const handleFocus = () => {
+            setShowSecurityShield(false);
+        };
+
+        // Inject global security CSS
+        let style: HTMLStyleElement | null = null;
+        if (quiz.settings.proctoring.preventScreenshots) {
+            style = document.createElement('style');
+            style.innerHTML = `
+                @media print { body { display: none !important; } }
+                .no-select { -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; }
+            `;
+            document.head.appendChild(style);
+        }
+
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('contextmenu', handleContextMenu);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('blur', handleBlur);
+        window.addEventListener('focus', handleFocus);
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('contextmenu', handleContextMenu);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('blur', handleBlur);
+            window.removeEventListener('focus', handleFocus);
+            if (style) document.head.removeChild(style);
+        };
+    }, [quiz?.settings?.proctoring]);
+
+    // Set initial time when quiz data loads
+    useEffect(() => {
+        if (quiz && !isFinished && timeLeft === 0) {
+            setTimeLeft(quiz.settings?.timeLimit ? quiz.settings.timeLimit * 60 : 3600);
+        }
+    }, [quiz, isFinished]);
+
     // Timer logic
     useEffect(() => {
-        if (!quiz || isFinished) return;
+        if (!quiz || isFinished || timeLeft <= 0) return;
 
         const timer = setInterval(() => {
             setTimeLeft(prev => {
@@ -58,7 +149,7 @@ export default function TakeQuiz() {
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [quiz, isFinished]);
+    }, [quiz, isFinished, timeLeft > 0]);
 
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -66,23 +157,29 @@ export default function TakeQuiz() {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const currentQuestion = quiz?.questions[currentQuestionIndex];
-    const totalQuestions = quiz?.questions.length || 0;
-    const progress = ((currentQuestionIndex + 1) / totalQuestions) * 100;
+    const currentQuestion = (questions || [])[currentQuestionIndex];
+    const totalQuestions = (questions || []).length;
+    const progress = totalQuestions > 0 ? ((currentQuestionIndex + 1) / totalQuestions) * 100 : 0;
 
-    const handleAnswerSelect = (optionId: string) => {
+    const handleAnswerSelect = (optionId: string | string[]) => {
         if (!currentQuestion) return;
 
         setSelectedAnswers(prev => {
             const currentAnswers = prev[currentQuestion.id] || [];
+
+            if (currentQuestion.type === 'fill-in-the-blank') {
+                return { ...prev, [currentQuestion.id]: Array.isArray(optionId) ? optionId : [optionId] };
+            }
+
             if (currentQuestion.allowMultipleAnswers) {
-                if (currentAnswers.includes(optionId)) {
-                    return { ...prev, [currentQuestion.id]: currentAnswers.filter(id => id !== optionId) };
+                const singleId = Array.isArray(optionId) ? optionId[0] : optionId;
+                if (currentAnswers.includes(singleId)) {
+                    return { ...prev, [currentQuestion.id]: currentAnswers.filter(id => id !== singleId) };
                 } else {
-                    return { ...prev, [currentQuestion.id]: [...currentAnswers, optionId] };
+                    return { ...prev, [currentQuestion.id]: [...currentAnswers, singleId] };
                 }
             } else {
-                return { ...prev, [currentQuestion.id]: [optionId] };
+                return { ...prev, [currentQuestion.id]: Array.isArray(optionId) ? optionId : [optionId] };
             }
         });
     };
@@ -96,12 +193,18 @@ export default function TakeQuiz() {
         let score = 0;
         let correctCount = 0;
 
-        quiz.questions.forEach(q => {
+        (questions || []).forEach(q => {
             const userAnswers = selectedAnswers[q.id] || [];
-            const correctOptionIds = q.options.filter(opt => opt.isCorrect).map(opt => opt.id);
+            let isCorrect = false;
 
-            const isCorrect = userAnswers.length === correctOptionIds.length &&
-                userAnswers.every(id => correctOptionIds.includes(id));
+            if (q.type === 'fill-in-the-blank') {
+                const userAnswer = userAnswers[0] || "";
+                isCorrect = userAnswer.toLowerCase().trim() === q.correctAnswer?.toLowerCase().trim();
+            } else {
+                const correctOptionIds = (q.options || []).filter(opt => opt.isCorrect).map(opt => opt.id);
+                isCorrect = userAnswers.length === correctOptionIds.length &&
+                    userAnswers.every(id => correctOptionIds.includes(id));
+            }
 
             if (isCorrect) {
                 score += q.points;
@@ -109,10 +212,10 @@ export default function TakeQuiz() {
             }
         });
 
-        const accuracy = Math.round((correctCount / totalQuestions) * 100);
+        const accuracy = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
         const timeSpent = Math.round((Date.now() - startTime) / 1000);
 
-        const totalPoints = quiz.questions.reduce((acc, q) => acc + q.points, 0);
+        const totalPoints = (quiz.questions || []).reduce((acc, q) => acc + q.points, 0);
 
         const submission = {
             id: crypto.randomUUID(),
@@ -125,18 +228,25 @@ export default function TakeQuiz() {
             timeSpent,
             completedAt: new Date().toISOString(),
             status: "completed" as const,
-            answers: quiz.questions.map(q => {
+            answers: (questions || []).map(q => {
                 const userAnswers = selectedAnswers[q.id] || [];
-                const correctIds = q.options.filter(opt => opt.isCorrect).map(opt => opt.id);
-                const isCorrect = userAnswers.length === correctIds.length &&
-                    userAnswers.every(id => correctIds.includes(id));
+                let isCorrect = false;
+
+                if (q.type === 'fill-in-the-blank') {
+                    const userAnswer = userAnswers[0] || "";
+                    isCorrect = userAnswer.toLowerCase().trim() === q.correctAnswer?.toLowerCase().trim();
+                } else {
+                    const correctIds = (q.options || []).filter(opt => opt.isCorrect).map(opt => opt.id);
+                    isCorrect = userAnswers.length === correctIds.length &&
+                        userAnswers.every(id => correctIds.includes(id));
+                }
 
                 return {
                     questionId: q.id,
                     answer: userAnswers,
                     isCorrect,
                     pointsEarned: isCorrect ? q.points : 0,
-                    timeSpent: 0 // Could potentially track per-question time if needed
+                    timeSpent: 0
                 };
             })
         };
@@ -152,7 +262,27 @@ export default function TakeQuiz() {
         toast.success("Quiz submitted successfully!");
     };
 
-    if (!quiz || (!currentQuestion && !isFinished)) return null;
+    if (loading) {
+        return (
+            <div className="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center">
+                <div className="h-16 w-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
+                <p className="text-slate-500 font-bold">Preparing your assessment...</p>
+            </div>
+        );
+    }
+
+    if (!quiz || (!currentQuestion && !isFinished)) {
+        return (
+            <div className="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center p-8 text-center">
+                <div className="h-20 w-20 bg-rose-50 rounded-full flex items-center justify-center mb-6">
+                    <AlertCircle className="h-10 w-10 text-rose-500" />
+                </div>
+                <h2 className="text-2xl font-black text-slate-900 mb-2">Oops! Assessment incomplete</h2>
+                <p className="text-slate-500 max-w-md mb-8">This assessment hasn't been set up with any questions yet. Please contact your instructor.</p>
+                <Button onClick={() => navigate(-1)} className="rounded-xl px-10 h-14 font-bold bg-slate-900 text-white">Go Back</Button>
+            </div>
+        );
+    }
 
     if (isFinished && quizResult) {
         return (
@@ -214,7 +344,10 @@ export default function TakeQuiz() {
     }
 
     return (
-        <div className="fixed inset-0 bg-white z-[100] flex flex-col overflow-hidden font-sans">
+        <div className={cn(
+            "fixed inset-0 bg-white z-[100] flex flex-col overflow-hidden font-sans",
+            quiz?.settings?.proctoring?.preventScreenshots && "no-select"
+        )}>
             {/* Top Bar - Mobile First */}
             <header className="h-20 border-b border-slate-100 px-6 flex items-center justify-between sticky top-0 bg-white z-10">
                 <div className="flex items-center gap-4">
@@ -285,43 +418,66 @@ export default function TakeQuiz() {
                             </p>
                         </div>
 
-                        {/* Options (Image 1 & 3 Ref) */}
+                        {/* Options Section */}
                         <div className="space-y-4">
-                            {currentQuestion?.options.map((option, idx) => {
-                                const isSelected = currentQuestion && selectedAnswers[currentQuestion.id]?.includes(option.id);
-                                const letter = String.fromCharCode(65 + idx);
-
-                                return (
-                                    <button
-                                        key={option.id}
-                                        className={cn(
-                                            "w-full p-6 md:p-8 rounded-[1.5rem] border-2 text-left flex items-center gap-6 transition-all group relative overflow-hidden",
-                                            isSelected
-                                                ? "border-emerald-500 bg-emerald-50/30 ring-4 ring-emerald-50"
-                                                : "border-slate-100 hover:border-slate-200 bg-white"
-                                        )}
-                                        onClick={() => handleAnswerSelect(option.id)}
-                                    >
-                                        <div className={cn(
-                                            "h-12 w-12 rounded-xl flex items-center justify-center text-lg font-black shrink-0 transition-colors",
-                                            isSelected ? "bg-emerald-500 text-white" : "bg-slate-50 text-slate-400 group-hover:bg-slate-100"
-                                        )}>
-                                            {letter}
-                                        </div>
-                                        <span className={cn(
-                                            "text-lg md:text-xl font-bold flex-1 leading-tight",
-                                            isSelected ? "text-slate-900" : "text-slate-600"
-                                        )}>
-                                            {option.text}
-                                        </span>
-                                        {isSelected && (
-                                            <div className="h-6 w-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-200">
-                                                <CheckCircle2 className="h-4 w-4 text-white" />
+                            {currentQuestion?.type === 'fill-in-the-blank' ? (
+                                <div className="space-y-6">
+                                    <div className="p-6 md:p-8 rounded-[1.5rem] bg-slate-50 border-2 border-slate-100 flex flex-col gap-4 group transition-all focus-within:border-indigo-500 focus-within:bg-white focus-within:ring-8 focus-within:ring-indigo-50 shadow-sm">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-8 w-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                                                <X className="h-4 w-4 transform rotate-45" />
                                             </div>
-                                        )}
-                                    </button>
-                                );
-                            })}
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Your Answer Below</p>
+                                        </div>
+                                        <textarea
+                                            value={selectedAnswers[currentQuestion.id]?.[0] || ""}
+                                            onChange={(e) => handleAnswerSelect([e.target.value])}
+                                            placeholder="Type your answer here..."
+                                            className="w-full bg-transparent border-none text-xl md:text-2xl font-bold text-slate-900 placeholder:text-slate-300 focus:outline-none focus:ring-0 min-h-[80px] resize-none"
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-2 px-6 py-4 bg-amber-50 rounded-2xl border border-amber-100 text-amber-700">
+                                        <AlertCircle className="h-4 w-4 shrink-0" />
+                                        <p className="text-[11px] font-bold">Spelling matters! Ensure your answer is typed correctly before proceeding.</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                currentQuestion?.options.map((option, idx) => {
+                                    const isSelected = currentQuestion && selectedAnswers[currentQuestion.id]?.includes(option.id);
+                                    const letter = String.fromCharCode(65 + idx);
+
+                                    return (
+                                        <button
+                                            key={option.id}
+                                            className={cn(
+                                                "w-full p-6 md:p-8 rounded-[1.5rem] border-2 text-left flex items-center gap-6 transition-all group relative overflow-hidden",
+                                                isSelected
+                                                    ? "border-emerald-500 bg-emerald-50/30 ring-4 ring-emerald-50"
+                                                    : "border-slate-100 hover:border-slate-200 bg-white shadow-sm"
+                                            )}
+                                            onClick={() => handleAnswerSelect(option.id)}
+                                        >
+                                            <div className={cn(
+                                                "h-12 w-12 rounded-xl flex items-center justify-center text-lg font-black shrink-0 transition-colors",
+                                                isSelected ? "bg-emerald-500 text-white shadow-lg shadow-emerald-200" : "bg-slate-50 text-slate-400 group-hover:bg-slate-100"
+                                            )}>
+                                                {letter}
+                                            </div>
+                                            <span className={cn(
+                                                "text-lg md:text-xl font-bold flex-1 leading-tight",
+                                                isSelected ? "text-slate-900" : "text-slate-600"
+                                            )}>
+                                                {option.text}
+                                            </span>
+                                            {isSelected && (
+                                                <div className="h-6 w-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-200">
+                                                    <CheckCircle2 className="h-4 w-4 text-white" />
+                                                </div>
+                                            )}
+                                        </button>
+                                    );
+                                })
+                            )}
                         </div>
                     </div>
                 </main>
@@ -360,7 +516,7 @@ export default function TakeQuiz() {
                             </div>
 
                             <div className="grid grid-cols-1 gap-2">
-                                {quiz.questions.map((q, idx) => {
+                                {(questions || []).map((q, idx) => {
                                     const isAnswered = (selectedAnswers[q.id]?.length || 0) > 0;
                                     const isCurrent = currentQuestionIndex === idx;
 
@@ -410,7 +566,7 @@ export default function TakeQuiz() {
 
                 {/* Question dots for medium screens */}
                 <div className="hidden md:flex items-center gap-2 px-8 overflow-hidden max-w-sm">
-                    {quiz.questions.map((_, idx) => (
+                    {(questions || []).map((_, idx) => (
                         <div
                             key={idx}
                             className={cn(
@@ -429,6 +585,23 @@ export default function TakeQuiz() {
                     Next <ChevronRight className="h-5 w-5" />
                 </Button>
             </footer>
+
+            {/* Security Shield Overlay */}
+            {showSecurityShield && quiz?.settings?.proctoring?.tabSwitchDetection && (
+                <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[200] flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-300">
+                    <div className="h-24 w-24 bg-rose-500/20 rounded-full flex items-center justify-center mb-8 animate-pulse">
+                        <AlertCircle className="h-12 w-12 text-rose-500" />
+                    </div>
+                    <h2 className="text-3xl font-black text-white mb-4">Security Alert</h2>
+                    <p className="text-slate-400 max-w-md text-lg font-medium">
+                        Focus lost. Please return to the assessment window immediately. Switching tabs or applications is strictly prohibited.
+                    </p>
+                    <div className="mt-12 p-4 bg-white/5 rounded-2xl border border-white/10 flex items-center gap-3 text-slate-300 text-sm italic">
+                        <Info className="h-4 w-4" />
+                        This event has been recorded for instructor review.
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

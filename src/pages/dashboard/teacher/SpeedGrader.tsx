@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import PDFViewer from "@/components/PDFViewer";
 
 export default function SpeedGrader() {
     const { id: assignmentId } = useParams();
@@ -43,6 +44,26 @@ export default function SpeedGrader() {
     );
 
     const currentSubmission = assignmentSubmissions.find(s => s.id === selectedSubmissionId);
+
+    console.log("[SpeedGrader] Component mounted/updated:", {
+        assignmentId,
+        assignment: assignment ? { id: assignment.id, title: assignment.title, rubricId: assignment.rubricId } : null,
+        rubric: rubric ? { id: rubric.id, title: rubric.title, criteriaCount: rubric.criteria?.length } : null,
+        submissionCount: assignmentSubmissions.length,
+        submissions: assignmentSubmissions.map(s => ({ 
+            id: s.id, 
+            studentId: s.studentId, 
+            studentName: s.studentName,
+            submittedAt: s.submittedAt,
+            status: s.status
+        })),
+        currentSubmission: currentSubmission ? {
+            id: currentSubmission.id,
+            studentName: currentSubmission.studentName,
+            submittedAt: currentSubmission.submittedAt,
+            status: currentSubmission.status
+        } : null
+    });
 
     // Grading State
     const [rubricGrades, setRubricGrades] = useState<Record<string, number>>(
@@ -85,16 +106,20 @@ export default function SpeedGrader() {
     const handleSaveGrade = (release: boolean = false) => {
         if (!selectedSubmissionId) return;
 
-        updateGrade(selectedSubmissionId, {
+        const gradeUpdate = {
             rubricGrades,
             overallFeedback,
             annotations,
             totalGrade,
-            status: "graded",
+            status: release ? "graded" : "draft",
             isReleased: release,
-        });
+        };
+        
+        console.log('[SpeedGrader] Saving grade:', { submissionId: selectedSubmissionId, ...gradeUpdate });
 
-        toast.success(release ? "Grade released to student" : "Grade saved as draft");
+        updateGrade(selectedSubmissionId, gradeUpdate);
+
+        toast.success(release ? "✅ Grade released to student" : "💾 Changes saved as draft");
     };
 
     const handleAnnotateSelection = () => {
@@ -124,6 +149,30 @@ export default function SpeedGrader() {
     };
 
     const handleQuickHighlight = () => {
+        // For PDFs, use the selection from onTextSelect callback
+        if (currentSubmission?.fileType === "pdf") {
+            if (!selection) {
+                toast.error("Please select some text in the PDF to highlight");
+                return;
+            }
+
+            const newNote: Annotation = {
+                id: crypto.randomUUID(),
+                text: "",
+                type: "highlight",
+                color: selectedColor,
+                range: { start: selection.start, end: selection.end },
+                authorName: "Instructor",
+                createdAt: new Date().toISOString()
+            };
+
+            setAnnotations([...annotations, newNote]);
+            setSelection(null);
+            toast.success("✅ Text highlighted in PDF");
+            return;
+        }
+
+        // For text submissions, use the old logic
         const sel = window.getSelection();
         if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
             toast.error("Please select some text to highlight");
@@ -157,13 +206,20 @@ export default function SpeedGrader() {
         };
 
         setAnnotations([...annotations, newNote]);
-        toast.success("Text highlighted");
+        toast.success("✅ Text highlighted");
     };
 
     const handleOpenAnnotator = () => {
-        handleAnnotateSelection();
-        if (window.getSelection()?.toString()) {
+        // For PDFs, the selection should already be set via onTextSelect callback
+        // For text submissions, we need to use handleAnnotateSelection
+        if (!selection && currentSubmission?.fileType !== "pdf") {
+            handleAnnotateSelection();
+        }
+        
+        if (selection || currentSubmission?.fileType === "pdf") {
             setIsAnnotating(true);
+        } else {
+            toast.error("Please select some text first");
         }
     };
 
@@ -322,19 +378,43 @@ export default function SpeedGrader() {
                 <div className="flex-1 overflow-auto bg-slate-100 p-4">
                     <div className="max-w-4xl mx-auto flex gap-4 items-start justify-center">
                         {/* Document Card */}
-                        <Card className="flex-1 max-w-xl min-h-[850px] shadow-lg border-none p-8 bg-white shrink-0">
+                        <Card className="flex-1 max-w-3xl min-h-[850px] shadow-lg border-none bg-white shrink-0">
                             {currentSubmission ? (
-                                <div className="prose prose-slate max-w-none">
-                                    <div className="flex items-center justify-between mb-8 pb-4 border-b italic text-muted-foreground">
-                                        <span>Student: {currentSubmission.studentName}</span>
-                                        <span>Submitted: {new Date(currentSubmission.submittedAt).toLocaleString()}</span>
+                                <div className="flex flex-col h-full">
+                                    <div className="px-8 pt-8 pb-4 border-b italic text-muted-foreground flex items-center justify-between sticky top-0 bg-white z-10">
+                                        <span className="font-semibold">Student: <span className="text-slate-900">{currentSubmission.studentName}</span></span>
+                                        <span className="text-sm">Submitted: {new Date(currentSubmission.submittedAt).toLocaleString()}</span>
                                     </div>
-                                    <div
-                                        id="submission-content"
-                                        className="whitespace-pre-wrap leading-relaxed text-lg text-slate-700 font-serif"
-                                    >
-                                        <HighlightedText text={currentSubmission.content} annotations={annotations} />
-                                    </div>
+
+                                    {/* Conditional rendering based on file type */}
+                                    {currentSubmission.fileType === "pdf" && currentSubmission.content?.startsWith("http") ? (
+                                        <div className="flex-1 overflow-hidden">
+                                            <PDFViewer 
+                                                pdfUrl={currentSubmission.content}
+                                                fileName={`${currentSubmission.studentName}_submission.pdf`}
+                                                onTextSelect={(selectedText) => {
+                                                    // For PDF annotations, store the selected text
+                                                    setSelection({ 
+                                                        start: 0, 
+                                                        end: selectedText.length, 
+                                                        text: selectedText 
+                                                    });
+                                                    setIsAnnotating(true);
+                                                }}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="flex-1 overflow-auto px-8 py-6">
+                                            <div className="prose prose-slate max-w-none">
+                                                <div
+                                                    id="submission-content"
+                                                    className="whitespace-pre-wrap leading-relaxed text-lg text-slate-700 font-serif"
+                                                >
+                                                    <HighlightedText text={currentSubmission.content} annotations={annotations} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground w-full">

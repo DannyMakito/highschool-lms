@@ -74,14 +74,6 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
         const fetchData = async () => {
             setLoading(true);
             
-            // Failsafe timer to prevent infinite load
-            const timer = setTimeout(() => {
-                if (!cancelled && loading) {
-                    console.warn("Subjects data fetch timed out, forcing loading to false");
-                    setLoading(false);
-                }
-            }, 15000);
-
             try {
 
                 const [subjectsRes, topicsRes, lessonsRes, quizzesRes, submissionsRes, progressRes] = await Promise.all([
@@ -130,14 +122,25 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
                     subjects: mappedSubjects,
                     topics: (topics || []).map(t => ({ ...t, subjectId: t.subject_id })),
                     lessons: (lessons || []).map(l => ({ ...l, topicId: l.topic_id, videoUrl: l.video_url })),
-                    quizzes: (quizzes || []).map(q => ({ ...q, subjectId: q.subject_id })),
-                    submissions: (submissions || []).map(sub => ({ ...sub, quizId: sub.quiz_id, studentId: sub.student_id })),
+                    quizzes: (quizzes || []).map(q => ({ 
+                        ...q, 
+                        subjectId: q.subject_id,
+                        settingsConfigured: q.settings_configured || false 
+                    })),
+                    submissions: (submissions || []).map(sub => ({ 
+                        ...sub, 
+                        quizId: sub.quiz_id, 
+                        studentId: sub.student_id,
+                        studentName: sub.student_name,
+                        totalPoints: sub.total_points,
+                        timeSpent: sub.time_spent,
+                        completedAt: sub.completed_at
+                    })),
                     completedLessonIds: (progress && !progressError) ? progress.map((p: any) => p.lesson_id) : [],
                 });
             } catch (error) {
                 console.error("Error fetching LMS data:", error);
             } finally {
-                clearTimeout(timer);
                 if (!cancelled) setLoading(false);
             }
         };
@@ -263,6 +266,8 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
                 description: quiz.description,
                 status: quiz.status,
                 settings: quiz.settings,
+                questions: quiz.questions,
+                settings_configured: quiz.settingsConfigured,
             });
 
         if (error) throw error;
@@ -293,9 +298,12 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
         const { error } = await supabase
             .from('quiz_submissions')
             .insert({
+                id: submission.id,
                 quiz_id: submission.quizId,
                 student_id: submission.studentId,
+                student_name: submission.studentName,
                 score: submission.score,
+                total_points: submission.totalPoints,
                 accuracy: submission.accuracy,
                 time_spent: submission.timeSpent,
                 status: submission.status,

@@ -97,14 +97,6 @@ export function RegistrationDataProvider({ children }: { children: ReactNode }) 
         const fetchRegistrationData = async () => {
             setLoading(true);
 
-            // Failsafe timer
-            const timer = setTimeout(() => {
-                if (!cancelled && loading) {
-                    console.warn("Registration data fetch timed out, forcing loading to false");
-                    setLoading(false);
-                }
-            }, 5000);
-
             try {
                 // Fire all queries in parallel for maximum speed
                 const [gradesRes, rcRes, scRes, studentsDirectRes, ssRes, sscRes] = await Promise.all([
@@ -201,7 +193,6 @@ export function RegistrationDataProvider({ children }: { children: ReactNode }) 
             } catch (error) {
                 console.error("Error fetching registration data:", error);
             } finally {
-                clearTimeout(timer);
                 if (!cancelled) setLoading(false);
             }
         };

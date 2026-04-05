@@ -42,12 +42,24 @@ export default function AssignmentManagement() {
 
     const subjects = useMemo(() => {
         if (!teacherProfile) return [];
+        // If teacher has no subjects assigned, show all subjects as fallback for development
+        if (teacherProfile.subjects.length === 0) {
+            console.warn("[AssignmentManagement] Teacher has no subjects assigned in teacher_subjects table. Showing all subjects.");
+            return allSubjects;
+        }
         return allSubjects.filter(s => teacherProfile.subjects.includes(s.id));
     }, [allSubjects, teacherProfile]);
 
     const assignments = useMemo(() => {
         const subjectIds = subjects.map(s => s.id);
-        return allAssignments.filter(a => subjectIds.includes(a.subjectId));
+        const filtered = allAssignments.filter(a => subjectIds.includes(a.subjectId));
+        console.log("[AssignmentManagement] Filtered assignments:", {
+            totalAssignments: allAssignments.length,
+            teacherSubjects: subjectIds,
+            visibleAssignments: filtered.length,
+            assignmentSubjects: allAssignments.map(a => ({ id: a.id, subjectId: a.subjectId }))
+        });
+        return filtered;
     }, [allAssignments, subjects]);
 
     const [searchTerm, setSearchTerm] = useState("");
@@ -73,47 +85,52 @@ export default function AssignmentManagement() {
         ]
     });
 
-    const handleCreate = () => {
+    const handleCreate = async () => {
         if (!newAssignment.title || !newAssignment.subjectId) {
             toast.error("Please fill in title and subject");
             return;
         }
 
-        let finalRubricId = newAssignment.rubricId;
+        try {
+            let finalRubricId = newAssignment.rubricId;
 
-        if (isCreatingCustomRubric) {
-            if (!newRubric.title || newRubric.criteria.some(c => !c.title || c.maxPoints <= 0)) {
-                toast.error("Please fill in all rubric details correctly");
-                return;
+            if (isCreatingCustomRubric) {
+                if (!newRubric.title || newRubric.criteria.some(c => !c.title || c.maxPoints <= 0)) {
+                    toast.error("Please fill in all rubric details correctly");
+                    return;
+                }
+                const createdRubric = await addRubric(newRubric);
+                finalRubricId = createdRubric.id;
             }
-            const createdRubric = addRubric(newRubric);
-            finalRubricId = createdRubric.id;
+
+            await addAssignment({
+                ...newAssignment,
+                rubricId: finalRubricId || "default-essay-rubric",
+                status: "published",
+            });
+
+            setIsCreating(false);
+            setNewAssignment({
+                title: "",
+                description: "",
+                subjectId: "",
+                totalMarks: 100,
+                submissionType: "both",
+                isGroup: false,
+                durationDays: 7,
+                dueDate: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"),
+                rubricId: "",
+            });
+            setIsCreatingCustomRubric(false);
+            setNewRubric({
+                title: "",
+                criteria: [{ id: crypto.randomUUID(), title: "", description: "", maxPoints: 25 }]
+            });
+            toast.success("Assignment created successfully");
+        } catch (error) {
+            console.error("Failed to create assignment:", error);
+            toast.error("Failed to create assignment. Please check your connection.");
         }
-
-        addAssignment({
-            ...newAssignment,
-            rubricId: finalRubricId || "default-essay-rubric",
-            status: "published",
-        });
-
-        setIsCreating(false);
-        setNewAssignment({
-            title: "",
-            description: "",
-            subjectId: "",
-            totalMarks: 100,
-            submissionType: "both",
-            isGroup: false,
-            durationDays: 7,
-            dueDate: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"),
-            rubricId: "",
-        });
-        setIsCreatingCustomRubric(false);
-        setNewRubric({
-            title: "",
-            criteria: [{ id: crypto.randomUUID(), title: "", description: "", maxPoints: 25 }]
-        });
-        toast.success("Assignment created successfully");
     };
 
     const addCriterion = () => {

@@ -2,20 +2,31 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDiscussions } from '@/hooks/useDiscussions';
 import { useAuth } from '@/context/AuthContext';
+import { useSubjects } from '@/hooks/useSubjects';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import TinyMCEEditor from '@/components/shared/TinyMCEEditor';
-import { Calendar as CalendarIcon, Save, X } from 'lucide-react';
+import { Calendar as CalendarIcon, Save, X, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 
 const DiscussionForm: React.FC = () => {
     const { id: subjectId, discussionId } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { subjects } = useSubjects();
     const { discussions, addDiscussion, updateDiscussion } = useDiscussions(subjectId);
+
+    const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjectId || '');
 
     const [formData, setFormData] = useState({
         title: '',
@@ -49,14 +60,16 @@ const DiscussionForm: React.FC = () => {
     }, [discussionId, discussions]);
 
     const handleSave = () => {
-        if (!formData.title) {
-            toast.error('Title is required');
+        const finalSubjectId = subjectId || selectedSubjectId;
+
+        if (!finalSubjectId) {
+            toast.error('Please select a subject');
             return;
         }
 
         const data = {
             ...formData,
-            subjectId: subjectId!,
+            subjectId: finalSubjectId,
             authorId: user?.id || '1',
             authorName: user?.name || 'Instructor',
             authorRole: user?.role || 'teacher',
@@ -71,7 +84,7 @@ const DiscussionForm: React.FC = () => {
             toast.success('Discussion created');
         }
 
-        navigate(`/teacher/subjects/${subjectId}/discussions`);
+        navigate(`/teacher/subjects/${finalSubjectId}/discussions`);
     };
 
     return (
@@ -90,6 +103,28 @@ const DiscussionForm: React.FC = () => {
             </header>
 
             <div className="space-y-8">
+                {!subjectId && !discussionId && (
+                    <div className="space-y-2 bg-blue-50/50 p-6 rounded-2xl border border-blue-100/50">
+                        <div className="flex items-center gap-2 mb-2">
+                            <BookOpen className="w-4 h-4 text-blue-600" />
+                            <Label className="text-sm font-bold text-blue-900 uppercase tracking-widest">Select Subject</Label>
+                        </div>
+                        <Select value={selectedSubjectId} onValueChange={setSelectedSubjectId}>
+                            <SelectTrigger className="h-12 bg-white border-slate-200 rounded-xl font-medium">
+                                <SelectValue placeholder="Which subject is this discussion for?" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl shadow-xl border-slate-100">
+                                {subjects.map(s => (
+                                    <SelectItem key={s.id} value={s.id} className="rounded-lg">
+                                        {s.name} (Grade {s.gradeTier})
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="text-xs text-slate-400 font-medium">This discussion will be visible to all students enrolled in this subject.</p>
+                    </div>
+                )}
+
                 <div className="space-y-2">
                     <Input
                         placeholder="Topic Title"

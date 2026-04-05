@@ -84,7 +84,7 @@ export default function StudentQuizzes() {
                                     </div>
 
                                     <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                                        <span className="flex items-center gap-1.5"><HelpCircle className="h-4 w-4 text-indigo-400" /> {quiz.questions.length} Qs</span>
+                                        <span className="flex items-center gap-1.5"><HelpCircle className="h-4 w-4 text-indigo-400" /> {(quiz.questions || []).length} Qs</span>
                                         <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-amber-400" /> {quiz.settings?.timeLimit || 0} Mins</span>
                                     </div>
                                 </div>
