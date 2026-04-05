@@ -1,9 +1,8 @@
-
-import { useRegistrationDataContext } from '@/context/RegistrationDataContext';
+import { useRegistrationDataContext } from "@/context/RegistrationDataContext";
 
 /**
  * Thin wrapper around RegistrationDataContext.
- * Data is fetched ONCE at the layout level and shared across all pages.
+ * Data is fetched once at the layout level and shared across pages.
  */
 export function useRegistrationData() {
     return useRegistrationDataContext();

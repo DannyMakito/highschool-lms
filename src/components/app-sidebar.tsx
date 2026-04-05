@@ -31,7 +31,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       user: {
         name: user?.name || "User",
         email: user?.email || "user@school.com",
-        avatar: "/avatars/user.jpg",
+        avatar: "",
       },
       teams: [
         {
