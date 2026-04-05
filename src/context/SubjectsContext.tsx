@@ -121,7 +121,15 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
                 setData({
                     subjects: mappedSubjects,
                     topics: (topics || []).map(t => ({ ...t, subjectId: t.subject_id })),
-                    lessons: (lessons || []).map(l => ({ ...l, topicId: l.topic_id, videoUrl: l.video_url })),
+                    lessons: (lessons || []).map(l => ({
+                        ...l,
+                        topicId: l.topic_id,
+                        videoUrl: l.video_url,
+                        videoType: l.video_type,
+                        videoFilePath: l.video_file_path,
+                        videoFileName: l.video_file_name,
+                        videoMimeType: l.video_mime_type
+                    })),
                     quizzes: (quizzes || []).map(q => ({ 
                         ...q, 
                         subjectId: q.subject_id,
@@ -202,6 +210,10 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
                 title: lesson.title,
                 content: lesson.content,
                 video_url: lesson.videoUrl,
+                video_type: lesson.videoType,
+                video_file_path: lesson.videoFilePath,
+                video_file_name: lesson.videoFileName,
+                video_mime_type: lesson.videoMimeType,
                 order: lesson.order
             })
             .select()
@@ -213,7 +225,15 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
             const topic = prev.topics.find(t => t.id === lesson.topicId);
             return {
                 ...prev,
-                lessons: [...prev.lessons, { ...newLesson, topicId: newLesson.topic_id, videoUrl: newLesson.video_url }],
+                lessons: [...prev.lessons, {
+                    ...newLesson,
+                    topicId: newLesson.topic_id,
+                    videoUrl: newLesson.video_url,
+                    videoType: newLesson.video_type,
+                    videoFilePath: newLesson.video_file_path,
+                    videoFileName: newLesson.video_file_name,
+                    videoMimeType: newLesson.video_mime_type
+                }],
                 subjects: prev.subjects.map(s => s.id === topic?.subjectId ? { ...s, lessonsCount: s.lessonsCount + 1 } : s)
             };
         });
@@ -227,6 +247,10 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
                 title: updates.title,
                 content: updates.content,
                 video_url: updates.videoUrl,
+                video_type: updates.videoType,
+                video_file_path: updates.videoFilePath,
+                video_file_name: updates.videoFileName,
+                video_mime_type: updates.videoMimeType,
                 order: updates.order
             })
             .eq('id', id);

@@ -1,9 +1,10 @@
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSubjects } from "@/hooks/useSubjects";
+import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Plus, ChevronLeft, Video, Save, Layout, HelpCircle, X, MessageSquare } from "lucide-react";
+import { Plus, ChevronLeft, Video, Save, Layout, HelpCircle, X, MessageSquare, Upload, Loader2, PlayCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -20,13 +21,16 @@ import {
     CollapsibleTrigger
 } from "@/components/ui/collapsible";
 import { RichTextEditor } from "@/components/editor/RichTextEditor";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import supabase from "@/lib/supabase";
 
 export default function SubjectDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { subjects, addTopic, updateTopic, addLesson, updateLesson, getSubjectTopics, getTopicLessons } = useSubjects();
+    const { user } = useAuth();
+    const { subjects, addTopic, addLesson, updateLesson, getSubjectTopics, getTopicLessons } = useSubjects();
     const subject = subjects.find(s => s.id === id);
 
     const [isTopicDialogOpen, setIsTopicDialogOpen] = useState(false);
@@ -38,46 +42,171 @@ export default function SubjectDetail() {
         title: "",
         content: "",
         videoUrl: "",
+        videoType: undefined as "external" | "upload" | undefined,
+        videoFilePath: null as string | null,
+        videoFileName: null as string | null,
+        videoMimeType: null as string | null,
     });
     const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+    const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     if (!subject) return <div>Subject not found</div>;
 
     const topics = getSubjectTopics(id!);
 
-    const handleAddTopic = () => {
-        if (!newTopicTitle) return;
-        addTopic({
-            subjectId: id!,
-            title: newTopicTitle,
-            order: topics.length + 1,
+    const resetLessonForm = () => {
+        setNewLesson({
+            title: "",
+            content: "",
+            videoUrl: "",
+            videoType: undefined,
+            videoFilePath: null,
+            videoFileName: null,
+            videoMimeType: null,
         });
-        setNewTopicTitle("");
-        setIsTopicDialogOpen(false);
+        setEditingLessonId(null);
     };
 
-    const handleAddLesson = () => {
-        if (!newLesson.title || !selectedTopicId) return;
+    const handleAddTopic = async () => {
+        if (!newTopicTitle) return;
+        try {
+            await addTopic({
+                subjectId: id!,
+                title: newTopicTitle,
+                order: topics.length + 1,
+            });
+            setNewTopicTitle("");
+            setIsTopicDialogOpen(false);
+            toast.success("Module added");
+        } catch (error) {
+            console.error("Failed to add topic", error);
+            toast.error("Could not save the module");
+        }
+    };
 
-        if (editingLessonId) {
-            updateLesson(editingLessonId, {
-                title: newLesson.title,
-                content: newLesson.content,
-                videoUrl: newLesson.videoUrl,
-            });
-        } else {
-            addLesson({
-                topicId: selectedTopicId,
-                title: newLesson.title,
-                content: newLesson.content,
-                videoUrl: newLesson.videoUrl,
-                order: getTopicLessons(selectedTopicId).length + 1,
-            });
+    const handleVideoFileSelected = async (file?: File | null) => {
+        if (!file || !id || !selectedTopicId || !user?.id) return;
+
+        const allowedTypes = ["video/mp4", "video/webm", "video/ogg"];
+        if (!allowedTypes.includes(file.type)) {
+            toast.error("Please upload an MP4, WEBM, or OGG video");
+            return;
         }
 
-        setNewLesson({ title: "", content: "", videoUrl: "" });
-        setEditingLessonId(null);
-        setIsLessonDialogOpen(false);
+        const maxSizeBytes = 100 * 1024 * 1024;
+        if (file.size > maxSizeBytes) {
+            toast.error("Video files must be 100MB or smaller");
+            return;
+        }
+
+        setIsUploadingVideo(true);
+
+        try {
+            const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+            const filePath = `${id}/${selectedTopicId}/${user.id}/${Date.now()}_${sanitizedName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from("lesson-videos")
+                .upload(filePath, file, {
+                    cacheControl: "3600",
+                    upsert: false,
+                    contentType: file.type,
+                });
+
+            if (uploadError) {
+                throw uploadError;
+            }
+
+            const { data: publicUrlData } = supabase.storage.from("lesson-videos").getPublicUrl(filePath);
+
+            setNewLesson((prev) => ({
+                ...prev,
+                videoUrl: publicUrlData.publicUrl,
+                videoType: "upload",
+                videoFilePath: filePath,
+                videoFileName: file.name,
+                videoMimeType: file.type,
+            }));
+
+            toast.success("Video uploaded");
+        } catch (error) {
+            console.error("Failed to upload lesson video", error);
+            toast.error("Could not upload the lesson video");
+        } finally {
+            setIsUploadingVideo(false);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
+        }
+    };
+
+    const clearVideo = async () => {
+        try {
+            if (newLesson.videoType === "upload" && newLesson.videoFilePath) {
+                const isEditingExistingLesson = Boolean(editingLessonId);
+
+                if (!isEditingExistingLesson) {
+                    await supabase.storage.from("lesson-videos").remove([newLesson.videoFilePath]);
+                }
+            }
+        } catch (error) {
+            console.error("Failed to clear uploaded video", error);
+        }
+
+        setNewLesson((prev) => ({
+            ...prev,
+            videoUrl: "",
+            videoType: undefined,
+            videoFilePath: null,
+            videoFileName: null,
+            videoMimeType: null,
+        }));
+    };
+
+    const handleAddLesson = async () => {
+        if (!newLesson.title || !selectedTopicId) return;
+
+        try {
+            const currentLesson = editingLessonId
+                ? getTopicLessons(selectedTopicId).find((lesson) => lesson.id === editingLessonId)
+                : null;
+
+            const lessonPayload = {
+                title: newLesson.title,
+                content: newLesson.content,
+                videoUrl: newLesson.videoUrl || undefined,
+                videoType: newLesson.videoUrl ? (newLesson.videoType ?? "external") : undefined,
+                videoFilePath: newLesson.videoFilePath,
+                videoFileName: newLesson.videoFileName,
+                videoMimeType: newLesson.videoMimeType,
+            };
+
+            if (editingLessonId) {
+                await updateLesson(editingLessonId, lessonPayload);
+
+                if (
+                    currentLesson?.videoType === "upload" &&
+                    currentLesson.videoFilePath &&
+                    currentLesson.videoFilePath !== newLesson.videoFilePath
+                ) {
+                    await supabase.storage.from("lesson-videos").remove([currentLesson.videoFilePath]);
+                }
+            } else {
+                await addLesson({
+                    topicId: selectedTopicId,
+                    ...lessonPayload,
+                    order: getTopicLessons(selectedTopicId).length + 1,
+                });
+            }
+
+            resetLessonForm();
+            setIsLessonDialogOpen(false);
+            toast.success(editingLessonId ? "Lesson updated" : "Lesson created");
+        } catch (error) {
+            console.error("Failed to save lesson", error);
+            toast.error("Could not save the lesson");
+        }
     };
 
     return (
@@ -174,8 +303,7 @@ export default function SubjectDetail() {
                                             className="text-primary hover:text-primary hover:bg-primary/10"
                                             onClick={() => {
                                                 setSelectedTopicId(topic.id);
-                                                setEditingLessonId(null);
-                                                setNewLesson({ title: "", content: "", videoUrl: "" });
+                                                resetLessonForm();
                                                 setIsLessonDialogOpen(true);
                                             }}
                                         >
@@ -209,6 +337,10 @@ export default function SubjectDetail() {
                                                         title: lesson.title,
                                                         content: lesson.content,
                                                         videoUrl: lesson.videoUrl || "",
+                                                        videoType: lesson.videoType,
+                                                        videoFilePath: lesson.videoFilePath || null,
+                                                        videoFileName: lesson.videoFileName || null,
+                                                        videoMimeType: lesson.videoMimeType || null,
                                                     });
                                                     setIsLessonDialogOpen(true);
                                                 }}
@@ -306,11 +438,26 @@ export default function SubjectDetail() {
                                             <CardContent className="p-6 space-y-6">
                                                 <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 text-center bg-slate-50 group cursor-pointer hover:border-primary/50 transition-all">
                                                     <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center mx-auto mb-4 border border-slate-100 text-slate-400 group-hover:text-primary transition-colors shadow-sm">
-                                                        <Video className="h-6 w-6" />
+                                                        {isUploadingVideo ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
                                                     </div>
-                                                    <p className="text-sm font-bold text-slate-900">Drop a video here</p>
-                                                    <p className="text-[10px] text-slate-400 mt-1">MP4, WEBM or OGG (Max 50MB)</p>
-                                                    <Button variant="ghost" className="mt-4 text-primary font-bold hover:bg-primary/5">Browse Files</Button>
+                                                    <p className="text-sm font-bold text-slate-900">{isUploadingVideo ? "Uploading video..." : "Upload a lesson video"}</p>
+                                                    <p className="text-[10px] text-slate-400 mt-1">MP4, WEBM or OGG (Max 100MB)</p>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        className="mt-4 text-primary font-bold hover:bg-primary/5"
+                                                        disabled={isUploadingVideo}
+                                                        onClick={() => fileInputRef.current?.click()}
+                                                    >
+                                                        Browse Files
+                                                    </Button>
+                                                    <input
+                                                        ref={fileInputRef}
+                                                        type="file"
+                                                        accept="video/mp4,video/webm,video/ogg"
+                                                        className="hidden"
+                                                        onChange={(e) => handleVideoFileSelected(e.target.files?.[0] || null)}
+                                                    />
                                                 </div>
 
                                                 <div className="space-y-2 pt-2">
@@ -318,10 +465,41 @@ export default function SubjectDetail() {
                                                     <Input
                                                         placeholder="YouTube or Vimeo URL"
                                                         value={newLesson.videoUrl}
-                                                        onChange={(e) => setNewLesson({ ...newLesson, videoUrl: e.target.value })}
+                                                        onChange={(e) => setNewLesson({
+                                                            ...newLesson,
+                                                            videoUrl: e.target.value,
+                                                            videoType: e.target.value ? "external" : undefined,
+                                                            videoFilePath: e.target.value ? null : newLesson.videoFilePath,
+                                                            videoFileName: e.target.value ? null : newLesson.videoFileName,
+                                                            videoMimeType: e.target.value ? null : newLesson.videoMimeType,
+                                                        })}
                                                         className="h-12 rounded-xl border-slate-200"
                                                     />
                                                 </div>
+
+                                                {newLesson.videoUrl && (
+                                                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <div className="min-w-0">
+                                                                <p className="text-xs font-black text-slate-900 flex items-center gap-2">
+                                                                    <PlayCircle className="h-4 w-4 text-primary" />
+                                                                    {newLesson.videoType === "upload" ? (newLesson.videoFileName || "Uploaded lesson video") : "External video link"}
+                                                                </p>
+                                                                <p className="text-[11px] text-slate-500 truncate">{newLesson.videoUrl}</p>
+                                                            </div>
+                                                            <Button type="button" variant="ghost" size="sm" onClick={() => void clearVideo()}>
+                                                                Clear
+                                                            </Button>
+                                                        </div>
+                                                        {newLesson.videoType === "upload" && newLesson.videoMimeType?.startsWith("video/") ? (
+                                                            <video
+                                                                src={newLesson.videoUrl}
+                                                                controls
+                                                                className="w-full rounded-xl bg-black"
+                                                            />
+                                                        ) : null}
+                                                    </div>
+                                                )}
                                             </CardContent>
                                         </Card>
                                     </div>

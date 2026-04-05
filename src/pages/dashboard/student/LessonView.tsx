@@ -45,6 +45,23 @@ export default function LessonView() {
     const totalLessons = topics.reduce((acc, t) => acc + getTopicLessons(t.id).length, 0);
     const completed = isLessonCompleted(lessonId!);
 
+    const videoUrl = currentLesson.videoUrl?.trim();
+    const isYouTubeVideo = Boolean(videoUrl && (videoUrl.includes("youtube.com") || videoUrl.includes("youtu.be")));
+    const isVimeoVideo = Boolean(videoUrl && videoUrl.includes("vimeo.com"));
+    const isDirectVideoFile = Boolean(
+        currentLesson.videoType === "upload" ||
+        currentLesson.videoMimeType?.startsWith("video/") ||
+        (videoUrl && /\.(mp4|webm|ogg)(\?|$)/i.test(videoUrl))
+    );
+    const youtubeEmbedUrl = videoUrl
+        ? videoUrl
+            .replace("watch?v=", "embed/")
+            .replace("youtu.be/", "youtube.com/embed/")
+        : "";
+    const vimeoEmbedUrl = videoUrl && isVimeoVideo
+        ? `https://player.vimeo.com/video/${videoUrl.split("/").filter(Boolean).pop()?.split("?")[0]}`
+        : "";
+
     // Navigation logic
     const getAllLessons = () => {
         const all: any[] = [];
@@ -159,31 +176,40 @@ export default function LessonView() {
                         </div>
 
                         {/* Video Section */}
-                        {currentLesson.videoUrl && (
+                        {videoUrl && (
                             <Card className="border-none shadow-2xl overflow-hidden rounded-[2rem] bg-black aspect-video relative group ring-1 ring-white/10">
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-all duration-500 z-10">
-                                    <div className="w-20 h-20 rounded-full bg-primary flex items-center justify-center text-white cursor-pointer hover:scale-110 shadow-2xl shadow-primary/40 transition-transform">
-                                        <Play className="h-8 w-8 fill-current ml-1" />
-                                    </div>
-                                </div>
-                                {currentLesson.videoUrl.includes('youtube.com') || currentLesson.videoUrl.includes('youtu.be') ? (
+                                {isYouTubeVideo ? (
                                     <iframe
-                                        src={currentLesson.videoUrl.replace('watch?v=', 'embed/')}
+                                        src={youtubeEmbedUrl}
                                         className="w-full h-full border-none"
                                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                         allowFullScreen
                                     />
-                                ) : (
-                                    <img
-                                        src="https://images.unsplash.com/photo-1587620962725-abab7fe55159?w=1600&auto=format&fit=crop&q=80"
-                                        alt="Video Placeholder"
-                                        className="w-full h-full object-cover opacity-80"
+                                ) : isVimeoVideo ? (
+                                    <iframe
+                                        src={vimeoEmbedUrl}
+                                        className="w-full h-full border-none"
+                                        allow="autoplay; fullscreen; picture-in-picture"
+                                        allowFullScreen
                                     />
+                                ) : isDirectVideoFile ? (
+                                    <video
+                                        src={videoUrl}
+                                        controls
+                                        className="w-full h-full"
+                                        preload="metadata"
+                                    />
+                                ) : (
+                                    <div className="w-full h-full flex flex-col items-center justify-center gap-4 text-white/80 px-8 text-center">
+                                        <Play className="h-12 w-12 text-primary" />
+                                        <div>
+                                            <p className="font-bold text-lg">Video attached for this lesson</p>
+                                            <a href={videoUrl} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-4">
+                                                Open video in a new tab
+                                            </a>
+                                        </div>
+                                    </div>
                                 )}
-                                {/* Progress overlay for video */}
-                                <div className="absolute bottom-8 left-8 right-8 h-1.5 bg-white/10 rounded-full overflow-hidden backdrop-blur-md">
-                                    <div className="w-1/3 h-full bg-primary shadow-[0_0_10px_rgba(var(--primary),0.8)]" />
-                                </div>
                             </Card>
                         )}
 

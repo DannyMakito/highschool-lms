@@ -144,6 +144,8 @@ export default function AssignmentView() {
     if (!assignment) return <div>Assignment not found</div>;
 
     const isGraded = submission?.status === "graded" && submission.isReleased;
+    const availableFrom = new Date(assignment.availableFrom || assignment.createdAt);
+    const isOpen = availableFrom.getTime() <= Date.now();
 
     return (
         <div className="w-full px-4 md:px-8 lg:px-12 space-y-6 py-4">
@@ -170,6 +172,11 @@ export default function AssignmentView() {
                     <CardContent className="space-y-6">
                         {!submission ? (
                             <div className="space-y-4">
+                                {!isOpen && (
+                                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+                                        This assessment opens on <span className="font-bold">{availableFrom.toLocaleDateString()}</span>. You can review the instructions now, but submission is locked until then.
+                                    </div>
+                                )}
                                 {(assignment.submissionType === "text" || assignment.submissionType === "both") && (
                                     <div className="space-y-2">
                                         <h3 className="text-sm font-bold flex items-center gap-2">
@@ -181,7 +188,7 @@ export default function AssignmentView() {
                                             className="min-h-[400px] font-serif text-lg leading-relaxed p-6 rounded-2xl border-2 focus-visible:ring-primary/20"
                                             value={content}
                                             onChange={(e) => setContent(e.target.value)}
-                                            disabled={isSubmitting}
+                                            disabled={isSubmitting || !isOpen}
                                         />
                                     </div>
                                 )}
@@ -197,11 +204,12 @@ export default function AssignmentView() {
                                             ref={fileInputRef}
                                             className="hidden"
                                             accept=".pdf"
+                                            disabled={!isOpen}
                                             onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                                         />
                                         <div
-                                            className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all cursor-pointer group ${selectedFile ? 'border-primary bg-primary/10' : 'border-primary/20 bg-primary/5 hover:border-primary/40'}`}
-                                            onClick={() => fileInputRef.current?.click()}
+                                            className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all ${isOpen ? 'cursor-pointer group' : 'opacity-60 cursor-not-allowed'} ${selectedFile ? 'border-primary bg-primary/10' : 'border-primary/20 bg-primary/5 hover:border-primary/40'}`}
+                                            onClick={() => isOpen && fileInputRef.current?.click()}
                                         >
                                             {selectedFile ? (
                                                 <div className="flex flex-col items-center">
@@ -224,10 +232,10 @@ export default function AssignmentView() {
                                     <Button
                                         className="flex-1 h-12 font-black text-lg gap-2"
                                         onClick={handleSubmit}
-                                        disabled={isSubmitting || (assignment.submissionType === "text" && !content.trim())}
+                                        disabled={isSubmitting || !isOpen || (assignment.submissionType === "text" && !content.trim())}
                                     >
                                         <Send className="h-5 w-5" />
-                                        {isSubmitting ? "Submitting..." : "Submit Assignment"}
+                                        {isSubmitting ? "Submitting..." : !isOpen ? "Assessment Locked" : "Submit Assignment"}
                                     </Button>
                                 </div>
                             </div>
@@ -274,10 +282,14 @@ export default function AssignmentView() {
                 {/* Sidebar Info */}
                 <div className="space-y-6">
                     <Card className="border-none shadow-premium-hover">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground">Status</CardTitle>
-                        </CardHeader>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground">Status</CardTitle>
+                    </CardHeader>
                         <CardContent className="space-y-4 text-sm font-bold">
+                            <div className="flex justify-between items-center">
+                                <span>Opens</span>
+                                <span className="text-muted-foreground">{availableFrom.toLocaleDateString()}</span>
+                            </div>
                             <div className="flex justify-between items-center">
                                 <span>Due Date</span>
                                 <span className="text-muted-foreground">{new Date(assignment.dueDate).toLocaleDateString()}</span>
@@ -286,6 +298,8 @@ export default function AssignmentView() {
                                 <span>Submission</span>
                                 {submission ? (
                                     <Badge className="bg-green-500">Graded</Badge>
+                                ) : !isOpen ? (
+                                    <Badge variant="outline">Locked</Badge>
                                 ) : (
                                     <Badge variant="outline">Missing</Badge>
                                 )}

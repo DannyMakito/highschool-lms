@@ -13,8 +13,10 @@ interface AssignmentsContextType {
     refreshAssignments: () => Promise<void>;
     addAssignmentSubmission: (submission: any) => Promise<void>;
     addAssignment: (assignment: Partial<Assignment>) => Promise<Assignment>;
+    updateAssignment: (id: string, assignment: Partial<Assignment>) => Promise<Assignment>;
     deleteAssignment: (id: string) => Promise<void>;
     addRubric: (rubric: Partial<Rubric>) => Promise<Rubric>;
+    updateRubric: (id: string, rubric: Partial<Rubric>) => Promise<Rubric>;
     notifyNonSubmitters: (assignmentId: string) => Promise<void>;
     getRubric: (id: string | undefined) => Rubric | undefined;
     getAssignmentSubmissions: (assignmentId: string) => AssignmentSubmission[];
@@ -102,13 +104,22 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
                 submissionType: a.submission_type,
                 isGroup: a.is_group,
                 durationDays: a.duration_days,
+                availableFrom: a.available_from,
                 dueDate: a.due_date,
-                rubricId: a.rubric_id
+                rubricId: a.rubric_id,
+                assessmentCategory: a.assessment_category,
+                assessmentPeriod: a.assessment_period,
+                contributionWeight: a.contribution_weight
             })));
 
             setRubrics((rubricsData || []).map(r => ({
                 ...r,
-                criteria: r.criteria || []
+                createdAt: r.created_at,
+                criteria: (r.criteria || []).sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0)).map((criterion: any) => ({
+                    ...criterion,
+                    maxPoints: criterion.max_points ?? criterion.maxPoints,
+                    order: criterion.order ?? 0,
+                }))
             })));
 
             // For teachers, filter submissions to only those for their assignments
@@ -206,10 +217,10 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
                 const newRubric = await addRubric({
                     title: `${assignment.title} - Rubric`,
                     criteria: [
-                        { title: 'Content Quality', description: 'Does the submission address the assignment requirements with depth and accuracy?', maxPoints: 25 },
-                        { title: 'Organization', description: 'Is the work well-structured, clear, and easy to follow?', maxPoints: 25 },
-                        { title: 'Grammar & Clarity', description: 'Is the writing clear, grammatically correct, and professional?', maxPoints: 25 },
-                        { title: 'Critical Thinking', description: 'Does the work demonstrate analysis, reasoning, and original thought?', maxPoints: 25 }
+                        { title: 'Content Quality', description: 'Does the submission address the assignment requirements with depth and accuracy?', maxPoints: 4 },
+                        { title: 'Organization', description: 'Is the work well-structured, clear, and easy to follow?', maxPoints: 4 },
+                        { title: 'Grammar & Clarity', description: 'Is the writing clear, grammatically correct, and professional?', maxPoints: 4 },
+                        { title: 'Critical Thinking', description: 'Does the work demonstrate analysis, reasoning, and original thought?', maxPoints: 4 }
                     ]
                 });
                 rubricId = newRubric.id;
@@ -229,8 +240,12 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
                 total_marks: assignment.totalMarks,
                 submission_type: assignment.submissionType,
                 is_group: assignment.isGroup,
+                available_from: assignment.availableFrom || null,
                 due_date: assignment.dueDate,
                 rubric_id: rubricId || null,
+                assessment_category: assignment.assessmentCategory || 'assignment',
+                assessment_period: assignment.assessmentPeriod || 'term',
+                contribution_weight: assignment.contributionWeight ?? 0,
                 status: assignment.status || 'published',
                 duration_days: assignment.durationDays || 7
             }])
@@ -245,10 +260,59 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
             submissionType: data.submission_type,
             isGroup: data.is_group,
             durationDays: data.duration_days,
+            availableFrom: data.available_from,
             dueDate: data.due_date,
-            rubricId: data.rubric_id
+            rubricId: data.rubric_id,
+            assessmentCategory: data.assessment_category,
+            assessmentPeriod: data.assessment_period,
+            contributionWeight: data.contribution_weight
         };
         setAssignments(prev => [mapped, ...prev]);
+        return mapped;
+    };
+
+    const updateAssignment = async (id: string, assignment: Partial<Assignment>) => {
+        const dbAssignment: Record<string, unknown> = {};
+        if (assignment.title !== undefined) dbAssignment.title = assignment.title;
+        if (assignment.description !== undefined) dbAssignment.description = assignment.description;
+        if (assignment.subjectId !== undefined) dbAssignment.subject_id = assignment.subjectId;
+        if (assignment.totalMarks !== undefined) dbAssignment.total_marks = assignment.totalMarks;
+        if (assignment.submissionType !== undefined) dbAssignment.submission_type = assignment.submissionType;
+        if (assignment.isGroup !== undefined) dbAssignment.is_group = assignment.isGroup;
+        if (assignment.durationDays !== undefined) dbAssignment.duration_days = assignment.durationDays;
+        if (assignment.availableFrom !== undefined) dbAssignment.available_from = assignment.availableFrom;
+        if (assignment.dueDate !== undefined) dbAssignment.due_date = assignment.dueDate;
+        if (assignment.rubricId !== undefined) dbAssignment.rubric_id = assignment.rubricId;
+        if (assignment.status !== undefined) dbAssignment.status = assignment.status;
+        if (assignment.assessmentCategory !== undefined) dbAssignment.assessment_category = assignment.assessmentCategory;
+        if (assignment.assessmentPeriod !== undefined) dbAssignment.assessment_period = assignment.assessmentPeriod;
+        if (assignment.contributionWeight !== undefined) dbAssignment.contribution_weight = assignment.contributionWeight;
+
+        const { data, error } = await supabase
+            .from('assignments')
+            .update(dbAssignment)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        const mapped = {
+            ...data,
+            subjectId: data.subject_id,
+            totalMarks: data.total_marks,
+            submissionType: data.submission_type,
+            isGroup: data.is_group,
+            durationDays: data.duration_days,
+            availableFrom: data.available_from,
+            dueDate: data.due_date,
+            rubricId: data.rubric_id,
+            assessmentCategory: data.assessment_category,
+            assessmentPeriod: data.assessment_period,
+            contributionWeight: data.contribution_weight
+        };
+
+        setAssignments(prev => prev.map(existing => existing.id === id ? mapped : existing));
         return mapped;
     };
 
@@ -268,19 +332,65 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
         if (rubricError) throw rubricError;
 
         if (rubric.criteria && rubric.criteria.length > 0) {
-            const criteriaToInsert = rubric.criteria.map(c => ({
+            const criteriaToInsert = rubric.criteria.map((c, index) => ({
                 rubric_id: newRubric.id,
                 title: c.title,
                 description: c.description,
-                max_points: c.maxPoints
+                max_points: c.maxPoints,
+                order: c.order ?? index + 1
             }));
 
             const { error: criteriaError } = await supabase.from('rubric_criteria').insert(criteriaToInsert);
             if (criteriaError) throw criteriaError;
         }
 
-        const finalRubric = { ...newRubric, criteria: rubric.criteria || [] };
+        const finalRubric = { ...newRubric, createdAt: newRubric.created_at, criteria: rubric.criteria || [] };
         setRubrics(prev => [...prev, finalRubric]);
+        return finalRubric;
+    };
+
+    const updateRubric = async (id: string, rubric: Partial<Rubric>) => {
+        const { data: updatedRubric, error: rubricError } = await supabase
+            .from('rubrics')
+            .update({ title: rubric.title })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (rubricError) throw rubricError;
+
+        if (rubric.criteria) {
+            const { error: deleteError } = await supabase
+                .from('rubric_criteria')
+                .delete()
+                .eq('rubric_id', id);
+
+            if (deleteError) throw deleteError;
+
+            if (rubric.criteria.length > 0) {
+                const criteriaToInsert = rubric.criteria.map((criterion, index) => ({
+                    rubric_id: id,
+                    title: criterion.title,
+                    description: criterion.description,
+                    max_points: criterion.maxPoints,
+                    order: criterion.order ?? index + 1
+                }));
+
+                const { error: insertError } = await supabase
+                    .from('rubric_criteria')
+                    .insert(criteriaToInsert);
+
+                if (insertError) throw insertError;
+            }
+        }
+
+        const finalRubric = {
+            ...updatedRubric,
+            createdAt: updatedRubric.created_at,
+            criteria: rubric.criteria || []
+        };
+
+        setRubrics(prev => prev.map(existing => existing.id === id ? finalRubric : existing));
         return finalRubric;
     };
 
@@ -315,8 +425,10 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
         addAssignmentSubmission,
         submitWork: addAssignmentSubmission,
         addAssignment,
+        updateAssignment,
         deleteAssignment,
         addRubric,
+        updateRubric,
         notifyNonSubmitters,
         getRubric,
         getAssignmentSubmissions,

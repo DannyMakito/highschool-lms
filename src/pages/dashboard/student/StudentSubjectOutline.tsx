@@ -1,8 +1,7 @@
-
 import { useParams, useNavigate } from "react-router-dom";
 import { useSubjects } from "@/hooks/useSubjects";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Play, CheckCircle2, Circle } from "lucide-react";
+import { ChevronLeft, Play, CheckCircle2, Circle, Video } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
@@ -42,7 +41,6 @@ export default function StudentSubjectOutline() {
                     <Progress value={progress} className="h-2" />
                     <div className="flex gap-2">
                         <Button className="flex-1 bg-primary hover:bg-primary/90 font-bold" onClick={() => {
-                            // Find first incomplete lesson or first lesson
                             for (const topic of topics) {
                                 const lessons = getTopicLessons(topic.id);
                                 for (const lesson of lessons) {
@@ -52,7 +50,7 @@ export default function StudentSubjectOutline() {
                                     }
                                 }
                             }
-                            // If all complete, go to first lesson
+
                             if (topics.length > 0) {
                                 const firstLessons = getTopicLessons(topics[0].id);
                                 if (firstLessons.length > 0) {
@@ -103,7 +101,10 @@ export default function StudentSubjectOutline() {
                                                     </div>
                                                     <div>
                                                         <h4 className="font-bold">{lesson.title}</h4>
-                                                        <p className="text-xs text-muted-foreground tracking-wide font-medium">Video Lesson • 10m</p>
+                                                        <p className="text-xs text-muted-foreground tracking-wide font-medium flex items-center gap-1.5">
+                                                            {lesson.videoUrl ? <Video className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
+                                                            {lesson.videoUrl ? "Video lesson available" : "Lesson notes available"}
+                                                        </p>
                                                     </div>
                                                 </div>
                                                 {completed ? (
