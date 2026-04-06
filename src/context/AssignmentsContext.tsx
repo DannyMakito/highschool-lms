@@ -162,7 +162,7 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
                 }))
             })));
 
-        } catch (error) {
+         } catch (error) {
             console.error("Error fetching assignment data:", error);
         } finally {
             if (!cancelled) setLoading(false);
