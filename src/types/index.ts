@@ -27,6 +27,10 @@ export interface Lesson {
     title: string;
     content: string; // HTML string from editor
     videoUrl?: string;
+    videoType?: "external" | "upload";
+    videoFilePath?: string | null;
+    videoFileName?: string | null;
+    videoMimeType?: string | null;
     order: number;
 }
 
@@ -137,13 +141,18 @@ export interface RubricCriterion {
     title: string;
     description: string;
     maxPoints: number;
+    order?: number;
 }
 
 export interface Rubric {
     id: string;
     title: string;
     criteria: RubricCriterion[];
+    createdAt?: string;
 }
+
+export type AssessmentPeriod = "term" | "year";
+export type AssessmentCategory = "assignment" | "test" | "quiz" | "exam" | "project";
 
 export interface Assignment {
     id: string;
@@ -154,8 +163,12 @@ export interface Assignment {
     submissionType: "pdf" | "text" | "both";
     isGroup: boolean;
     durationDays: number;
+    availableFrom?: string;
     dueDate: string;
     rubricId?: string;
+    assessmentCategory?: AssessmentCategory;
+    assessmentPeriod?: AssessmentPeriod;
+    contributionWeight?: number;
     status: "draft" | "published";
     createdAt: string;
 }
@@ -180,7 +193,7 @@ export interface AssignmentSubmission {
     studentName: string;
     content: string; // Text content or File URL
     fileType: "pdf" | "text";
-    status: "submitted" | "graded" | "pending";
+    status: "submitted" | "graded" | "pending" | "draft";
     submittedAt: string;
     annotations: Annotation[];
     rubricGrades: Record<string, number>; // criterionId -> score

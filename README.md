@@ -1,42 +1,271 @@
 LMS Instruction Guide
 
-# Log in as the principal by using its login credential. principal@school.com PIN is 123456. Once you log in, create a subject by clicking on the subject tab. Fill in the  fields required. Once the subject is created, it should pop up on the subject tab. 
-- create a teacher by cliking on the Staff Management tab on the sidebar: create and assign a teacher a subject, and also the login credential. which is email and the pin. 							 After the teacher is created, the teacher will appear on the table and click on the eye icon to see teacher details
--  Go to the registration tab and click on  register class to  create a new register class that the teacher will have, and specify the details of this class. 
-	After a register class is created, go to the subject classes tab on the sidebar and create a subject class.
-- When both register class and  subject classes have been created you can now create a student by clicking on the  student registration tab and create the student by filling in the details. A PIN will be auto-generated for the learner ,select the available reg class and subject class if the learner is g10-g12 . The system will auto-select subjects for G10-12. learner will appear on the student directory . click on the eye icon to view the student's profile with log in details
+# Core Login Flow
 
-Once log in as a teacher you'll see your dashboard overview .on the side bar . there a subject tab You see all the subjects that the teacher has, and in classes, you will see all the classes that the teacher has  both the roster class and the subject classes in the table . when you click On subject, you can create quiz discussions and add modules. 
-on the assessment sidebar tab  you can create an essays  assessment or  view all created quizzes 
+Principal login:
+- Email: `principal@school.com`
+- PIN: `123456`
 
+Teacher and learner accounts are created inside the system and use the saved email + PIN credentials.
 
-# when you log in as a learner you'll be able to see an overview of the dashboard:
-- The total number of subjects that the learner has
-- The last course that the learner was doing
-You should also be able to see all your subjects, your assigned class
+# Main Setup Flow
 
-#Thing that need to be fixed :		
-**Principle portal **
+## Principal Portal
 
-- when you create a subject and you select to upload an image, you will get a error that says "bucket not created". Subject creation only works when a url image is used
-- ~~There is currently no way to add a learner to a subject class~~ ✅ Fixed: Subject Classes → click eye icon → Add learner dropdown + remove (X) button
-- ~~When registering a learner the system automatically assigns all available subjects for grades 10 to 12. It does not give us the option to select or deselect a specific subject for learner~~ ✅ Fixed: G10-12 registration Step 3 now lets you select/deselect both core and elective subjects
-- ~~In the learner directory, the assigned subjects that were assigned to the learner  while doing registration does not show on the table.~~
-- ~~ Teachers are not able to see learners in their register class and also subject class dont apear on the table~~
+Use the principal portal to set up the school structure in this order:
 
-  **  Learner portal **
-  ~~ when learner login there are not able to see their data, such as subjects, class and anything that is related to them.~~
--~~ there is an issue with the login  . You need to login twice before you can access your respective dashboard ~~~
-~~ The logout button in the principal dashboard is not functioning correctly.~~
--~~ The principal dashboard overview page does not render the actual number of teachers and students.~~
-- ~~~ Register classes need an eye icon in the table that opens a full register class details view with the enrolled students list.~~
--~~ Register classes need full CRUD support for the principal, including viewing, editing, and deleting existing classes.~~~
--~~ The subject classes page needs to be upgraded into a full subject class details workflow with complete CRUD functionality.~~
- leaner  need to be able to view video lessons. the front end already exist
+1. Create subjects from the `Subjects` area.
+2. Create teachers from `Staff Management` and assign subjects to them.
+3. Create register classes from `Register Classes`.
+4. Create subject classes from `Subject Classes`.
+5. Register learners from `Student Registration`.
 
- **  Teacher  portal **
- - teacher need to be able to add video lessons
- - Create a subjects grading for each subjects where teachers will choose how total grade for the leaner subject will be conducted for example, the learner will have 3 quize each weighing 20% and 1 assignment weighing 40% which will make a total of 100%
+Notes:
+- Learner PINs are auto-generated.
+- Grade 10 to 12 learners can be assigned subjects during registration.
+- Learners appear in the learner directory after registration.
 
+## Teacher Portal
 
+Teachers can currently:
+- View their dashboard and subject list
+- Open subjects and create modules and lessons
+- Add lesson notes and video lessons
+- Create quizzes
+- Create assessments under `Assessments > Essays & Research`
+- Edit assessment setup, including rubric criteria and weighting
+- Open the grading queue under `Assessments > Grading Queue`
+- Grade PDF/text assignment submissions with rubric scoring
 
+## Learner Portal
+
+Learners can currently:
+- View their dashboard
+- Open their subjects and lessons
+- Watch lesson videos when attached to lessons
+- View assessments grouped by subject
+- See upcoming assessments before release
+- Open assessments only once they are available
+- Submit text or PDF work
+- View released grades and feedback
+
+# What Was Implemented
+
+## Video Lessons
+
+Implemented:
+- Teachers can add lesson videos inside the lesson editor
+- Teachers can use either:
+  - external video URLs
+  - uploaded video files stored in Supabase storage
+- Learners can view lesson videos in the lesson page
+- Learner subject outline now shows whether a lesson has video or notes only
+
+Related app files:
+- [src/pages/dashboard/shared/SubjectDetail.tsx](C:\Users\ndlal\highschool-lms\src\pages\dashboard\shared\SubjectDetail.tsx)
+- [src/pages/dashboard/student/LessonView.tsx](C:\Users\ndlal\highschool-lms\src\pages\dashboard\student\LessonView.tsx)
+- [src/pages/dashboard/student/StudentSubjectOutline.tsx](C:\Users\ndlal\highschool-lms\src\pages\dashboard\student\StudentSubjectOutline.tsx)
+- [src/context/SubjectsContext.tsx](C:\Users\ndlal\highschool-lms\src\context\SubjectsContext.tsx)
+
+Supabase support:
+- `lesson-videos` storage bucket
+- lesson video metadata columns on `public.lessons`
+- SQL file: [supabase/lesson_videos_support.sql](C:\Users\ndlal\highschool-lms\supabase\lesson_videos_support.sql)
+
+## Rubric Grading Improvements
+
+Implemented:
+- Teachers grade by rubric scale, not raw final marks
+- Example:
+  - assignment total = `100`
+  - 4 criteria
+  - each criterion = `/4`
+  - each criterion contributes up to `25` marks
+- Speed grader now shows:
+  - rubric score entry
+  - converted assignment marks per criterion
+  - final total mark
+
+Related app files:
+- [src/pages/dashboard/teacher/SpeedGrader.tsx](C:\Users\ndlal\highschool-lms\src\pages\dashboard\teacher\SpeedGrader.tsx)
+- [src/context/AssignmentsContext.tsx](C:\Users\ndlal\highschool-lms\src\context\AssignmentsContext.tsx)
+
+## Editable Assessment Rubrics
+
+Implemented:
+- Teachers can create custom rubrics with any number of criteria
+- Teachers can edit an existing assessment and update the linked rubric
+- Rubric criteria now persist an explicit display/order value
+
+Related app files:
+- [src/pages/dashboard/teacher/AssignmentManagement.tsx](C:\Users\ndlal\highschool-lms\src\pages\dashboard\teacher\AssignmentManagement.tsx)
+- [src/context/AssignmentsContext.tsx](C:\Users\ndlal\highschool-lms\src\context\AssignmentsContext.tsx)
+
+## Assessment Weighting And Release Windows
+
+Implemented:
+- Teachers can configure:
+  - assessment type
+  - reporting period (`term` or `year`)
+  - contribution weight percentage
+  - release/open date
+  - due date
+- Learners can see future assessments before they open
+- Learners cannot start or submit an assessment before its release date
+- Learners can see assessments grouped by subject
+
+Related app files:
+- [src/pages/dashboard/teacher/AssignmentManagement.tsx](C:\Users\ndlal\highschool-lms\src\pages\dashboard\teacher\AssignmentManagement.tsx)
+- [src/pages/dashboard/student/StudentAssignments.tsx](C:\Users\ndlal\highschool-lms\src\pages\dashboard\student\StudentAssignments.tsx)
+- [src/pages/dashboard/student/AssignmentView.tsx](C:\Users\ndlal\highschool-lms\src\pages\dashboard\student\AssignmentView.tsx)
+
+Supabase support:
+- assessment metadata columns on `public.assignments`
+- rubric criterion order column on `public.rubric_criteria`
+- SQL file: [supabase/assessment_support.sql](C:\Users\ndlal\highschool-lms\supabase\assessment_support.sql)
+
+## Grading Queue
+
+Implemented:
+- New teacher grading queue page
+- Queue is grouped by:
+  - subject
+  - subject class within subject
+- Shows:
+  - pending assessment grading count
+  - historical grading count
+  - quick links into assessment grading
+
+Related app files:
+- [src/pages/dashboard/teacher/GradingQueue.tsx](C:\Users\ndlal\highschool-lms\src\pages\dashboard\teacher\GradingQueue.tsx)
+- [src/App.tsx](C:\Users\ndlal\highschool-lms\src\App.tsx)
+- [src/components/app-sidebar.tsx](C:\Users\ndlal\highschool-lms\src\components\app-sidebar.tsx)
+
+# Supabase Changes Applied
+
+Already applied or prepared:
+- Lesson video support SQL
+- Assessment support SQL
+
+Expected schema additions:
+- `public.lessons.video_type`
+- `public.lessons.video_file_path`
+- `public.lessons.video_file_name`
+- `public.lessons.video_mime_type`
+- `public.assignments.available_from`
+- `public.assignments.assessment_category`
+- `public.assignments.assessment_period`
+- `public.assignments.contribution_weight`
+- `public.rubric_criteria.order`
+
+# What To Test
+
+## Principal Setup
+
+Test:
+1. Create a subject
+2. Create a teacher and assign a subject
+3. Create a register class
+4. Create a subject class
+5. Register a learner and assign subjects/classes
+
+Expected:
+- teacher sees assigned subject
+- learner sees assigned subject and class-linked data
+
+## Video Lesson Flow
+
+Test:
+1. Log in as teacher
+2. Open a subject
+3. Add a module
+4. Add a lesson with lesson notes only
+5. Edit the lesson and attach an external video URL
+6. Create another lesson and upload a video file
+7. Log in as learner and open both lessons
+
+Expected:
+- lesson saves successfully
+- uploaded video gets a playable URL
+- learner sees playable lesson video
+- learner outline distinguishes video lessons from note-only lessons
+
+## Assessment Creation
+
+Test:
+1. Log in as teacher
+2. Go to `Assessments > Essays & Research`
+3. Create an assessment with:
+   - subject
+   - total marks
+   - release date
+   - due date
+   - category
+   - term/year period
+   - contribution weight
+4. Create a custom rubric with multiple criteria
+5. Save and reopen the same assessment for editing
+
+Expected:
+- assessment appears in the list
+- rubric criteria persist
+- weight and release settings persist
+- editing the assessment updates the saved configuration
+
+## Learner Assessment Visibility
+
+Test:
+1. Create one assessment with a future `available_from`
+2. Create another assessment with `available_from = today`
+3. Log in as learner
+4. Open `Assessments`
+
+Expected:
+- assessments are grouped by subject
+- future assessment is visible but locked
+- current assessment is open
+- learner cannot submit before release date
+
+## Assignment Submission And Feedback
+
+Test:
+1. Learner opens an available assessment
+2. Submit text work or PDF
+3. Teacher opens grading
+4. Grade using rubric
+5. Release the grade
+6. Learner opens the same assessment again
+
+Expected:
+- submission saves successfully
+- rubric marks convert correctly to final score
+- released grade and feedback appear for learner
+
+## Rubric Conversion Logic
+
+Test example:
+1. Create an assessment out of `100`
+2. Create `4` rubric criteria
+3. Set each criterion max to `4`
+4. In grading, enter `4/4` for one criterion
+
+Expected:
+- that criterion contributes `25` marks
+- total score is the sum of converted criterion marks
+
+## Grading Queue
+
+Test:
+1. Make submissions from learners in different subject classes
+2. Log in as teacher
+3. Open `Assessments > Grading Queue`
+
+Expected:
+- queue groups work by subject
+- each subject groups work by subject class
+- pending counts appear correctly
+- teacher can jump from queue into grading flow
+
+# Current Validation Note
+
+The code was updated for the features above, but a full local frontend build was not run in this workspace because `node_modules` is not installed here, so `vite` was unavailable for compile verification.

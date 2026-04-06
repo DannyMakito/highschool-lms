@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAssignments } from "@/hooks/useAssignments";
 import type { Annotation } from "@/types";
@@ -42,6 +42,12 @@ export default function SpeedGrader() {
     const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(
         assignmentSubmissions[0]?.id || null
     );
+
+    useEffect(() => {
+        if (!selectedSubmissionId && assignmentSubmissions.length > 0) {
+            setSelectedSubmissionId(assignmentSubmissions[0].id);
+        }
+    }, [assignmentSubmissions, selectedSubmissionId]);
 
     const currentSubmission = assignmentSubmissions.find(s => s.id === selectedSubmissionId);
 
@@ -90,18 +96,46 @@ export default function SpeedGrader() {
         { name: 'Purple', class: 'bg-purple-200 border-purple-500' },
     ];
 
-    // Sync state when submission changes
-    useMemo(() => {
+    useEffect(() => {
         if (currentSubmission) {
             setRubricGrades(currentSubmission.rubricGrades || {});
             setOverallFeedback(currentSubmission.overallFeedback || "");
             setAnnotations(currentSubmission.annotations || []);
+        } else {
+            setRubricGrades({});
+            setOverallFeedback("");
+            setAnnotations([]);
         }
-    }, [selectedSubmissionId]);
+    }, [currentSubmission]);
+
+    const rubricCriteria = rubric?.criteria || [];
+    const totalRubricScale = rubricCriteria.reduce((sum, criterion) => sum + (criterion.maxPoints || 0), 0);
+
+    const getCriterionAssignmentWeight = (criterionMaxPoints: number) => {
+        if (!assignment || totalRubricScale <= 0) return 0;
+        return (assignment.totalMarks * criterionMaxPoints) / totalRubricScale;
+    };
+
+    const getScaledCriterionMarks = (criterionId: string, criterionMaxPoints: number) => {
+        const rubricScore = rubricGrades[criterionId] || 0;
+        const weight = getCriterionAssignmentWeight(criterionMaxPoints);
+
+        if (criterionMaxPoints <= 0 || weight <= 0) return 0;
+
+        return Number(((rubricScore / criterionMaxPoints) * weight).toFixed(2));
+    };
 
     const totalGrade = useMemo(() => {
-        return Object.values(rubricGrades).reduce((sum, val) => sum + val, 0);
-    }, [rubricGrades]);
+        if (!rubricCriteria.length) {
+            return 0;
+        }
+
+        const scaledTotal = rubricCriteria.reduce((sum, criterion) => {
+            return sum + getScaledCriterionMarks(criterion.id, criterion.maxPoints);
+        }, 0);
+
+        return Number(Math.min(assignment?.totalMarks || scaledTotal, scaledTotal).toFixed(2));
+    }, [assignment?.totalMarks, rubricCriteria, rubricGrades]);
 
     const handleSaveGrade = (release: boolean = false) => {
         if (!selectedSubmissionId) return;
@@ -496,27 +530,58 @@ export default function SpeedGrader() {
                             </div>
                             {rubric ? (
                                 <div className="space-y-3 pb-2">
-                                    {rubric.criteria.map((c) => (
+                                    {rubric.criteria.map((c) => {
+                                        const criterionWeight = getCriterionAssignmentWeight(c.maxPoints);
+                                        const earnedMarks = getScaledCriterionMarks(c.id, c.maxPoints);
+
+                                        return (
                                         <div key={c.id} className="space-y-3 p-4 rounded-xl bg-slate-50 border-2 border-slate-100 hover:border-primary/20 transition-all">
                                             <div className="space-y-1">
-                                                <Label className="font-bold text-xs leading-tight text-slate-800">{c.title}</Label>
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <Label className="font-bold text-xs leading-tight text-slate-800">{c.title}</Label>
+                                                    <Badge variant="outline" className="text-[10px] font-black">
+                                                        {criterionWeight.toFixed(2).replace(/\.00$/, "")} marks max
+                                                    </Badge>
+                                                </div>
                                                 <p className="text-[10px] text-muted-foreground leading-relaxed">{c.description}</p>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <Input
-                                                    type="number"
-                                                    className="h-8 text-xs font-black flex-1"
-                                                    value={rubricGrades[c.id] || 0}
-                                                    max={c.maxPoints}
-                                                    onChange={(e) => setRubricGrades({
-                                                        ...rubricGrades,
-                                                        [c.id]: Math.min(parseInt(e.target.value) || 0, c.maxPoints)
-                                                    })}
-                                                />
-                                                <span className="text-[10px] font-black opacity-40 uppercase">/ {c.maxPoints}</span>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] font-black opacity-50 uppercase">Rubric Score</Label>
+                                                    <div className="flex items-center gap-2">
+                                                        <Input
+                                                            type="number"
+                                                            min={0}
+                                                            max={c.maxPoints}
+                                                            step={1}
+                                                            className="h-8 text-xs font-black flex-1"
+                                                            value={rubricGrades[c.id] || 0}
+                                                            onChange={(e) => {
+                                                                const nextScore = Math.max(
+                                                                    0,
+                                                                    Math.min(Number(e.target.value) || 0, c.maxPoints)
+                                                                );
+
+                                                                setRubricGrades({
+                                                                    ...rubricGrades,
+                                                                    [c.id]: nextScore
+                                                                });
+                                                            }}
+                                                        />
+                                                        <span className="text-[10px] font-black opacity-40 uppercase">/ {c.maxPoints}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] font-black opacity-50 uppercase">Marks Added</Label>
+                                                    <Input
+                                                        readOnly
+                                                        className="h-8 text-xs font-black bg-white"
+                                                        value={`${earnedMarks.toFixed(2).replace(/\.00$/, "")} / ${criterionWeight.toFixed(2).replace(/\.00$/, "")}`}
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
-                                    ))}
+                                    )})}
                                 </div>
                             ) : (
                                 <div className="text-[10px] p-6 text-center border-2 border-dashed rounded-2xl text-muted-foreground bg-muted/20">
