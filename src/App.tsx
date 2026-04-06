@@ -36,6 +36,8 @@ import RegisterClassManagement from "@/pages/dashboard/principal/RegisterClassMa
 import SubjectClassManagement from "@/pages/dashboard/principal/SubjectClassManagement";
 import GradeManagement from "@/pages/dashboard/principal/GradeManagement";
 import StudentDirectory from "@/pages/dashboard/principal/StudentDirectory";
+import GradingQueue from "@/pages/dashboard/teacher/GradingQueue";
+
 
 
 
@@ -82,6 +84,7 @@ export function App() {
             <Route path="assignments/quizzes" element={<Quizzes />} />
             <Route path="assignments/quizzes/:id/analytics" element={<QuizAnalytics />} />
             <Route path="assignments/essays" element={<AssignmentManagement />} />
+            <Route path="assignments/queue" element={<GradingQueue />} />
             <Route path="assignments/:id/grade" element={<SpeedGraderV2 />} />
             <Route path="classes" element={<SchoolClassManagement />} />
             <Route path="subjects/:id/discussions" element={<Discussions />} />
