@@ -14,7 +14,8 @@ import {
     CheckCircle2,
     MessageSquare,
     FileText,
-    History
+    History,
+    LinkIcon
 } from "lucide-react";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
@@ -233,9 +234,26 @@ export default function AssignmentView() {
                             </div>
                         ) : (
                             <div className="space-y-6">
-                                <div className="p-6 rounded-2xl bg-muted/30 border font-serif text-lg leading-relaxed whitespace-pre-wrap">
-                                    {submission.content}
-                                </div>
+                                {submission.fileType === "pdf" ? (
+                                    <div className="p-6 rounded-2xl bg-primary/5 border border-primary/20 flex flex-col items-center justify-center gap-4 text-center">
+                                        <FileText className="h-10 w-10 text-primary" />
+                                        <div>
+                                            <p className="font-bold text-slate-800 break-all max-w-[300px]">
+                                                {submission.content.split('/').pop()?.split('?')[0] || "document.pdf"}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground uppercase tracking-widest mt-1">Submitted PDF</p>
+                                        </div>
+                                        <a href={submission.content} target="_blank" rel="noreferrer" className="mt-2">
+                                            <Button variant="outline" className="font-bold gap-2">
+                                                <LinkIcon className="h-4 w-4" /> View Document
+                                            </Button>
+                                        </a>
+                                    </div>
+                                ) : (
+                                    <div className="p-6 rounded-2xl bg-muted/30 border font-serif text-lg leading-relaxed whitespace-pre-wrap">
+                                        {submission.content}
+                                    </div>
+                                )}
 
                                 {isGraded && (
                                     <Card className="border-primary/20 bg-primary/5 shadow-none overflow-hidden">
@@ -257,7 +275,7 @@ export default function AssignmentView() {
                                                         {rubric.criteria.map(c => (
                                                             <div key={c.id} className="flex items-center justify-between text-sm py-2 border-b border-primary/10">
                                                                 <span className="font-bold">{c.title}</span>
-                                                                <span className="font-black">{(submission.rubricGrades?.[c.id]) || 0} / {c.maxPoints || 0}</span>
+                                                                <span className="font-black">{(submission.rubricGrades?.[c.id]) || 0} / {c.maxPoints || (c as any).points || 0}</span>
                                                             </div>
                                                         ))}
                                                     </div>

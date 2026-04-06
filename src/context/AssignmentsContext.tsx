@@ -44,7 +44,7 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
 
         try {
             let assignmentsQuery = supabase.from('assignments').select('*').order('created_at', { ascending: false });
-            let submissionsQuery = supabase.from('assignment_submissions').select('*, annotations(*)');
+            let submissionsQuery = supabase.from('assignment_submissions').select('*, annotations(*), rubric_criterion_grades(*)');
 
             // Filter by role
             if (user.role === 'teacher') {
@@ -107,8 +107,14 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
             })));
 
             setRubrics((rubricsData || []).map(r => ({
-                ...r,
-                criteria: r.criteria || []
+                id: r.id,
+                title: r.title,
+                criteria: (r.criteria || []).map((c: any) => ({
+                    id: c.id,
+                    title: c.title,
+                    description: c.description,
+                    maxPoints: c.max_points || c.maxPoints || c.points || 0
+                }))
             })));
 
             // For teachers, filter submissions to only those for their assignments
@@ -116,17 +122,30 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
             let filteredSubmissions = submissionsData || [];
             if (user.role === 'teacher' && assignmentsData) {
                 // Teachers can see submissions for any assignment (temporary until RLS is properly set up)
-                // In production, this should be filtered by RLS policies
                 console.log("[AssignmentsContext] Teacher viewing all submissions for their classes");
+            }
+
+            // Manually fetch student names to avoid PostgREST FK errors
+            const studentIds = [...new Set(filteredSubmissions.map(s => s.student_id))];
+            let profilesMap = new Map();
+            if (studentIds.length > 0) {
+                const { data: profilesData } = await supabase
+                    .from('profiles')
+                    .select('id, full_name')
+                    .in('id', studentIds);
+                profilesMap = new Map((profilesData || []).map(p => [p.id, p]));
             }
 
             setSubmissions(filteredSubmissions.map(s => ({
                 ...s,
                 assignmentId: s.assignment_id,
                 studentId: s.student_id,
+                studentName: profilesMap.get(s.student_id)?.full_name || s.student_id,
                 fileType: s.file_type,
                 submittedAt: s.submitted_at,
-                rubricGrades: s.rubric_grades,
+                rubricGrades: s.rubric_criterion_grades && s.rubric_criterion_grades.length > 0 
+                    ? s.rubric_criterion_grades.reduce((acc: any, grade: any) => ({...acc, [grade.criterion_id]: grade.score}), {}) 
+                    : s.rubric_grades,
                 overallFeedback: s.overall_feedback,
                 totalGrade: s.total_grade,
                 isReleased: s.is_released,

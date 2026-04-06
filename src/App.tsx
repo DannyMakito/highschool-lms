@@ -23,7 +23,7 @@ import LoginPage from "@/pages/LoginPage";
 import Announcements from "@/pages/dashboard/principal/Announcements";
 import StudentAnnouncements from "@/pages/dashboard/student/StudentAnnouncements";
 import AssignmentManagement from "@/pages/dashboard/teacher/AssignmentManagement";
-import SpeedGrader from "@/pages/dashboard/teacher/SpeedGrader";
+import SpeedGraderV2 from "@/pages/dashboard/teacher/SpeedGraderV2";
 import StudentAssignments from "@/pages/dashboard/student/StudentAssignments";
 import AssignmentView from "@/pages/dashboard/student/AssignmentView";
 import TeacherManagement from "@/pages/dashboard/principal/TeacherManagement";
@@ -82,7 +82,7 @@ export function App() {
             <Route path="assignments/quizzes" element={<Quizzes />} />
             <Route path="assignments/quizzes/:id/analytics" element={<QuizAnalytics />} />
             <Route path="assignments/essays" element={<AssignmentManagement />} />
-            <Route path="assignments/:id/grade" element={<SpeedGrader />} />
+            <Route path="assignments/:id/grade" element={<SpeedGraderV2 />} />
             <Route path="classes" element={<SchoolClassManagement />} />
             <Route path="subjects/:id/discussions" element={<Discussions />} />
             <Route path="subjects/:id/discussions/create" element={<DiscussionForm />} />
