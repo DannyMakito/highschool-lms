@@ -29,6 +29,7 @@ interface SubjectsContextType {
     updateTopic: (id: string, updates: Partial<Topic>) => Promise<void>;
     addLesson: (lesson: Omit<Lesson, 'id'>) => Promise<any>;
     updateLesson: (id: string, updates: Partial<Lesson>) => Promise<void>;
+    deleteLesson: (id: string) => Promise<void>;
     addQuiz: (quiz: Quiz) => Promise<void>;
     updateQuiz: (id: string, updates: Partial<Quiz>) => Promise<void>;
     deleteQuizzes: (quizIds: string[]) => Promise<void>;
@@ -265,6 +266,31 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
             ...prev,
             lessons: prev.lessons.map(l => l.id === id ? { ...l, ...updates } : l)
         }));
+    };
+
+    const deleteLesson = async (id: string) => {
+        const lessonToDelete = data.lessons.find(lesson => lesson.id === id);
+
+        const { error } = await supabase
+            .from('lessons')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+
+        setData(prev => {
+            const topic = lessonToDelete ? prev.topics.find(item => item.id === lessonToDelete.topicId) : undefined;
+
+            return {
+                ...prev,
+                lessons: prev.lessons.filter(lesson => lesson.id !== id),
+                subjects: prev.subjects.map(subject => (
+                    subject.id === topic?.subjectId
+                        ? { ...subject, lessonsCount: Math.max(0, subject.lessonsCount - 1) }
+                        : subject
+                ))
+            };
+        });
     };
 
     const updateTopic = async (id: string, updates: Partial<Topic>) => {
@@ -514,6 +540,7 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
         updateTopic,
         addLesson,
         updateLesson,
+        deleteLesson,
         addQuiz,
         updateQuiz,
         deleteQuizzes,

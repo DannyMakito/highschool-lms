@@ -30,7 +30,7 @@ export default function SubjectDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { subjects, addTopic, addLesson, updateLesson, getSubjectTopics, getTopicLessons } = useSubjects();
+    const { subjects, addTopic, addLesson, updateLesson, deleteLesson, getSubjectTopics, getTopicLessons } = useSubjects();
     const subject = subjects.find(s => s.id === id);
 
     const [isTopicDialogOpen, setIsTopicDialogOpen] = useState(false);
@@ -49,6 +49,7 @@ export default function SubjectDetail() {
     });
     const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
     const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+    const [isSavingLesson, setIsSavingLesson] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -67,7 +68,47 @@ export default function SubjectDetail() {
             videoMimeType: null,
         });
         setEditingLessonId(null);
+        setSelectedTopicId(null);
+        setIsSavingLesson(false);
         setUploadProgress(0);
+    };
+
+    const getEditingLesson = () => {
+        if (!editingLessonId || !selectedTopicId) return null;
+        return getTopicLessons(selectedTopicId).find((lesson) => lesson.id === editingLessonId) || null;
+    };
+
+    const removeUploadedVideoFile = async (filePath?: string | null) => {
+        if (!filePath) return;
+
+        try {
+            const { error } = await supabase.storage.from("lesson-videos").remove([filePath]);
+            if (error) {
+                console.error("Failed to remove lesson video file", error);
+            }
+        } catch (error) {
+            console.error("Failed to remove lesson video file", error);
+        }
+    };
+
+    const closeLessonDialog = async () => {
+        if (isSavingLesson) {
+            return;
+        }
+
+        const currentLesson = getEditingLesson();
+        const shouldCleanupTemporaryUpload = (
+            newLesson.videoType === "upload" &&
+            newLesson.videoFilePath &&
+            newLesson.videoFilePath !== currentLesson?.videoFilePath
+        );
+
+        if (shouldCleanupTemporaryUpload) {
+            await removeUploadedVideoFile(newLesson.videoFilePath);
+        }
+
+        resetLessonForm();
+        setIsLessonDialogOpen(false);
     };
 
     const uploadLessonVideoWithProgress = async (filePath: string, file: File) => {
@@ -195,10 +236,11 @@ export default function SubjectDetail() {
     const clearVideo = async () => {
         try {
             if (newLesson.videoType === "upload" && newLesson.videoFilePath) {
-                const isEditingExistingLesson = Boolean(editingLessonId);
+                const currentLesson = getEditingLesson();
+                const shouldDeleteCurrentUpload = newLesson.videoFilePath !== currentLesson?.videoFilePath;
 
-                if (!isEditingExistingLesson) {
-                    await supabase.storage.from("lesson-videos").remove([newLesson.videoFilePath]);
+                if (shouldDeleteCurrentUpload) {
+                    await removeUploadedVideoFile(newLesson.videoFilePath);
                 }
             }
         } catch (error) {
@@ -216,9 +258,23 @@ export default function SubjectDetail() {
     };
 
     const handleAddLesson = async () => {
-        if (!newLesson.title || !selectedTopicId) return;
+        if (!selectedTopicId) {
+            toast.error("Choose a module before creating a lesson");
+            return;
+        }
+
+        if (!newLesson.title.trim()) {
+            toast.error("Add a lesson title before saving");
+            return;
+        }
+
+        if (isUploadingVideo) {
+            toast.error("Please wait for the video upload to finish before saving");
+            return;
+        }
 
         try {
+            setIsSavingLesson(true);
             const currentLesson = editingLessonId
                 ? getTopicLessons(selectedTopicId).find((lesson) => lesson.id === editingLessonId)
                 : null;
@@ -257,6 +313,30 @@ export default function SubjectDetail() {
         } catch (error) {
             console.error("Failed to save lesson", error);
             toast.error("Could not save the lesson");
+        } finally {
+            setIsSavingLesson(false);
+        }
+    };
+
+    const handleDeleteLesson = async () => {
+        if (!editingLessonId) return;
+
+        const currentLesson = getEditingLesson();
+
+        try {
+            setIsSavingLesson(true);
+            await deleteLesson(editingLessonId);
+
+            if (currentLesson?.videoType === "upload" && currentLesson.videoFilePath) {
+                await removeUploadedVideoFile(currentLesson.videoFilePath);
+            }
+
+            resetLessonForm();
+            setIsLessonDialogOpen(false);
+            toast.success("Lesson deleted");
+        } catch (error) {
+            console.error("Failed to delete lesson", error);
+            toast.error("Could not delete the lesson");
         }
     };
 
@@ -353,8 +433,8 @@ export default function SubjectDetail() {
                                             variant="ghost"
                                             className="text-primary hover:text-primary hover:bg-primary/10"
                                             onClick={() => {
-                                                setSelectedTopicId(topic.id);
                                                 resetLessonForm();
+                                                setSelectedTopicId(topic.id);
                                                 setIsLessonDialogOpen(true);
                                             }}
                                         >
@@ -425,7 +505,8 @@ export default function SubjectDetail() {
                                 variant="ghost"
                                 size="icon"
                                 className="rounded-xl h-11 w-11 bg-slate-50 text-slate-400 hover:text-rose-500 transition-colors"
-                                onClick={() => setIsLessonDialogOpen(false)}
+                                onClick={() => void closeLessonDialog()}
+                                disabled={isSavingLesson || isUploadingVideo}
                             >
                                 <X className="h-5 w-5" />
                             </Button>
@@ -440,19 +521,31 @@ export default function SubjectDetail() {
                         </div>
 
                         <div className="flex items-center gap-3">
+                            {editingLessonId ? (
+                                <Button
+                                    variant="outline"
+                                    className="rounded-xl px-6 h-11 font-black text-rose-600 border-rose-200 hover:bg-rose-50"
+                                    onClick={() => void handleDeleteLesson()}
+                                    disabled={isSavingLesson || isUploadingVideo}
+                                >
+                                    Delete Lesson
+                                </Button>
+                            ) : null}
                             <Button
                                 variant="outline"
                                 className="rounded-xl px-6 h-11 font-black text-slate-600 border-slate-200"
-                                onClick={() => setIsLessonDialogOpen(false)}
+                                onClick={() => void closeLessonDialog()}
+                                disabled={isSavingLesson || isUploadingVideo}
                             >
                                 Cancel
                             </Button>
                             <Button
                                 className="bg-primary hover:bg-primary/90 text-white rounded-xl px-8 h-11 font-black transition-all shadow-lg shadow-primary/20 flex items-center gap-2"
-                                onClick={handleAddLesson}
+                                onClick={() => void handleAddLesson()}
+                                disabled={isSavingLesson || isUploadingVideo}
                             >
                                 <Save className="h-4 w-4" />
-                                {editingLessonId ? "Save Changes" : "Create Lesson"}
+                                {isSavingLesson ? "Saving..." : editingLessonId ? "Save Changes" : "Create Lesson"}
                             </Button>
                         </div>
                     </header>

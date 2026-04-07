@@ -159,7 +159,18 @@ export interface AssignmentGroup {
     subjectId: string;
     name: string;
     weightPercentage: number;
+    maxPoints?: number;
     order?: number;
+}
+
+export interface StudentGradebookScore {
+    id: string;
+    subjectId: string;
+    assignmentGroupId: string;
+    studentId: string;
+    score: number;
+    feedback?: string | null;
+    updatedAt?: string;
 }
 
 export type AssessmentPeriod = "term" | "year";
