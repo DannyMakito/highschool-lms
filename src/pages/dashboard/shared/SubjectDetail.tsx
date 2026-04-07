@@ -24,7 +24,7 @@ import { RichTextEditor } from "@/components/editor/RichTextEditor";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import supabase from "@/lib/supabase";
+import supabase, { supabaseKey, supabaseUrl } from "@/lib/supabase";
 
 export default function SubjectDetail() {
     const { id } = useParams();
@@ -49,6 +49,7 @@ export default function SubjectDetail() {
     });
     const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
     const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     if (!subject) return <div>Subject not found</div>;
@@ -66,6 +67,64 @@ export default function SubjectDetail() {
             videoMimeType: null,
         });
         setEditingLessonId(null);
+        setUploadProgress(0);
+    };
+
+    const uploadLessonVideoWithProgress = async (filePath: string, file: File) => {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+            throw sessionError;
+        }
+
+        const accessToken = sessionData.session?.access_token;
+
+        if (!accessToken) {
+            throw new Error("You must be signed in to upload lesson videos.");
+        }
+
+        const uploadUrl = `${supabaseUrl}/storage/v1/object/lesson-videos/${filePath}`;
+
+        await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+
+            xhr.open("POST", uploadUrl);
+            xhr.setRequestHeader("apikey", supabaseKey);
+            xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+            xhr.setRequestHeader("x-upsert", "false");
+            xhr.setRequestHeader("cache-control", "3600");
+            xhr.setRequestHeader("Content-Type", file.type);
+
+            xhr.upload.onprogress = (event) => {
+                if (!event.lengthComputable) {
+                    return;
+                }
+
+                const nextProgress = Math.min(100, Math.round((event.loaded / event.total) * 100));
+                setUploadProgress(nextProgress);
+            };
+
+            xhr.onerror = () => {
+                reject(new Error("The upload failed before the server could respond."));
+            };
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    setUploadProgress(100);
+                    resolve();
+                    return;
+                }
+
+                try {
+                    const parsedError = JSON.parse(xhr.responseText);
+                    reject(new Error(parsedError.message || "Upload failed."));
+                } catch {
+                    reject(new Error("Upload failed."));
+                }
+            };
+
+            xhr.send(file);
+        });
     };
 
     const handleAddTopic = async () => {
@@ -101,22 +160,13 @@ export default function SubjectDetail() {
         }
 
         setIsUploadingVideo(true);
+        setUploadProgress(0);
 
         try {
             const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
             const filePath = `${id}/${selectedTopicId}/${user.id}/${Date.now()}_${sanitizedName}`;
 
-            const { error: uploadError } = await supabase.storage
-                .from("lesson-videos")
-                .upload(filePath, file, {
-                    cacheControl: "3600",
-                    upsert: false,
-                    contentType: file.type,
-                });
-
-            if (uploadError) {
-                throw uploadError;
-            }
+            await uploadLessonVideoWithProgress(filePath, file);
 
             const { data: publicUrlData } = supabase.storage.from("lesson-videos").getPublicUrl(filePath);
 
@@ -135,6 +185,7 @@ export default function SubjectDetail() {
             toast.error("Could not upload the lesson video");
         } finally {
             setIsUploadingVideo(false);
+            setUploadProgress(0);
             if (fileInputRef.current) {
                 fileInputRef.current.value = "";
             }
@@ -440,8 +491,23 @@ export default function SubjectDetail() {
                                                     <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center mx-auto mb-4 border border-slate-100 text-slate-400 group-hover:text-primary transition-colors shadow-sm">
                                                         {isUploadingVideo ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
                                                     </div>
-                                                    <p className="text-sm font-bold text-slate-900">{isUploadingVideo ? "Uploading video..." : "Upload a lesson video"}</p>
-                                                    <p className="text-[10px] text-slate-400 mt-1">MP4, WEBM or OGG (Max 100MB)</p>
+                                                    <p className="text-sm font-bold text-slate-900">
+                                                        {isUploadingVideo ? `Uploading video... ${uploadProgress}%` : "Upload a lesson video"}
+                                                    </p>
+                                                    <p className="text-[10px] text-slate-400 mt-1">
+                                                        {isUploadingVideo ? "Large files depend on your internet speed. Keep this lesson editor open while the upload completes." : "MP4, WEBM or OGG (Max 100MB)"}
+                                                    </p>
+                                                    {isUploadingVideo ? (
+                                                        <div className="mt-4 space-y-2">
+                                                            <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                                                                <div
+                                                                    className="h-full rounded-full bg-primary transition-[width] duration-300"
+                                                                    style={{ width: `${uploadProgress}%` }}
+                                                                />
+                                                            </div>
+                                                            <p className="text-[11px] font-bold text-primary">{uploadProgress}% uploaded</p>
+                                                        </div>
+                                                    ) : null}
                                                     <Button
                                                         type="button"
                                                         variant="ghost"

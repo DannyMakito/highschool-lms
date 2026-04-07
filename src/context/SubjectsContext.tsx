@@ -30,6 +30,7 @@ interface SubjectsContextType {
     addLesson: (lesson: Omit<Lesson, 'id'>) => Promise<any>;
     updateLesson: (id: string, updates: Partial<Lesson>) => Promise<void>;
     addQuiz: (quiz: Quiz) => Promise<void>;
+    updateQuiz: (id: string, updates: Partial<Quiz>) => Promise<void>;
     deleteQuizzes: (quizIds: string[]) => Promise<void>;
     deleteSubject: (subjectId: string) => Promise<void>;
     addSubmission: (submission: QuizSubmission) => Promise<void>;
@@ -133,7 +134,10 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
                     quizzes: (quizzes || []).map(q => ({ 
                         ...q, 
                         subjectId: q.subject_id,
-                        settingsConfigured: q.settings_configured || false 
+                        settingsConfigured: q.settings_configured || false,
+                        groupId: q.group_id,
+                        countsTowardsFinal: q.counts_towards_final ?? true,
+                        pointsPossible: q.points_possible ?? (Array.isArray(q.questions) ? q.questions.reduce((sum: number, question: any) => sum + (question.points || 0), 0) : 0)
                     })),
                     submissions: (submissions || []).map(sub => ({ 
                         ...sub, 
@@ -292,6 +296,9 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
                 settings: quiz.settings,
                 questions: quiz.questions,
                 settings_configured: quiz.settingsConfigured,
+                group_id: quiz.groupId || null,
+                counts_towards_final: quiz.countsTowardsFinal ?? true,
+                points_possible: quiz.pointsPossible ?? quiz.questions.reduce((sum, question) => sum + (question.points || 0), 0),
             });
 
         if (error) throw error;
@@ -299,6 +306,31 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
         setData(prev => ({
             ...prev,
             quizzes: [...prev.quizzes.filter(q => q.id !== quiz.id), quiz]
+        }));
+    };
+
+    const updateQuiz = async (id: string, updates: Partial<Quiz>) => {
+        const payload: Record<string, unknown> = {};
+        if (updates.title !== undefined) payload.title = updates.title;
+        if (updates.description !== undefined) payload.description = updates.description;
+        if (updates.status !== undefined) payload.status = updates.status;
+        if (updates.settings !== undefined) payload.settings = updates.settings;
+        if (updates.questions !== undefined) payload.questions = updates.questions;
+        if (updates.settingsConfigured !== undefined) payload.settings_configured = updates.settingsConfigured;
+        if (updates.groupId !== undefined) payload.group_id = updates.groupId;
+        if (updates.countsTowardsFinal !== undefined) payload.counts_towards_final = updates.countsTowardsFinal;
+        if (updates.pointsPossible !== undefined) payload.points_possible = updates.pointsPossible;
+
+        const { error } = await supabase
+            .from('quizzes')
+            .update(payload)
+            .eq('id', id);
+
+        if (error) throw error;
+
+        setData(prev => ({
+            ...prev,
+            quizzes: prev.quizzes.map(quiz => quiz.id === id ? { ...quiz, ...updates } : quiz)
         }));
     };
 
@@ -483,6 +515,7 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
         addLesson,
         updateLesson,
         addQuiz,
+        updateQuiz,
         deleteQuizzes,
         deleteSubject,
         addSubmission,

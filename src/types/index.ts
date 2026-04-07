@@ -81,6 +81,9 @@ export interface Quiz {
         };
     };
     createdAt: string;
+    groupId?: string | null;
+    countsTowardsFinal?: boolean;
+    pointsPossible?: number;
 }
 
 export interface QuizSubmission {
@@ -151,6 +154,14 @@ export interface Rubric {
     createdAt?: string;
 }
 
+export interface AssignmentGroup {
+    id: string;
+    subjectId: string;
+    name: string;
+    weightPercentage: number;
+    order?: number;
+}
+
 export type AssessmentPeriod = "term" | "year";
 export type AssessmentCategory = "assignment" | "test" | "quiz" | "exam" | "project";
 
@@ -169,6 +180,8 @@ export interface Assignment {
     assessmentCategory?: AssessmentCategory;
     assessmentPeriod?: AssessmentPeriod;
     contributionWeight?: number;
+    groupId?: string | null;
+    countsTowardsFinal?: boolean;
     status: "draft" | "published";
     createdAt: string;
 }

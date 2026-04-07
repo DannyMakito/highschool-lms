@@ -109,7 +109,9 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
                 rubricId: a.rubric_id,
                 assessmentCategory: a.assessment_category,
                 assessmentPeriod: a.assessment_period,
-                contributionWeight: a.contribution_weight
+                contributionWeight: a.contribution_weight,
+                groupId: a.group_id,
+                countsTowardsFinal: a.counts_towards_final ?? true
             })));
 
             setRubrics((rubricsData || []).map(r => ({
@@ -260,6 +262,8 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
                 assessment_category: assignment.assessmentCategory || 'assignment',
                 assessment_period: assignment.assessmentPeriod || 'term',
                 contribution_weight: assignment.contributionWeight ?? 0,
+                group_id: assignment.groupId || null,
+                counts_towards_final: assignment.countsTowardsFinal ?? true,
                 status: assignment.status || 'published',
                 duration_days: assignment.durationDays || 7
             }])
@@ -279,7 +283,9 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
             rubricId: data.rubric_id,
             assessmentCategory: data.assessment_category,
             assessmentPeriod: data.assessment_period,
-            contributionWeight: data.contribution_weight
+            contributionWeight: data.contribution_weight,
+            groupId: data.group_id,
+            countsTowardsFinal: data.counts_towards_final ?? true
         };
         setAssignments(prev => [mapped, ...prev]);
         return mapped;
@@ -301,6 +307,8 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
         if (assignment.assessmentCategory !== undefined) dbAssignment.assessment_category = assignment.assessmentCategory;
         if (assignment.assessmentPeriod !== undefined) dbAssignment.assessment_period = assignment.assessmentPeriod;
         if (assignment.contributionWeight !== undefined) dbAssignment.contribution_weight = assignment.contributionWeight;
+        if (assignment.groupId !== undefined) dbAssignment.group_id = assignment.groupId;
+        if (assignment.countsTowardsFinal !== undefined) dbAssignment.counts_towards_final = assignment.countsTowardsFinal;
 
         const { data, error } = await supabase
             .from('assignments')
@@ -323,7 +331,9 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
             rubricId: data.rubric_id,
             assessmentCategory: data.assessment_category,
             assessmentPeriod: data.assessment_period,
-            contributionWeight: data.contribution_weight
+            contributionWeight: data.contribution_weight,
+            groupId: data.group_id,
+            countsTowardsFinal: data.counts_towards_final ?? true
         };
 
         setAssignments(prev => prev.map(existing => existing.id === id ? mapped : existing));
