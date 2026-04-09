@@ -46,6 +46,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Track ongoing profile fetch to prevent concurrent requests
     const profileFetchInProgress = useRef<string | null>(null);
+    const currentUserRef = useRef<User | null>(user);
+    const rehydrateInProgress = useRef(false);
+    const lastRehydrateAt = useRef(0);
+
+    useEffect(() => {
+        currentUserRef.current = user;
+    }, [user]);
 
     const clearAuthState = () => {
         setUser(null);
@@ -144,17 +151,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
 
         const rehydrateSession = async () => {
+            const now = Date.now();
+            if (rehydrateInProgress.current || now - lastRehydrateAt.current < 2000) {
+                return;
+            }
+
+            rehydrateInProgress.current = true;
+            lastRehydrateAt.current = now;
+
             const { data: { session }, error } = await supabase.auth.getSession();
-            if (!mounted) return;
+            if (!mounted) {
+                rehydrateInProgress.current = false;
+                return;
+            }
 
             if (error) {
                 // Keep cached user if session check fails transiently.
                 console.error("[AuthContext] Session rehydrate error:", error);
                 setLoading(false);
+                rehydrateInProgress.current = false;
                 return;
             }
 
-            await handleSession(session);
+            try {
+                if (session?.user && currentUserRef.current?.id === session.user.id) {
+                    setLoading(false);
+                    return;
+                }
+
+                await handleSession(session);
+            } finally {
+                rehydrateInProgress.current = false;
+            }
         };
 
         const initializeAuth = async () => {
@@ -222,17 +250,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
         };
 
-        const onWindowFocus = () => {
-            void rehydrateSession();
-        };
-
         document.addEventListener("visibilitychange", onVisibilityChange);
-        window.addEventListener("focus", onWindowFocus);
 
         return () => {
             mounted = false;
             document.removeEventListener("visibilitychange", onVisibilityChange);
-            window.removeEventListener("focus", onWindowFocus);
             subscription.unsubscribe();
         };
     }, []);
