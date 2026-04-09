@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import RichTextEditor from "@/components/shared/TinyMCEEditor";
 import { useAssignments } from "@/hooks/useAssignments";
 import { useSubjects } from "@/hooks/useSubjects";
 import { useAuth } from "@/context/AuthContext";
 import { useSchoolData } from "@/hooks/useSchoolData";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, FileText, Users, Calendar as CalendarIcon, Send, Trash, PlusCircle, LayoutList, ArrowLeft, PencilLine, Scale, Clock3 } from "lucide-react";
+import { Plus, Search, FileText, Users, Calendar as CalendarIcon, Send, Trash, PlusCircle, LayoutList, ArrowLeft, PencilLine, Scale, Clock3, Upload, Loader2, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -21,6 +21,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import type { AssessmentCategory, AssessmentPeriod, Assignment, Rubric } from "@/types";
+import { removeStorageFile, uploadFileWithProgress } from "@/lib/storage";
 
 type AssignmentFormState = {
     title: string;
@@ -36,6 +37,11 @@ type AssignmentFormState = {
     assessmentCategory: AssessmentCategory;
     assessmentPeriod: AssessmentPeriod;
     contributionWeight: number;
+    attachmentUrl: string;
+    attachmentType: "pdf" | "file" | null;
+    attachmentFilePath: string | null;
+    attachmentFileName: string | null;
+    attachmentMimeType: string | null;
 };
 
 type RubricEditorState = {
@@ -67,6 +73,11 @@ const createDefaultAssignmentState = (): AssignmentFormState => {
         assessmentCategory: "assignment",
         assessmentPeriod: "term",
         contributionWeight: 0,
+        attachmentUrl: "",
+        attachmentType: null,
+        attachmentFilePath: null,
+        attachmentFileName: null,
+        attachmentMimeType: null,
     };
 };
 
@@ -107,6 +118,9 @@ export default function AssignmentManagement() {
     const [assignmentForm, setAssignmentForm] = useState<AssignmentFormState>(createDefaultAssignmentState());
     const [isCustomRubricMode, setIsCustomRubricMode] = useState(false);
     const [rubricEditor, setRubricEditor] = useState<RubricEditorState>(createEmptyRubric());
+    const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+    const [attachmentUploadProgress, setAttachmentUploadProgress] = useState(0);
+    const attachmentInputRef = useRef<HTMLInputElement | null>(null);
 
     const filteredAssignments = assignments.filter(a =>
         a.title.toLowerCase().includes(searchTerm.toLowerCase())
@@ -148,6 +162,11 @@ export default function AssignmentManagement() {
             assessmentCategory: assignment.assessmentCategory || "assignment",
             assessmentPeriod: assignment.assessmentPeriod || "term",
             contributionWeight: assignment.contributionWeight || 0,
+            attachmentUrl: assignment.attachmentUrl || "",
+            attachmentType: assignment.attachmentType || null,
+            attachmentFilePath: assignment.attachmentFilePath || null,
+            attachmentFileName: assignment.attachmentFileName || null,
+            attachmentMimeType: assignment.attachmentMimeType || null,
         });
         const attachedRubric = rubrics.find(r => r.id === assignment.rubricId);
         if (attachedRubric) {
@@ -167,6 +186,81 @@ export default function AssignmentManagement() {
             setRubricEditor(createEmptyRubric());
         }
         setIsEditorOpen(true);
+    };
+
+    const removeAssignmentAttachment = async (filePath?: string | null) => {
+        if (!filePath) return;
+
+        try {
+            await removeStorageFile("assignment-files", filePath);
+        } catch (error) {
+            console.error("Failed to remove assignment attachment", error);
+        }
+    };
+
+    const handleAttachmentSelected = async (file?: File | null) => {
+        if (!file || !assignmentForm.subjectId || !user?.id) {
+            toast.error("Choose a subject before uploading the assignment file.");
+            return;
+        }
+
+        const maxSizeBytes = 25 * 1024 * 1024;
+        if (file.size > maxSizeBytes) {
+            toast.error("Assignment files must be 25MB or smaller");
+            return;
+        }
+
+        setIsUploadingAttachment(true);
+        setAttachmentUploadProgress(0);
+
+        try {
+            const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+            const filePath = `${assignmentForm.subjectId}/${user.id}/${Date.now()}_${sanitizedName}`;
+            const publicUrl = await uploadFileWithProgress({
+                bucket: "assignment-files",
+                filePath,
+                file,
+                onProgress: setAttachmentUploadProgress,
+            });
+
+            setAssignmentForm((prev) => ({
+                ...prev,
+                attachmentUrl: publicUrl,
+                attachmentType: file.type === "application/pdf" ? "pdf" : "file",
+                attachmentFilePath: filePath,
+                attachmentFileName: file.name,
+                attachmentMimeType: file.type || "application/octet-stream",
+            }));
+
+            toast.success("Assignment file uploaded");
+        } catch (error) {
+            console.error("Failed to upload assignment attachment", error);
+            toast.error("Could not upload the assignment file");
+        } finally {
+            setIsUploadingAttachment(false);
+            setAttachmentUploadProgress(0);
+            if (attachmentInputRef.current) {
+                attachmentInputRef.current.value = "";
+            }
+        }
+    };
+
+    const clearAttachment = async () => {
+        if (assignmentForm.attachmentFilePath) {
+            const editingAssignment = assignments.find((item) => item.id === editingAssignmentId);
+            if (assignmentForm.attachmentFilePath !== editingAssignment?.attachmentFilePath) {
+                await removeAssignmentAttachment(assignmentForm.attachmentFilePath);
+            }
+        }
+
+        setAssignmentForm((prev) => ({
+            ...prev,
+            attachmentUrl: "",
+            attachmentType: null,
+            attachmentFilePath: null,
+            attachmentFileName: null,
+            attachmentMimeType: null,
+        }));
     };
 
     const addCriterion = () => {
@@ -222,8 +316,15 @@ export default function AssignmentManagement() {
             toast.error("Please fill in the assessment title and subject.");
             return;
         }
+        if (isUploadingAttachment) {
+            toast.error("Please wait for the file upload to finish.");
+            return;
+        }
         try {
             const rubricId = await saveRubricIfNeeded();
+            const existingAssignment = editingAssignmentId
+                ? assignments.find((item) => item.id === editingAssignmentId)
+                : null;
             const payload: Partial<Assignment> = {
                 ...assignmentForm,
                 rubricId,
@@ -231,6 +332,12 @@ export default function AssignmentManagement() {
             };
             if (editingAssignmentId) {
                 await updateAssignment(editingAssignmentId, payload);
+                if (
+                    existingAssignment?.attachmentFilePath &&
+                    existingAssignment.attachmentFilePath !== assignmentForm.attachmentFilePath
+                ) {
+                    await removeAssignmentAttachment(existingAssignment.attachmentFilePath);
+                }
                 toast.success("Assessment updated successfully");
             } else {
                 await addAssignment(payload);
@@ -511,6 +618,63 @@ export default function AssignmentManagement() {
                                         </Select>
                                     </div>
 
+                                    <div className="grid gap-3">
+                                        <Label className="text-xs font-bold text-muted-foreground">Assignment File</Label>
+                                        <div className="rounded-2xl border border-dashed border-primary/20 bg-primary/5 p-4 text-center">
+                                            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white text-primary shadow-sm">
+                                                {isUploadingAttachment ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+                                            </div>
+                                            <p className="text-sm font-bold text-slate-900">
+                                                {isUploadingAttachment ? `Uploading file... ${attachmentUploadProgress}%` : "Upload a worksheet, memo, or PDF brief"}
+                                            </p>
+                                            <p className="mt-1 text-[10px] text-slate-500">PDF and classroom files up to 25MB</p>
+                                            {isUploadingAttachment ? (
+                                                <div className="mt-3 space-y-2">
+                                                    <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                                                        <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${attachmentUploadProgress}%` }} />
+                                                    </div>
+                                                </div>
+                                            ) : null}
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                className="mt-4 font-bold text-primary"
+                                                disabled={isUploadingAttachment}
+                                                onClick={() => attachmentInputRef.current?.click()}
+                                            >
+                                                Browse Files
+                                            </Button>
+                                            <input
+                                                ref={attachmentInputRef}
+                                                type="file"
+                                                className="hidden"
+                                                accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,image/*"
+                                                onChange={(e) => void handleAttachmentSelected(e.target.files?.[0] || null)}
+                                            />
+                                        </div>
+
+                                        {assignmentForm.attachmentUrl ? (
+                                            <div className="rounded-2xl border bg-background/70 p-3">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <p className="truncate text-sm font-bold">{assignmentForm.attachmentFileName || "Attached file"}</p>
+                                                        <p className="truncate text-[11px] text-muted-foreground">{assignmentForm.attachmentUrl}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <a href={assignmentForm.attachmentUrl} target="_blank" rel="noreferrer">
+                                                            <Button type="button" variant="ghost" size="icon">
+                                                                <Download className="h-4 w-4" />
+                                                            </Button>
+                                                        </a>
+                                                        <Button type="button" variant="ghost" size="sm" onClick={() => void clearAttachment()}>
+                                                            Clear
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : null}
+                                    </div>
+
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="grid gap-2">
                                             <Label className="text-xs font-bold text-muted-foreground flex items-center gap-2">
@@ -636,6 +800,7 @@ export default function AssignmentManagement() {
                                                 <div className="flex flex-wrap gap-2 text-xs">
                                                     <Badge variant="secondary">{assignment.assessmentPeriod || "term"} grade</Badge>
                                                     <Badge variant="outline">{assignment.contributionWeight || 0}% contribution</Badge>
+                                                    {assignment.attachmentUrl ? <Badge variant="outline">Has file</Badge> : null}
                                                 </div>
                                             </CardContent>
                                             <CardFooter className="bg-muted/30 pt-4 flex gap-2">

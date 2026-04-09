@@ -31,6 +31,11 @@ export interface Lesson {
     videoFilePath?: string | null;
     videoFileName?: string | null;
     videoMimeType?: string | null;
+    resourceUrl?: string | null;
+    resourceType?: "pdf" | "file" | null;
+    resourceFilePath?: string | null;
+    resourceFileName?: string | null;
+    resourceMimeType?: string | null;
     order: number;
 }
 
@@ -193,6 +198,11 @@ export interface Assignment {
     contributionWeight?: number;
     groupId?: string | null;
     countsTowardsFinal?: boolean;
+    attachmentUrl?: string | null;
+    attachmentType?: "pdf" | "file" | null;
+    attachmentFilePath?: string | null;
+    attachmentFileName?: string | null;
+    attachmentMimeType?: string | null;
     status: "draft" | "published";
     createdAt: string;
 }

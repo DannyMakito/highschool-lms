@@ -4,7 +4,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useSubjects } from "@/hooks/useSubjects";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Plus, ChevronLeft, Video, Save, Layout, HelpCircle, X, MessageSquare, Upload, Loader2, PlayCircle } from "lucide-react";
+import { Plus, ChevronLeft, Video, Save, Layout, HelpCircle, X, MessageSquare, Upload, Loader2, PlayCircle, FileText, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -24,7 +24,7 @@ import { RichTextEditor } from "@/components/editor/RichTextEditor";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import supabase, { supabaseKey, supabaseUrl } from "@/lib/supabase";
+import { removeStorageFile, uploadFileWithProgress } from "@/lib/storage";
 
 export default function SubjectDetail() {
     const { id } = useParams();
@@ -46,12 +46,20 @@ export default function SubjectDetail() {
         videoFilePath: null as string | null,
         videoFileName: null as string | null,
         videoMimeType: null as string | null,
+        resourceUrl: "",
+        resourceType: null as "pdf" | "file" | null,
+        resourceFilePath: null as string | null,
+        resourceFileName: null as string | null,
+        resourceMimeType: null as string | null,
     });
     const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
     const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+    const [isUploadingResource, setIsUploadingResource] = useState(false);
     const [isSavingLesson, setIsSavingLesson] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [resourceUploadProgress, setResourceUploadProgress] = useState(0);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const resourceInputRef = useRef<HTMLInputElement | null>(null);
 
     if (!subject) return <div>Subject not found</div>;
 
@@ -66,11 +74,17 @@ export default function SubjectDetail() {
             videoFilePath: null,
             videoFileName: null,
             videoMimeType: null,
+            resourceUrl: "",
+            resourceType: null,
+            resourceFilePath: null,
+            resourceFileName: null,
+            resourceMimeType: null,
         });
         setEditingLessonId(null);
         setSelectedTopicId(null);
         setIsSavingLesson(false);
         setUploadProgress(0);
+        setResourceUploadProgress(0);
     };
 
     const getEditingLesson = () => {
@@ -82,12 +96,19 @@ export default function SubjectDetail() {
         if (!filePath) return;
 
         try {
-            const { error } = await supabase.storage.from("lesson-videos").remove([filePath]);
-            if (error) {
-                console.error("Failed to remove lesson video file", error);
-            }
+            await removeStorageFile("lesson-videos", filePath);
         } catch (error) {
             console.error("Failed to remove lesson video file", error);
+        }
+    };
+
+    const removeUploadedResourceFile = async (filePath?: string | null) => {
+        if (!filePath) return;
+
+        try {
+            await removeStorageFile("lesson-resources", filePath);
+        } catch (error) {
+            console.error("Failed to remove lesson resource file", error);
         }
     };
 
@@ -107,65 +128,17 @@ export default function SubjectDetail() {
             await removeUploadedVideoFile(newLesson.videoFilePath);
         }
 
+        const shouldCleanupTemporaryResource = (
+            newLesson.resourceFilePath &&
+            newLesson.resourceFilePath !== currentLesson?.resourceFilePath
+        );
+
+        if (shouldCleanupTemporaryResource) {
+            await removeUploadedResourceFile(newLesson.resourceFilePath);
+        }
+
         resetLessonForm();
         setIsLessonDialogOpen(false);
-    };
-
-    const uploadLessonVideoWithProgress = async (filePath: string, file: File) => {
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-
-        if (sessionError) {
-            throw sessionError;
-        }
-
-        const accessToken = sessionData.session?.access_token;
-
-        if (!accessToken) {
-            throw new Error("You must be signed in to upload lesson videos.");
-        }
-
-        const uploadUrl = `${supabaseUrl}/storage/v1/object/lesson-videos/${filePath}`;
-
-        await new Promise<void>((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-
-            xhr.open("POST", uploadUrl);
-            xhr.setRequestHeader("apikey", supabaseKey);
-            xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
-            xhr.setRequestHeader("x-upsert", "false");
-            xhr.setRequestHeader("cache-control", "3600");
-            xhr.setRequestHeader("Content-Type", file.type);
-
-            xhr.upload.onprogress = (event) => {
-                if (!event.lengthComputable) {
-                    return;
-                }
-
-                const nextProgress = Math.min(100, Math.round((event.loaded / event.total) * 100));
-                setUploadProgress(nextProgress);
-            };
-
-            xhr.onerror = () => {
-                reject(new Error("The upload failed before the server could respond."));
-            };
-
-            xhr.onload = () => {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    setUploadProgress(100);
-                    resolve();
-                    return;
-                }
-
-                try {
-                    const parsedError = JSON.parse(xhr.responseText);
-                    reject(new Error(parsedError.message || "Upload failed."));
-                } catch {
-                    reject(new Error("Upload failed."));
-                }
-            };
-
-            xhr.send(file);
-        });
     };
 
     const handleAddTopic = async () => {
@@ -207,13 +180,16 @@ export default function SubjectDetail() {
             const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
             const filePath = `${id}/${selectedTopicId}/${user.id}/${Date.now()}_${sanitizedName}`;
 
-            await uploadLessonVideoWithProgress(filePath, file);
-
-            const { data: publicUrlData } = supabase.storage.from("lesson-videos").getPublicUrl(filePath);
+            const publicUrl = await uploadFileWithProgress({
+                bucket: "lesson-videos",
+                filePath,
+                file,
+                onProgress: setUploadProgress,
+            });
 
             setNewLesson((prev) => ({
                 ...prev,
-                videoUrl: publicUrlData.publicUrl,
+                videoUrl: publicUrl,
                 videoType: "upload",
                 videoFilePath: filePath,
                 videoFileName: file.name,
@@ -229,6 +205,50 @@ export default function SubjectDetail() {
             setUploadProgress(0);
             if (fileInputRef.current) {
                 fileInputRef.current.value = "";
+            }
+        }
+    };
+
+    const handleResourceFileSelected = async (file?: File | null) => {
+        if (!file || !id || !selectedTopicId || !user?.id) return;
+
+        const maxSizeBytes = 25 * 1024 * 1024;
+        if (file.size > maxSizeBytes) {
+            toast.error("Lesson files must be 25MB or smaller");
+            return;
+        }
+
+        setIsUploadingResource(true);
+        setResourceUploadProgress(0);
+
+        try {
+            const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+            const filePath = `${id}/${selectedTopicId}/${user.id}/${Date.now()}_${sanitizedName}`;
+            const publicUrl = await uploadFileWithProgress({
+                bucket: "lesson-resources",
+                filePath,
+                file,
+                onProgress: setResourceUploadProgress,
+            });
+
+            setNewLesson((prev) => ({
+                ...prev,
+                resourceUrl: publicUrl,
+                resourceType: file.type === "application/pdf" ? "pdf" : "file",
+                resourceFilePath: filePath,
+                resourceFileName: file.name,
+                resourceMimeType: file.type || "application/octet-stream",
+            }));
+
+            toast.success("Lesson file uploaded");
+        } catch (error) {
+            console.error("Failed to upload lesson resource", error);
+            toast.error("Could not upload the lesson file");
+        } finally {
+            setIsUploadingResource(false);
+            setResourceUploadProgress(0);
+            if (resourceInputRef.current) {
+                resourceInputRef.current.value = "";
             }
         }
     };
@@ -257,6 +277,30 @@ export default function SubjectDetail() {
         }));
     };
 
+    const clearResource = async () => {
+        try {
+            if (newLesson.resourceFilePath) {
+                const currentLesson = getEditingLesson();
+                const shouldDeleteCurrentUpload = newLesson.resourceFilePath !== currentLesson?.resourceFilePath;
+
+                if (shouldDeleteCurrentUpload) {
+                    await removeUploadedResourceFile(newLesson.resourceFilePath);
+                }
+            }
+        } catch (error) {
+            console.error("Failed to clear uploaded resource", error);
+        }
+
+        setNewLesson((prev) => ({
+            ...prev,
+            resourceUrl: "",
+            resourceType: null,
+            resourceFilePath: null,
+            resourceFileName: null,
+            resourceMimeType: null,
+        }));
+    };
+
     const handleAddLesson = async () => {
         if (!selectedTopicId) {
             toast.error("Choose a module before creating a lesson");
@@ -268,8 +312,8 @@ export default function SubjectDetail() {
             return;
         }
 
-        if (isUploadingVideo) {
-            toast.error("Please wait for the video upload to finish before saving");
+        if (isUploadingVideo || isUploadingResource) {
+            toast.error("Please wait for uploads to finish before saving");
             return;
         }
 
@@ -287,6 +331,11 @@ export default function SubjectDetail() {
                 videoFilePath: newLesson.videoFilePath,
                 videoFileName: newLesson.videoFileName,
                 videoMimeType: newLesson.videoMimeType,
+                resourceUrl: newLesson.resourceUrl || undefined,
+                resourceType: newLesson.resourceType,
+                resourceFilePath: newLesson.resourceFilePath,
+                resourceFileName: newLesson.resourceFileName,
+                resourceMimeType: newLesson.resourceMimeType,
             };
 
             if (editingLessonId) {
@@ -297,7 +346,14 @@ export default function SubjectDetail() {
                     currentLesson.videoFilePath &&
                     currentLesson.videoFilePath !== newLesson.videoFilePath
                 ) {
-                    await supabase.storage.from("lesson-videos").remove([currentLesson.videoFilePath]);
+                    await removeUploadedVideoFile(currentLesson.videoFilePath);
+                }
+
+                if (
+                    currentLesson?.resourceFilePath &&
+                    currentLesson.resourceFilePath !== newLesson.resourceFilePath
+                ) {
+                    await removeUploadedResourceFile(currentLesson.resourceFilePath);
                 }
             } else {
                 await addLesson({
@@ -329,6 +385,10 @@ export default function SubjectDetail() {
 
             if (currentLesson?.videoType === "upload" && currentLesson.videoFilePath) {
                 await removeUploadedVideoFile(currentLesson.videoFilePath);
+            }
+
+            if (currentLesson?.resourceFilePath) {
+                await removeUploadedResourceFile(currentLesson.resourceFilePath);
             }
 
             resetLessonForm();
@@ -455,6 +515,7 @@ export default function SubjectDetail() {
                                                 <div className="w-6 h-6 rounded-full border-2 border-muted-foreground/30 group-hover/lesson:border-primary transition-colors" />
                                                 <span className="font-medium">{lesson.title}</span>
                                                 {lesson.videoUrl && <Video className="w-3.5 h-3.5 text-muted-foreground" />}
+                                                {lesson.resourceUrl && <FileText className="w-3.5 h-3.5 text-muted-foreground" />}
                                             </div>
                                             <Button
                                                 size="sm"
@@ -472,6 +533,11 @@ export default function SubjectDetail() {
                                                         videoFilePath: lesson.videoFilePath || null,
                                                         videoFileName: lesson.videoFileName || null,
                                                         videoMimeType: lesson.videoMimeType || null,
+                                                        resourceUrl: lesson.resourceUrl || "",
+                                                        resourceType: lesson.resourceType || null,
+                                                        resourceFilePath: lesson.resourceFilePath || null,
+                                                        resourceFileName: lesson.resourceFileName || null,
+                                                        resourceMimeType: lesson.resourceMimeType || null,
                                                     });
                                                     setIsLessonDialogOpen(true);
                                                 }}
@@ -506,7 +572,7 @@ export default function SubjectDetail() {
                                 size="icon"
                                 className="rounded-xl h-11 w-11 bg-slate-50 text-slate-400 hover:text-rose-500 transition-colors"
                                 onClick={() => void closeLessonDialog()}
-                                disabled={isSavingLesson || isUploadingVideo}
+                                disabled={isSavingLesson || isUploadingVideo || isUploadingResource}
                             >
                                 <X className="h-5 w-5" />
                             </Button>
@@ -526,7 +592,7 @@ export default function SubjectDetail() {
                                     variant="outline"
                                     className="rounded-xl px-6 h-11 font-black text-rose-600 border-rose-200 hover:bg-rose-50"
                                     onClick={() => void handleDeleteLesson()}
-                                    disabled={isSavingLesson || isUploadingVideo}
+                                    disabled={isSavingLesson || isUploadingVideo || isUploadingResource}
                                 >
                                     Delete Lesson
                                 </Button>
@@ -535,14 +601,14 @@ export default function SubjectDetail() {
                                 variant="outline"
                                 className="rounded-xl px-6 h-11 font-black text-slate-600 border-slate-200"
                                 onClick={() => void closeLessonDialog()}
-                                disabled={isSavingLesson || isUploadingVideo}
+                                disabled={isSavingLesson || isUploadingVideo || isUploadingResource}
                             >
                                 Cancel
                             </Button>
                             <Button
                                 className="bg-primary hover:bg-primary/90 text-white rounded-xl px-8 h-11 font-black transition-all shadow-lg shadow-primary/20 flex items-center gap-2"
                                 onClick={() => void handleAddLesson()}
-                                disabled={isSavingLesson || isUploadingVideo}
+                                disabled={isSavingLesson || isUploadingVideo || isUploadingResource}
                             >
                                 <Save className="h-4 w-4" />
                                 {isSavingLesson ? "Saving..." : editingLessonId ? "Save Changes" : "Create Lesson"}
@@ -659,6 +725,73 @@ export default function SubjectDetail() {
                                                         ) : null}
                                                     </div>
                                                 )}
+                                            </CardContent>
+                                        </Card>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Lesson File (Optional)</Label>
+                                        <Card className="rounded-3xl border-slate-200 shadow-sm overflow-hidden bg-white">
+                                            <CardContent className="p-6 space-y-6">
+                                                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 text-center bg-slate-50 group cursor-pointer hover:border-primary/50 transition-all">
+                                                    <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center mx-auto mb-4 border border-slate-100 text-slate-400 group-hover:text-primary transition-colors shadow-sm">
+                                                        {isUploadingResource ? <Loader2 className="h-6 w-6 animate-spin" /> : <FileText className="h-6 w-6" />}
+                                                    </div>
+                                                    <p className="text-sm font-bold text-slate-900">
+                                                        {isUploadingResource ? `Uploading file... ${resourceUploadProgress}%` : "Upload a PDF or lesson handout"}
+                                                    </p>
+                                                    <p className="text-[10px] text-slate-400 mt-1">
+                                                        {isUploadingResource ? "Keep this editor open until the upload finishes." : "PDF, DOCX, PPTX, images, or worksheets (Max 25MB)"}
+                                                    </p>
+                                                    {isUploadingResource ? (
+                                                        <div className="mt-4 space-y-2">
+                                                            <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                                                                <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${resourceUploadProgress}%` }} />
+                                                            </div>
+                                                            <p className="text-[11px] font-bold text-primary">{resourceUploadProgress}% uploaded</p>
+                                                        </div>
+                                                    ) : null}
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        className="mt-4 text-primary font-bold hover:bg-primary/5"
+                                                        disabled={isUploadingResource}
+                                                        onClick={() => resourceInputRef.current?.click()}
+                                                    >
+                                                        Browse Files
+                                                    </Button>
+                                                    <input
+                                                        ref={resourceInputRef}
+                                                        type="file"
+                                                        accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,image/*"
+                                                        className="hidden"
+                                                        onChange={(e) => void handleResourceFileSelected(e.target.files?.[0] || null)}
+                                                    />
+                                                </div>
+
+                                                {newLesson.resourceUrl ? (
+                                                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <div className="min-w-0">
+                                                                <p className="text-xs font-black text-slate-900 flex items-center gap-2">
+                                                                    <FileText className="h-4 w-4 text-primary" />
+                                                                    {newLesson.resourceFileName || "Uploaded lesson file"}
+                                                                </p>
+                                                                <p className="text-[11px] text-slate-500 truncate">{newLesson.resourceUrl}</p>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <a href={newLesson.resourceUrl} target="_blank" rel="noreferrer">
+                                                                    <Button type="button" variant="ghost" size="sm">
+                                                                        <Download className="h-4 w-4" />
+                                                                    </Button>
+                                                                </a>
+                                                                <Button type="button" variant="ghost" size="sm" onClick={() => void clearResource()}>
+                                                                    Clear
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ) : null}
                                             </CardContent>
                                         </Card>
                                     </div>

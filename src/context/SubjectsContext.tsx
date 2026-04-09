@@ -130,7 +130,12 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
                         videoType: l.video_type,
                         videoFilePath: l.video_file_path,
                         videoFileName: l.video_file_name,
-                        videoMimeType: l.video_mime_type
+                        videoMimeType: l.video_mime_type,
+                        resourceUrl: l.resource_url,
+                        resourceType: l.resource_type,
+                        resourceFilePath: l.resource_file_path,
+                        resourceFileName: l.resource_file_name,
+                        resourceMimeType: l.resource_mime_type
                     })),
                     quizzes: (quizzes || []).map(q => ({ 
                         ...q, 
@@ -219,6 +224,11 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
                 video_file_path: lesson.videoFilePath,
                 video_file_name: lesson.videoFileName,
                 video_mime_type: lesson.videoMimeType,
+                resource_url: lesson.resourceUrl,
+                resource_type: lesson.resourceType,
+                resource_file_path: lesson.resourceFilePath,
+                resource_file_name: lesson.resourceFileName,
+                resource_mime_type: lesson.resourceMimeType,
                 order: lesson.order
             })
             .select()
@@ -237,7 +247,12 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
                     videoType: newLesson.video_type,
                     videoFilePath: newLesson.video_file_path,
                     videoFileName: newLesson.video_file_name,
-                    videoMimeType: newLesson.video_mime_type
+                    videoMimeType: newLesson.video_mime_type,
+                    resourceUrl: newLesson.resource_url,
+                    resourceType: newLesson.resource_type,
+                    resourceFilePath: newLesson.resource_file_path,
+                    resourceFileName: newLesson.resource_file_name,
+                    resourceMimeType: newLesson.resource_mime_type
                 }],
                 subjects: prev.subjects.map(s => s.id === topic?.subjectId ? { ...s, lessonsCount: s.lessonsCount + 1 } : s)
             };
@@ -256,6 +271,11 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
                 video_file_path: updates.videoFilePath,
                 video_file_name: updates.videoFileName,
                 video_mime_type: updates.videoMimeType,
+                resource_url: updates.resourceUrl,
+                resource_type: updates.resourceType,
+                resource_file_path: updates.resourceFilePath,
+                resource_file_name: updates.resourceFileName,
+                resource_mime_type: updates.resourceMimeType,
                 order: updates.order
             })
             .eq('id', id);

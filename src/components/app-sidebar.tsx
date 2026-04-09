@@ -69,6 +69,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               icon: Megaphone,
             },
             {
+              title: "Grades",
+              url: "/student/grades",
+              icon: GraduationCap,
+            },
+            {
               title: "Assignments",
               url: "/student/assignments",
               icon: FileText,

@@ -12,6 +12,7 @@ interface AssignmentsContextType {
     loading: boolean;
     refreshAssignments: () => Promise<void>;
     addAssignmentSubmission: (submission: any) => Promise<void>;
+    submitWork: (submission: any) => Promise<void>;
     addAssignment: (assignment: Partial<Assignment>) => Promise<Assignment>;
     updateAssignment: (id: string, assignment: Partial<Assignment>) => Promise<Assignment>;
     deleteAssignment: (id: string) => Promise<void>;
@@ -111,7 +112,12 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
                 assessmentPeriod: a.assessment_period,
                 contributionWeight: a.contribution_weight,
                 groupId: a.group_id,
-                countsTowardsFinal: a.counts_towards_final ?? true
+                countsTowardsFinal: a.counts_towards_final ?? true,
+                attachmentUrl: a.attachment_url,
+                attachmentType: a.attachment_type,
+                attachmentFilePath: a.attachment_file_path,
+                attachmentFileName: a.attachment_file_name,
+                attachmentMimeType: a.attachment_mime_type
             })));
 
             setRubrics((rubricsData || []).map(r => ({
@@ -264,6 +270,11 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
                 contribution_weight: assignment.contributionWeight ?? 0,
                 group_id: assignment.groupId || null,
                 counts_towards_final: assignment.countsTowardsFinal ?? true,
+                attachment_url: assignment.attachmentUrl || null,
+                attachment_type: assignment.attachmentType || null,
+                attachment_file_path: assignment.attachmentFilePath || null,
+                attachment_file_name: assignment.attachmentFileName || null,
+                attachment_mime_type: assignment.attachmentMimeType || null,
                 status: assignment.status || 'published',
                 duration_days: assignment.durationDays || 7
             }])
@@ -285,7 +296,12 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
             assessmentPeriod: data.assessment_period,
             contributionWeight: data.contribution_weight,
             groupId: data.group_id,
-            countsTowardsFinal: data.counts_towards_final ?? true
+            countsTowardsFinal: data.counts_towards_final ?? true,
+            attachmentUrl: data.attachment_url,
+            attachmentType: data.attachment_type,
+            attachmentFilePath: data.attachment_file_path,
+            attachmentFileName: data.attachment_file_name,
+            attachmentMimeType: data.attachment_mime_type
         };
         setAssignments(prev => [mapped, ...prev]);
         return mapped;
@@ -309,6 +325,11 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
         if (assignment.contributionWeight !== undefined) dbAssignment.contribution_weight = assignment.contributionWeight;
         if (assignment.groupId !== undefined) dbAssignment.group_id = assignment.groupId;
         if (assignment.countsTowardsFinal !== undefined) dbAssignment.counts_towards_final = assignment.countsTowardsFinal;
+        if (assignment.attachmentUrl !== undefined) dbAssignment.attachment_url = assignment.attachmentUrl;
+        if (assignment.attachmentType !== undefined) dbAssignment.attachment_type = assignment.attachmentType;
+        if (assignment.attachmentFilePath !== undefined) dbAssignment.attachment_file_path = assignment.attachmentFilePath;
+        if (assignment.attachmentFileName !== undefined) dbAssignment.attachment_file_name = assignment.attachmentFileName;
+        if (assignment.attachmentMimeType !== undefined) dbAssignment.attachment_mime_type = assignment.attachmentMimeType;
 
         const { data, error } = await supabase
             .from('assignments')
@@ -333,7 +354,12 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
             assessmentPeriod: data.assessment_period,
             contributionWeight: data.contribution_weight,
             groupId: data.group_id,
-            countsTowardsFinal: data.counts_towards_final ?? true
+            countsTowardsFinal: data.counts_towards_final ?? true,
+            attachmentUrl: data.attachment_url,
+            attachmentType: data.attachment_type,
+            attachmentFilePath: data.attachment_file_path,
+            attachmentFileName: data.attachment_file_name,
+            attachmentMimeType: data.attachment_mime_type
         };
 
         setAssignments(prev => prev.map(existing => existing.id === id ? mapped : existing));

@@ -38,6 +38,7 @@ export default function GradingQueue() {
     const [scoreDrafts, setScoreDrafts] = useState<ScoreDraftMap>({});
     const [isSavingGroups, setIsSavingGroups] = useState(false);
     const [savingScoreKey, setSavingScoreKey] = useState<string | null>(null);
+    const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
 
     const teacherProfile = useMemo(() => teachers.find((teacher) => teacher.id === user?.id), [teachers, user?.id]);
     const teacherSubjectIds = teacherProfile?.subjects || [];
@@ -415,6 +416,21 @@ export default function GradingQueue() {
         return { subject, groups, classQueue };
     });
 
+    useEffect(() => {
+        if (!subjectQueue.length) {
+            setSelectedSubjectId(null);
+            return;
+        }
+
+        if (!selectedSubjectId || !subjectQueue.some(({ subject }) => subject.id === selectedSubjectId)) {
+            setSelectedSubjectId(subjectQueue[0].subject.id);
+        }
+    }, [selectedSubjectId, subjectQueue]);
+
+    const visibleSubjectQueue = selectedSubjectId
+        ? subjectQueue.filter(({ subject }) => subject.id === selectedSubjectId)
+        : subjectQueue;
+
     return (
         <div className="space-y-6">
             <div>
@@ -425,7 +441,23 @@ export default function GradingQueue() {
             </div>
 
             <div className="space-y-8">
-                {subjectQueue.map(({ subject, groups, classQueue }) => (
+                {subjectQueue.length > 0 ? (
+                    <div className="flex flex-wrap gap-3">
+                        {subjectQueue.map(({ subject, groups, classQueue }) => (
+                            <button
+                                key={subject.id}
+                                type="button"
+                                onClick={() => setSelectedSubjectId(subject.id)}
+                                className={`rounded-2xl border px-4 py-3 text-left transition-all ${selectedSubjectId === subject.id ? "border-primary bg-primary/5 shadow-lg shadow-primary/10" : "border-muted/20 bg-card/60 hover:border-primary/40"}`}
+                            >
+                                <p className="font-bold">{subject.name}</p>
+                                <p className="text-xs text-muted-foreground">Grade {subject.gradeTier} • {groups.length} columns • {classQueue.length} classes</p>
+                            </button>
+                        ))}
+                    </div>
+                ) : null}
+
+                {visibleSubjectQueue.map(({ subject, groups, classQueue }) => (
                     <section key={subject.id} className="space-y-5">
                         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                             <div>

@@ -10,7 +10,9 @@ import {
     Layout,
     Circle,
     ArrowLeft,
-    BookOpen
+    BookOpen,
+    Download,
+    FileText
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,6 +22,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import StudentPdfWorkspace from "@/components/student/StudentPdfWorkspace";
 
 export default function LessonView() {
     const { id: subjectId, lessonId } = useParams();
@@ -61,6 +64,8 @@ export default function LessonView() {
     const vimeoEmbedUrl = videoUrl && isVimeoVideo
         ? `https://player.vimeo.com/video/${videoUrl.split("/").filter(Boolean).pop()?.split("?")[0]}`
         : "";
+    const lessonResourceUrl = currentLesson.resourceUrl?.trim();
+    const isLessonPdf = currentLesson.resourceType === "pdf" || currentLesson.resourceMimeType === "application/pdf" || Boolean(lessonResourceUrl && /\.pdf(\?|$)/i.test(lessonResourceUrl));
 
     // Navigation logic
     const getAllLessons = () => {
@@ -239,6 +244,49 @@ export default function LessonView() {
                                 )}
                             </div>
                         </div>
+
+                        {lessonResourceUrl ? (
+                            <div className="space-y-6 bg-white/80 backdrop-blur-xl rounded-[2rem] p-6 lg:p-8 border border-muted/20 shadow-xl">
+                                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-3 text-primary">
+                                            <FileText className="h-5 w-5" />
+                                            <h2 className="text-2xl font-black tracking-tight text-slate-900">Lesson File</h2>
+                                        </div>
+                                        <p className="text-sm text-slate-600">
+                                            {currentLesson.resourceFileName || "Lesson resource"} is attached to this lesson.
+                                        </p>
+                                    </div>
+                                    <a href={lessonResourceUrl} target="_blank" rel="noreferrer">
+                                        <Button type="button" variant="outline">
+                                            <Download className="mr-2 h-4 w-4" />
+                                            Download File
+                                        </Button>
+                                    </a>
+                                </div>
+
+                                {isLessonPdf ? (
+                                    <StudentPdfWorkspace
+                                        documentId={`lesson:${currentLesson.id}`}
+                                        pdfUrl={lessonResourceUrl}
+                                        fileName={currentLesson.resourceFileName || "lesson-resource.pdf"}
+                                        title="Lesson PDF Notes"
+                                    />
+                                ) : (
+                                    <Card className="border-dashed border-muted/30 bg-background/70">
+                                        <div className="p-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                            <div>
+                                                <p className="font-bold text-slate-900">{currentLesson.resourceFileName || "Attached lesson file"}</p>
+                                                <p className="text-sm text-muted-foreground">Open or download this file from the lesson.</p>
+                                            </div>
+                                            <a href={lessonResourceUrl} target="_blank" rel="noreferrer">
+                                                <Button type="button">Open File</Button>
+                                            </a>
+                                        </div>
+                                    </Card>
+                                )}
+                            </div>
+                        ) : null}
 
                         {/* Footer Nav */}
                         <div className="flex items-center justify-between py-10 border-t border-muted/20 pt-10">

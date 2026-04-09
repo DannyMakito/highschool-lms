@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useAssignments } from "@/hooks/useAssignments";
 import { useSubjects } from "@/hooks/useSubjects";
 import { useAuth } from "@/context/AuthContext";
@@ -5,14 +6,9 @@ import { useRegistrationData } from "@/hooks/useRegistrationData";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Clock, CheckCircle2, ChevronRight, PenTool, Lock, CalendarDays } from "lucide-react";
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
-import supabase from "@/lib/supabase";
-import { buildGradebookScoreMap, calculateWeightedGradebookTotal, normalizeMaxPoints } from "@/lib/gradebook";
-import type { AssignmentGroup, StudentGradebookScore } from "@/types";
 
 export default function StudentAssignments() {
     const { user } = useAuth();
@@ -20,9 +16,6 @@ export default function StudentAssignments() {
     const { assignments: allAssignments, submissions } = useAssignments();
     const { subjects: allSubjects } = useSubjects();
     const navigate = useNavigate();
-
-    const [assignmentGroups, setAssignmentGroups] = useState<AssignmentGroup[]>([]);
-    const [gradebookScores, setGradebookScores] = useState<StudentGradebookScore[]>([]);
 
     const assignedIds = useMemo(() => {
         const directAssignedIds = studentSubjects
@@ -37,66 +30,6 @@ export default function StudentAssignments() {
         return Array.from(new Set([...directAssignedIds, ...classAssignedIds]));
     }, [studentSubjectClasses, studentSubjects, subjectClasses, user?.id]);
 
-    useEffect(() => {
-        if (!user?.id || assignedIds.length === 0) {
-            setAssignmentGroups([]);
-            setGradebookScores([]);
-            return;
-        }
-
-        let cancelled = false;
-
-        const fetchGradebook = async () => {
-            const [groupsRes, scoresRes] = await Promise.all([
-                supabase
-                    .from("assignment_groups")
-                    .select("*")
-                    .in("subject_id", assignedIds)
-                    .order("order", { ascending: true }),
-                supabase
-                    .from("student_gradebook_scores")
-                    .select("*")
-                    .eq("student_id", user.id)
-                    .in("subject_id", assignedIds),
-            ]);
-
-            if (groupsRes.error || scoresRes.error) {
-                console.error("Failed to fetch learner gradebook", {
-                    groupsError: groupsRes.error,
-                    scoresError: scoresRes.error,
-                });
-                return;
-            }
-
-            if (cancelled) return;
-
-            setAssignmentGroups((groupsRes.data || []).map((group) => ({
-                id: group.id,
-                subjectId: group.subject_id,
-                name: group.name,
-                weightPercentage: Number(group.weight_percentage || 0),
-                maxPoints: normalizeMaxPoints(group.max_points),
-                order: group.order ?? 0,
-            })));
-
-            setGradebookScores((scoresRes.data || []).map((entry) => ({
-                id: entry.id,
-                subjectId: entry.subject_id,
-                assignmentGroupId: entry.assignment_group_id,
-                studentId: entry.student_id,
-                score: Number(entry.score || 0),
-                feedback: entry.feedback,
-                updatedAt: entry.updated_at,
-            })));
-        };
-
-        void fetchGradebook();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [assignedIds.join(","), user?.id]);
-
     const assignments = useMemo(() => (
         allAssignments
             .filter((assignment) => assignedIds.includes(assignment.subjectId))
@@ -104,7 +37,6 @@ export default function StudentAssignments() {
     ), [allAssignments, assignedIds]);
 
     const studentSubmissions = submissions.filter((submission) => submission.studentId === user?.id);
-    const scoreMap = useMemo(() => buildGradebookScoreMap(gradebookScores), [gradebookScores]);
 
     const subjectSections = useMemo(() => {
         return allSubjects
@@ -112,79 +44,31 @@ export default function StudentAssignments() {
             .map((subject) => ({
                 subject,
                 subjectAssignments: assignments.filter((assignment) => assignment.subjectId === subject.id),
-                gradebookColumns: assignmentGroups
-                    .filter((group) => group.subjectId === subject.id)
-                    .sort((a, b) => (a.order || 0) - (b.order || 0)),
             }));
-    }, [allSubjects, assignedIds, assignments, assignmentGroups]);
+    }, [allSubjects, assignedIds, assignments]);
 
     return (
         <div className="w-full px-4 md:px-8 lg:px-12 space-y-8 py-6">
-            <div className="flex flex-col gap-2">
-                <h1 className="text-4xl font-extrabold tracking-tight">Assessments & Gradebook</h1>
-                <p className="text-xl text-muted-foreground mt-2">Track your yearly mark by subject, then open assessments once they are available.</p>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-col gap-2">
+                    <h1 className="text-4xl font-extrabold tracking-tight">Assignments</h1>
+                    <p className="text-xl text-muted-foreground mt-2">Open each subject to see active tasks. Your gradebook now lives on the dedicated Grades page.</p>
+                </div>
+                <Button type="button" variant="outline" onClick={() => navigate("/student/grades")}>
+                    Open Grades Page
+                </Button>
             </div>
 
             <div className="space-y-8">
-                {subjectSections.map(({ subject, subjectAssignments, gradebookColumns }) => (
+                {subjectSections.map(({ subject, subjectAssignments }) => (
                     <section key={subject.id} className="space-y-4">
                         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                             <div>
                                 <h2 className="text-2xl font-bold">{subject.name}</h2>
-                                <p className="text-sm text-muted-foreground">Grade {subject.gradeTier} yearly tracking</p>
+                                <p className="text-sm text-muted-foreground">Grade {subject.gradeTier} assessments</p>
                             </div>
-                            {gradebookColumns.length > 0 ? (
-                                <Badge variant="secondary">
-                                    Current Year Mark: {calculateWeightedGradebookTotal(gradebookColumns, scoreMap, user?.id || "").toFixed(1)}%
-                                </Badge>
-                            ) : null}
+                            <Badge variant="secondary">{subjectAssignments.length} tasks</Badge>
                         </div>
-
-                        {gradebookColumns.length > 0 ? (
-                            <Card className="border-muted/20 bg-card/70">
-                                <CardHeader>
-                                    <CardTitle className="text-lg">My Gradebook</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <ScrollArea className="w-full whitespace-nowrap rounded-xl border">
-                                        <table className="w-full min-w-[760px] text-sm">
-                                            <thead className="bg-muted/30">
-                                                <tr>
-                                                    {gradebookColumns.map((group) => (
-                                                        <th key={group.id} className="px-4 py-3 text-left font-black min-w-[180px]">
-                                                            <div className="space-y-1">
-                                                                <p>{group.name}</p>
-                                                                <p className="text-[10px] text-muted-foreground">/{normalizeMaxPoints(group.maxPoints)} • {group.weightPercentage}%</p>
-                                                            </div>
-                                                        </th>
-                                                    ))}
-                                                    <th className="px-4 py-3 text-center font-black min-w-[140px]">Year Mark</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <tr className="border-t">
-                                                    {gradebookColumns.map((group) => {
-                                                        const entry = scoreMap[`${user?.id}:${group.id}`];
-                                                        return (
-                                                            <td key={group.id} className="px-4 py-4">
-                                                                <div className="inline-flex items-center rounded-full bg-muted px-3 py-1 text-sm font-semibold">
-                                                                    {entry ? `${entry.score} / ${normalizeMaxPoints(group.maxPoints)}` : `- / ${normalizeMaxPoints(group.maxPoints)}`}
-                                                                </div>
-                                                            </td>
-                                                        );
-                                                    })}
-                                                    <td className="px-4 py-4 text-center">
-                                                        <Badge className="bg-green-600 text-white">
-                                                            {calculateWeightedGradebookTotal(gradebookColumns, scoreMap, user?.id || "").toFixed(1)}%
-                                                        </Badge>
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </ScrollArea>
-                                </CardContent>
-                            </Card>
-                        ) : null}
 
                         <div className="grid gap-6">
                             {subjectAssignments.map((assignment) => {
@@ -267,6 +151,12 @@ export default function StudentAssignments() {
                                     </Card>
                                 );
                             })}
+
+                            {subjectAssignments.length === 0 ? (
+                                <div className="rounded-2xl border-2 border-dashed p-8 text-center text-sm text-muted-foreground">
+                                    No assignments posted for this subject yet.
+                                </div>
+                            ) : null}
                         </div>
                     </section>
                 ))}
@@ -274,7 +164,7 @@ export default function StudentAssignments() {
                 {subjectSections.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed rounded-3xl">
                         <PenTool className="h-12 w-12 text-muted-foreground mb-4 opacity-20" />
-                        <p className="text-muted-foreground">No assessments or gradebook setup have been posted yet.</p>
+                        <p className="text-muted-foreground">No assessments have been posted yet.</p>
                     </div>
                 )}
             </div>

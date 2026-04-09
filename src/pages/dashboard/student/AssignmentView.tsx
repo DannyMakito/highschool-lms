@@ -1,5 +1,4 @@
-
-import { useState, useRef } from "react";
+import { type DragEvent, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAssignments } from "@/hooks/useAssignments";
 import { useAuth } from "@/context/AuthContext";
@@ -15,12 +14,13 @@ import {
     MessageSquare,
     FileText,
     History,
-    LinkIcon
+    LinkIcon,
+    Download,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import supabase from "@/lib/supabase";
+import StudentPdfWorkspace from "@/components/student/StudentPdfWorkspace";
 
 export default function AssignmentView() {
     const { id: assignmentId } = useParams();
@@ -34,8 +34,39 @@ export default function AssignmentView() {
 
     const [content, setContent] = useState("");
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    if (!assignment) return <div>Assignment not found</div>;
+
+    const isGraded = submission?.status === "graded" && submission.isReleased;
+    const availableFrom = new Date(assignment.availableFrom || assignment.createdAt);
+    const isOpen = availableFrom.getTime() <= Date.now();
+    const assignmentAttachmentIsPdf = assignment.attachmentType === "pdf" || assignment.attachmentMimeType === "application/pdf" || Boolean(assignment.attachmentUrl && /\.pdf(\?|$)/i.test(assignment.attachmentUrl));
+    const submissionIsPdf = submission?.fileType === "pdf";
+
+    const handleFileSelected = (file?: File | null) => {
+        if (!file) return;
+
+        if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+            toast.error("Please upload a PDF file");
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            toast.error("PDF uploads must be 10MB or smaller");
+            return;
+        }
+
+        setSelectedFile(file);
+    };
+
+    const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!isOpen) return;
+        handleFileSelected(event.dataTransfer.files?.[0] || null);
+    };
 
     const handleSubmit = async () => {
         const hasText = content.trim().length > 0;
@@ -61,67 +92,31 @@ export default function AssignmentView() {
             let submissionContent = content;
             let submissionFileType: "pdf" | "text" = "text";
 
-            // Upload PDF to Supabase Storage if file is selected
             if (selectedFile) {
-                toast.loading("📤 Uploading PDF file...", { duration: 999999 });
-                
-                try {
-                    const fileName = `${assignmentId}/${user?.id}/${Date.now()}_${selectedFile.name}`;
-                    console.log('[AssignmentView] Starting PDF upload:', { 
-                        fileName, 
-                        fileSize: selectedFile.size, 
-                        fileType: selectedFile.type 
+                toast.loading("Uploading PDF file...", { id: "assignment-upload" });
+
+                const fileName = `${assignmentId}/${user?.id}/${Date.now()}_${selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+                const { error: uploadError } = await supabase.storage
+                    .from("assignment-submissions")
+                    .upload(fileName, selectedFile, {
+                        cacheControl: "3600",
+                        upsert: false,
                     });
 
-                    const { data: uploadData, error: uploadError } = await supabase.storage
-                        .from('assignment-submissions')
-                        .upload(fileName, selectedFile, {
-                            cacheControl: '3600',
-                            upsert: false
-                        });
-
-                    if (uploadError) {
-                        console.error('[AssignmentView] Upload error:', uploadError);
-                        toast.dismiss();
-                        toast.error(`❌ Upload failed: ${uploadError.message}`);
-                        setIsSubmitting(false);
-                        return;
-                    }
-
-                    // Get public URL of uploaded file
-                    const { data: publicUrlData } = supabase.storage
-                        .from('assignment-submissions')
-                        .getPublicUrl(fileName);
-
-                    submissionContent = publicUrlData.publicUrl;
-                    submissionFileType = "pdf";
-                    
-                    console.log('[AssignmentView] PDF uploaded successfully:', { 
-                        fileName, 
-                        publicUrl: submissionContent 
-                    });
-                    
-                    toast.dismiss();
-                    toast.success("✅ PDF uploaded successfully!");
-                } catch (uploadException: any) {
-                    console.error('[AssignmentView] Unexpected upload error:', uploadException);
-                    toast.dismiss();
-                    
-                    // Check if issue is bucket not found
-                    if (uploadException?.message?.includes('not found') || uploadException?.status === 400) {
-                        toast.error("❌ Storage not configured. Please contact your administrator.");
-                    } else {
-                        toast.error(`❌ Upload failed: ${uploadException?.message || 'Unknown error'}`);
-                    }
-                    setIsSubmitting(false);
-                    return;
+                if (uploadError) {
+                    toast.dismiss("assignment-upload");
+                    throw uploadError;
                 }
+
+                const { data: publicUrlData } = supabase.storage.from("assignment-submissions").getPublicUrl(fileName);
+                submissionContent = publicUrlData.publicUrl;
+                submissionFileType = "pdf";
+
+                toast.success("PDF uploaded successfully", { id: "assignment-upload" });
             }
 
-            // Submit work with uploaded file URL or text content
-            toast.loading("📝 Submitting assignment...", { duration: 999999 });
-            
-            submitWork({
+            toast.loading("Submitting assignment...", { id: "assignment-submit" });
+            await submitWork({
                 assignmentId: assignmentId || "",
                 studentId: user?.id || "",
                 studentName: user?.name || "Student",
@@ -129,24 +124,17 @@ export default function AssignmentView() {
                 fileType: submissionFileType,
             });
 
-            toast.dismiss();
-            toast.success("✅ Assignment submitted successfully!");
+            toast.success("Assignment submitted successfully", { id: "assignment-submit" });
             setContent("");
             setSelectedFile(null);
-        } catch (error) {
-            console.error('[AssignmentView] Submission error:', error);
-            toast.dismiss();
-            toast.error("❌ Error submitting assignment. Please try again.");
+        } catch (error: any) {
+            console.error("[AssignmentView] Submission error:", error);
+            toast.error(error?.message || "Error submitting assignment. Please try again.", { id: "assignment-submit" });
         } finally {
+            toast.dismiss("assignment-upload");
             setIsSubmitting(false);
         }
     };
-
-    if (!assignment) return <div>Assignment not found</div>;
-
-    const isGraded = submission?.status === "graded" && submission.isReleased;
-    const availableFrom = new Date(assignment.availableFrom || assignment.createdAt);
-    const isOpen = availableFrom.getTime() <= Date.now();
 
     return (
         <div className="w-full px-4 md:px-8 lg:px-12 space-y-6 py-4">
@@ -156,13 +144,13 @@ export default function AssignmentView() {
             </Button>
 
             <div className="grid gap-6 md:grid-cols-3">
-                {/* Main Content */}
                 <Card className="md:col-span-2 border-none shadow-premium bg-card/50 backdrop-blur-sm">
                     <CardHeader>
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
                             <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest">
                                 {assignment.submissionType === "both" ? "PDF & Text" : assignment.submissionType}
                             </Badge>
+                            {assignment.attachmentUrl ? <Badge variant="secondary">Teacher File Attached</Badge> : null}
                         </div>
                         <CardTitle className="text-3xl font-bold">{assignment.title}</CardTitle>
                         <div
@@ -171,6 +159,45 @@ export default function AssignmentView() {
                         />
                     </CardHeader>
                     <CardContent className="space-y-6">
+                        {assignment.attachmentUrl ? (
+                            <Card className="border-primary/20 bg-primary/5 shadow-none overflow-hidden">
+                                <CardHeader className="pb-4">
+                                    <CardTitle className="text-xl font-bold flex items-center gap-2 text-primary">
+                                        <FileText className="h-5 w-5" />
+                                        Assignment File
+                                    </CardTitle>
+                                    <CardDescription>
+                                        {assignment.attachmentFileName || "Teacher attachment"}
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="flex flex-wrap gap-2">
+                                        <a href={assignment.attachmentUrl} target="_blank" rel="noreferrer">
+                                            <Button type="button" variant="outline">
+                                                <LinkIcon className="mr-2 h-4 w-4" />
+                                                Open File
+                                            </Button>
+                                        </a>
+                                        <a href={assignment.attachmentUrl} target="_blank" rel="noreferrer">
+                                            <Button type="button" variant="ghost">
+                                                <Download className="mr-2 h-4 w-4" />
+                                                Download
+                                            </Button>
+                                        </a>
+                                    </div>
+
+                                    {assignmentAttachmentIsPdf ? (
+                                        <StudentPdfWorkspace
+                                            documentId={`assignment-brief:${assignment.id}`}
+                                            pdfUrl={assignment.attachmentUrl}
+                                            fileName={assignment.attachmentFileName || "assignment-brief.pdf"}
+                                            title="Assignment PDF Notes"
+                                        />
+                                    ) : null}
+                                </CardContent>
+                            </Card>
+                        ) : null}
+
                         {!submission ? (
                             <div className="space-y-4">
                                 {!isOpen && (
@@ -178,6 +205,7 @@ export default function AssignmentView() {
                                         This assessment opens on <span className="font-bold">{availableFrom.toLocaleDateString()}</span>. You can review the instructions now, but submission is locked until then.
                                     </div>
                                 )}
+
                                 {(assignment.submissionType === "text" || assignment.submissionType === "both") && (
                                     <div className="space-y-2">
                                         <h3 className="text-sm font-bold flex items-center gap-2">
@@ -205,32 +233,55 @@ export default function AssignmentView() {
                                             ref={fileInputRef}
                                             className="hidden"
                                             accept=".pdf"
-                                            disabled={!isOpen}
-                                            onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                                            disabled={!isOpen || isSubmitting}
+                                            onChange={(e) => handleFileSelected(e.target.files?.[0] || null)}
                                         />
                                         <div
-                                            className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all ${isOpen ? 'cursor-pointer group' : 'opacity-60 cursor-not-allowed'} ${selectedFile ? 'border-primary bg-primary/10' : 'border-primary/20 bg-primary/5 hover:border-primary/40'}`}
-                                            onClick={() => isOpen && fileInputRef.current?.click()}
+                                            className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all ${isOpen ? 'group' : 'opacity-60 cursor-not-allowed'} ${selectedFile ? 'border-primary bg-primary/10' : 'border-primary/20 bg-primary/5 hover:border-primary/40'}`}
+                                            onDragOver={(event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                            }}
+                                            onDrop={handleDrop}
                                         >
                                             {selectedFile ? (
-                                                <div className="flex flex-col items-center">
-                                                    <CheckCircle2 className="h-12 w-12 text-primary mb-4" />
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <CheckCircle2 className="h-12 w-12 text-primary mb-2" />
                                                     <p className="font-bold text-primary">{selectedFile.name}</p>
-                                                    <p className="text-xs text-muted-foreground mt-2">Click to change file</p>
+                                                    <p className="text-xs text-muted-foreground">Ready to submit</p>
                                                 </div>
                                             ) : (
                                                 <>
                                                     <Upload className="mx-auto h-12 w-12 text-primary/40 group-hover:text-primary transition-colors mb-4" />
-                                                    <p className="font-bold text-primary/60 group-hover:text-primary">Click to select or drag and drop your PDF file</p>
+                                                    <p className="font-bold text-primary/60 group-hover:text-primary">Drag a PDF here or browse for a file</p>
                                                     <p className="text-xs text-muted-foreground mt-2">Maximum file size: 10MB</p>
                                                 </>
                                             )}
+                                            <div className="mt-4 flex justify-center gap-2">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    disabled={!isOpen || isSubmitting}
+                                                    onClick={(event) => {
+                                                        event.preventDefault();
+                                                        fileInputRef.current?.click();
+                                                    }}
+                                                >
+                                                    Choose PDF
+                                                </Button>
+                                                {selectedFile ? (
+                                                    <Button type="button" variant="ghost" onClick={() => setSelectedFile(null)}>
+                                                        Clear
+                                                    </Button>
+                                                ) : null}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
 
                                 <div className="flex gap-3 pt-4">
                                     <Button
+                                        type="button"
                                         className="flex-1 h-12 font-black text-lg gap-2"
                                         onClick={handleSubmit}
                                         disabled={isSubmitting || !isOpen || (assignment.submissionType === "text" && !content.trim())}
@@ -242,21 +293,15 @@ export default function AssignmentView() {
                             </div>
                         ) : (
                             <div className="space-y-6">
-                                {submission.fileType === "pdf" ? (
-                                    <div className="p-6 rounded-2xl bg-primary/5 border border-primary/20 flex flex-col items-center justify-center gap-4 text-center">
-                                        <FileText className="h-10 w-10 text-primary" />
-                                        <div>
-                                            <p className="font-bold text-slate-800 break-all max-w-[300px]">
-                                                {submission.content.split('/').pop()?.split('?')[0] || "document.pdf"}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground uppercase tracking-widest mt-1">Submitted PDF</p>
-                                        </div>
-                                        <a href={submission.content} target="_blank" rel="noreferrer" className="mt-2">
-                                            <Button variant="outline" className="font-bold gap-2">
-                                                <LinkIcon className="h-4 w-4" /> View Document
-                                            </Button>
-                                        </a>
-                                    </div>
+                                {submissionIsPdf ? (
+                                    submission?.content ? (
+                                        <StudentPdfWorkspace
+                                            documentId={`submission:${submission.id}`}
+                                            pdfUrl={submission.content}
+                                            fileName={submission.content.split('/').pop()?.split('?')[0] || 'submission.pdf'}
+                                            title="Submitted PDF"
+                                        />
+                                    ) : null
                                 ) : (
                                     <div className="p-6 rounded-2xl bg-muted/30 border font-serif text-lg leading-relaxed whitespace-pre-wrap">
                                         {submission.content}
@@ -297,12 +342,11 @@ export default function AssignmentView() {
                     </CardContent>
                 </Card>
 
-                {/* Sidebar Info */}
                 <div className="space-y-6">
                     <Card className="border-none shadow-premium-hover">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground">Status</CardTitle>
-                    </CardHeader>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground">Status</CardTitle>
+                        </CardHeader>
                         <CardContent className="space-y-4 text-sm font-bold">
                             <div className="flex justify-between items-center">
                                 <span>Opens</span>
@@ -328,6 +372,12 @@ export default function AssignmentView() {
                                     <span>Total Points</span>
                                     <span>{assignment.totalMarks || 0}</span>
                                 </div>
+                                {assignment.attachmentUrl ? (
+                                    <div className="flex justify-between items-center">
+                                        <span>Teacher File</span>
+                                        <Badge variant="secondary">Attached</Badge>
+                                    </div>
+                                ) : null}
                                 {isGraded && (
                                     <div className="flex justify-between items-center text-primary text-xl font-black pt-2">
                                         <span>Your Grade</span>
@@ -358,4 +408,3 @@ export default function AssignmentView() {
         </div>
     );
 }
- 

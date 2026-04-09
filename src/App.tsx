@@ -25,6 +25,7 @@ import StudentAnnouncements from "@/pages/dashboard/student/StudentAnnouncements
 import AssignmentManagement from "@/pages/dashboard/teacher/AssignmentManagement";
 import SpeedGraderV2 from "@/pages/dashboard/teacher/SpeedGraderV2";
 import StudentAssignments from "@/pages/dashboard/student/StudentAssignments";
+import StudentGrades from "@/pages/dashboard/student/StudentGrades";
 import AssignmentView from "@/pages/dashboard/student/AssignmentView";
 import TeacherManagement from "@/pages/dashboard/principal/TeacherManagement";
 import SchoolClassManagement from "@/pages/dashboard/teacher/ClassManagement";
@@ -66,6 +67,7 @@ export function App() {
             <Route path="quizzes/:id" element={<StudentQuizDetail />} />
             <Route path="quizzes/:id/take" element={<TakeQuiz />} />
             <Route path="announcements" element={<StudentAnnouncements />} />
+            <Route path="grades" element={<StudentGrades />} />
             <Route path="assignments" element={<StudentAssignments />} />
             <Route path="assignments/:id" element={<AssignmentView />} />
             <Route path="subjects/:id/discussions" element={<Discussions />} />
