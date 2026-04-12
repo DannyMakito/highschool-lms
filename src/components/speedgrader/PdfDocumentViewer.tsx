@@ -70,8 +70,8 @@ export default function PdfDocumentViewer({
     );
 
     return (
-        <div className="flex items-center justify-center" ref={containerRef}>
-            <div className="relative bg-white shadow-xl rounded-sm overflow-hidden">
+        <div className="flex items-center justify-center min-w-0 min-h-0" ref={containerRef}>
+            <div className="relative bg-white shadow-2xl rounded-sm overflow-hidden select-none">
                 {isLoading && (
                     <div className="absolute inset-0 flex items-center justify-center z-30 bg-white/80">
                         <div className="flex flex-col items-center gap-3">

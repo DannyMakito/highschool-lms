@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import supabase from "@/lib/supabase";
 import StudentPdfWorkspace from "@/components/student/StudentPdfWorkspace";
+import StudentSubmissionView from "@/components/student/StudentSubmissionView";
 
 export default function AssignmentView() {
     const { id: assignmentId } = useParams();
@@ -295,17 +296,20 @@ export default function AssignmentView() {
                             <div className="space-y-6">
                                 {submissionIsPdf ? (
                                     submission?.content ? (
-                                        <StudentPdfWorkspace
-                                            documentId={`submission:${submission.id}`}
+                                        <StudentSubmissionView
+                                            submissionId={submission.id}
                                             pdfUrl={submission.content}
+                                            fileType="pdf"
                                             fileName={submission.content.split('/').pop()?.split('?')[0] || 'submission.pdf'}
-                                            title="Submitted PDF"
                                         />
                                     ) : null
                                 ) : (
-                                    <div className="p-6 rounded-2xl bg-muted/30 border font-serif text-lg leading-relaxed whitespace-pre-wrap">
-                                        {submission.content}
-                                    </div>
+                                    <StudentSubmissionView
+                                        submissionId={submission.id}
+                                        content={submission.content}
+                                        fileType="text"
+                                        fileName="Essay Submission"
+                                    />
                                 )}
 
                                 {isGraded && (

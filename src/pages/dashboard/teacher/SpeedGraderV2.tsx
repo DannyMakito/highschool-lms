@@ -42,7 +42,7 @@ export default function SpeedGraderV2() {
     const { id: assignmentId } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { assignments, getAssignmentSubmissions, getRubric } = useAssignments();
+    const { assignments, getAssignmentSubmissions, getRubric, updateGrade } = useAssignments();
 
     const assignment = assignments.find((a) => a.id === assignmentId);
     const allSubmissions = getAssignmentSubmissions(assignmentId || '');
@@ -205,11 +205,10 @@ export default function SpeedGraderV2() {
 
             // Update submission metadata
             const totalGrade = state.criterionGrades.reduce((sum, g) => sum + g.score, 0);
-            await updateSubmissionGradeStatus(state.currentSubmissionId, {
+            await updateGrade(state.currentSubmissionId, {
                 status: 'submitted', // keep as submitted (draft)
-                overall_feedback: state.overallFeedback,
-                total_grade: totalGrade,
-                graded_by: user.id,
+                overallFeedback: state.overallFeedback,
+                totalGrade: totalGrade,
             });
 
             markSaved();
@@ -238,12 +237,11 @@ export default function SpeedGraderV2() {
             await saveAllGrades(gradesToSave);
 
             const totalGrade = state.criterionGrades.reduce((sum, g) => sum + g.score, 0);
-            await updateSubmissionGradeStatus(state.currentSubmissionId, {
+            await updateGrade(state.currentSubmissionId, {
                 status: 'graded',
-                is_released: true,
-                overall_feedback: state.overallFeedback,
-                total_grade: totalGrade,
-                graded_by: user.id,
+                isReleased: true,
+                overallFeedback: state.overallFeedback,
+                totalGrade: totalGrade,
             });
 
             markSaved();
@@ -352,9 +350,9 @@ export default function SpeedGraderV2() {
                 />
 
                 {/* Document + Gutter area */}
-                <div className="flex-1 overflow-auto flex">
+                <div className="flex-1 overflow-hidden flex">
                     {/* Document viewer */}
-                    <div className="flex-1 overflow-auto p-4 flex items-start justify-center">
+                    <div className="flex-1 overflow-auto flex items-start justify-center overflow-x-hidden">
                         {currentSubmission ? (
                             currentSubmission.fileType === 'pdf' && resolvedUrl ? (
                                 <PdfDocumentViewer
