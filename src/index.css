@@ -124,3 +124,5 @@
     @apply bg-background text-foreground;
   }
 }
+.react-pdf__Document { display: flex !important; flex-direction: column !important; align-items: center !important; overflow: hidden !important; }
+.react-pdf__Page { margin: 0 auto; overflow: hidden !important; }
