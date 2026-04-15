@@ -160,8 +160,8 @@ export default function LessonView() {
                         <div className="flex flex-col gap-4 pb-2">
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                 <div className="space-y-1">
-                                    <h1 className="text-4xl lg:text-5xl font-black tracking-tight text-slate-100">{currentLesson.title}</h1>
-                                    <p className="text-slate-400 font-medium">Part of {subject.name} • {currentIndex + 1} of {totalLessons} lessons</p>
+                                    <h1 className="text-4xl lg:text-5xl font-black tracking-tight text-indigo-400">{currentLesson.title}</h1>
+                                    <p className="text-indigo-400 font-medium">Part of {subject.name} • {currentIndex + 1} of {totalLessons} lessons</p>
                                 </div>
                                 <div className="flex items-center gap-3 shrink-0">
                                     {completed ? (
@@ -219,15 +219,15 @@ export default function LessonView() {
                         )}
 
                         {/* Content Section */}
-                        <div className="space-y-8 bg-slate-900/40 backdrop-blur-xl rounded-[2rem] p-8 lg:p-12 border border-white/5 shadow-2xl">
+                        <div className="space-y-8 bg-white-900/40 backdrop-blur-xl rounded-[2rem] p-8 lg:p-12 border border-white/5 shadow-2xl">
                             <div className="flex items-center gap-3 text-primary">
                                 <div className="p-2 rounded-xl bg-primary/10">
                                     <Layout className="h-6 w-6" />
                                 </div>
-                                <h2 className="text-2xl font-black tracking-tight text-slate-100">Lesson Notes</h2>
+                                <h2 className="text-2xl font-black tracking-tight text-indigo-400">Lesson Notes</h2>
                             </div>
 
-                            <div className="prose prose-invert prose-lg max-w-none prose-headings:font-black prose-headings:tracking-tight prose-headings:text-slate-100 prose-p:text-slate-300 prose-strong:text-slate-100 prose-a:text-primary prose-ul:text-slate-300 prose-ol:text-slate-300">
+                            <div className="prose prose-invert prose-lg max-w-none prose-headings:font-black prose-headings:tracking-tight prose-headings:text-slate-800 prose-p:text-black prose-strong:text-black prose-a:text-primary prose-ul:text-black prose-ol:text-black">
                                 <h1 className="text-3xl mb-6">{currentLesson.title}</h1>
                                 {currentLesson.content ? (
                                     <div
@@ -239,7 +239,7 @@ export default function LessonView() {
                                         <div className="p-4 rounded-full bg-slate-800/50">
                                             <BookOpen className="h-8 w-8 text-slate-500" />
                                         </div>
-                                        <p className="text-slate-500 font-medium">No extra notes provided for this lesson.</p>
+                                        <p className="text-black font-medium">No extra notes provided for this lesson.</p>
                                     </div>
                                 )}
                             </div>

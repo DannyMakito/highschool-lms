@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useDiscussions } from '@/hooks/useDiscussions';
 import { useAuth } from '@/context/AuthContext';
 import { useSubjects } from '@/hooks/useSubjects';
+import { useRegistrationData } from '@/hooks/useRegistrationData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,7 +17,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import TinyMCEEditor from '@/components/shared/TinyMCEEditor';
-import { Calendar as CalendarIcon, Save, X, BookOpen } from 'lucide-react';
+import { Calendar as CalendarIcon, Save, X, BookOpen, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
 const DiscussionForm: React.FC = () => {
@@ -24,9 +25,11 @@ const DiscussionForm: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const { subjects } = useSubjects();
+    const { subjectClasses, studentSubjectClasses } = useRegistrationData();
     const { discussions, addDiscussion, updateDiscussion } = useDiscussions(subjectId);
 
     const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjectId || '');
+    const [selectedClassId, setSelectedClassId] = useState<string>('');
 
     const [formData, setFormData] = useState({
         title: '',
@@ -55,9 +58,36 @@ const DiscussionForm: React.FC = () => {
                     availableFrom: existing.availableFrom.split('T')[0],
                     availableUntil: existing.availableUntil ? existing.availableUntil.split('T')[0] : '',
                 });
+                if (existing.subjectClassId) setSelectedClassId(existing.subjectClassId);
             }
         }
     }, [discussionId, discussions]);
+
+    const relevantClasses = React.useMemo(() => {
+        const finalSubId = subjectId || selectedSubjectId;
+        if (!finalSubId) return [];
+
+        const classesForSubject = subjectClasses.filter(sc => sc.subjectId === finalSubId);
+
+        if (user?.role === 'teacher') {
+            return classesForSubject.filter(sc => sc.teacherId === user.id);
+        }
+
+        if (user?.role === 'learner') {
+            const enrolledClassIds = studentSubjectClasses
+                .filter(ssc => ssc.studentId === user.id)
+                .map(ssc => ssc.subjectClassId);
+            return classesForSubject.filter(sc => enrolledClassIds.includes(sc.id));
+        }
+
+        return classesForSubject;
+    }, [subjectId, selectedSubjectId, subjectClasses, studentSubjectClasses, user]);
+
+    useEffect(() => {
+        if (!discussionId && relevantClasses.length > 0 && !selectedClassId) {
+            setSelectedClassId(relevantClasses[0].id);
+        }
+    }, [relevantClasses, discussionId, selectedClassId]);
 
     const handleSave = () => {
         const finalSubjectId = subjectId || selectedSubjectId;
@@ -70,6 +100,7 @@ const DiscussionForm: React.FC = () => {
         const data = {
             ...formData,
             subjectId: finalSubjectId,
+            subjectClassId: selectedClassId,
             authorId: user?.id || '1',
             authorName: user?.name || 'Instructor',
             authorRole: user?.role || 'teacher',
@@ -132,6 +163,30 @@ const DiscussionForm: React.FC = () => {
                         onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                         className="text-lg font-semibold h-12 border-slate-300"
                     />
+                </div>
+
+                <div className="space-y-4 bg-slate-50/50 p-6 rounded-2xl border border-slate-100/50">
+                    <div className="flex items-center gap-2 mb-2">
+                        <Users className="w-4 h-4 text-slate-600" />
+                        <Label className="text-sm font-bold text-slate-700 uppercase tracking-widest">Select Class Group</Label>
+                    </div>
+                    <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+                        <SelectTrigger className="h-12 bg-white border-slate-200 rounded-xl font-medium">
+                            <SelectValue placeholder="Which class group is this for?" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl shadow-xl border-slate-100">
+                            {relevantClasses.map(sc => (
+                                <SelectItem key={sc.id} value={sc.id} className="rounded-lg">
+                                    {sc.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <p className="text-xs text-slate-400 font-medium">
+                        {user?.role === 'teacher' 
+                            ? "Only students in the selected class group will see this discussion." 
+                            : "Your post will be visible to your class group and your teacher."}
+                    </p>
                 </div>
 
                 <div className="space-y-2">

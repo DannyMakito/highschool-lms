@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useDiscussions } from '@/hooks/useDiscussions';
 import { useAuth } from '@/context/AuthContext';
 import { useSubjects } from '@/hooks/useSubjects';
+import { useRegistrationData } from '@/hooks/useRegistrationData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -33,6 +34,7 @@ interface DiscussionItemProps {
     navigate: (path: string) => void;
     isTeacher: boolean;
     user: any;
+    subjectClasses: any[];
 }
 
 const DiscussionItem = ({ 
@@ -45,8 +47,10 @@ const DiscussionItem = ({
     role, 
     navigate, 
     isTeacher,
-    user
+    user,
+    subjectClasses
 }: DiscussionItemProps) => {
+    const subjectClass = subjectClasses.find(sc => sc.id === discussion.subjectClassId);
     return (
         <div
             className="group flex items-center justify-between p-4 border-b hover:bg-slate-50 cursor-pointer bg-white transition-colors"
@@ -73,6 +77,11 @@ const DiscussionItem = ({
                         {!subjectId && (
                             <Badge variant="outline" className="text-[10px] py-0 px-1 border-slate-200 text-slate-400 font-medium">
                                 {subjects.find(s => s.id === discussion.subjectId)?.name || 'Unknown Subject'}
+                            </Badge>
+                        )}
+                        {subjectClass && (
+                            <Badge variant="secondary" className="text-[10px] py-0 px-1 bg-slate-100 text-slate-500 font-bold tracking-tight">
+                                {subjectClass.name}
                             </Badge>
                         )}
                         <span>Last post {format(new Date(discussion.updatedAt), 'MMM d, yyyy')}</span>
@@ -120,6 +129,7 @@ const Discussions: React.FC = () => {
     const navigate = useNavigate();
     const { user, role } = useAuth();
     const { subjects } = useSubjects();
+    const { subjectClasses } = useRegistrationData();
     const { 
         discussions, 
         replies, 
@@ -211,7 +221,7 @@ const Discussions: React.FC = () => {
             {pinnedDiscussions.length > 0 && (
                 <div className="mb-8 border rounded overflow-hidden">
                     <div className="bg-slate-100 px-4 py-2 border-b flex items-center gap-2">
-                        <chevronright className="w-4 h-4 text-slate-400" />
+                        <ChevronRight className="w-4 h-4 text-slate-400" />
                         <h3 className="text-sm font-bold text-slate-700">Pinned Discussions</h3>
                     </div>
                     {pinnedDiscussions.map(d => (
@@ -227,6 +237,7 @@ const Discussions: React.FC = () => {
                             navigate={navigate}
                             isTeacher={isTeacher}
                             user={user}
+                            subjectClasses={subjectClasses}
                         />
                     ))}
                 </div>
@@ -255,6 +266,7 @@ const Discussions: React.FC = () => {
                             navigate={navigate}
                             isTeacher={isTeacher}
                             user={user}
+                            subjectClasses={subjectClasses}
                         />
                     ))
                 ) : (
@@ -284,6 +296,7 @@ const Discussions: React.FC = () => {
                             navigate={navigate}
                             isTeacher={isTeacher}
                             user={user}
+                            subjectClasses={subjectClasses}
                         />
                     ))}
                 </div>

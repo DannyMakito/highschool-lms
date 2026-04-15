@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDiscussions } from '@/hooks/useDiscussions';
 import { useAuth } from '@/context/AuthContext';
+import { useRegistrationData } from '@/hooks/useRegistrationData';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import TinyMCEEditor from '@/components/shared/TinyMCEEditor';
@@ -196,6 +197,8 @@ const DiscussionView: React.FC = () => {
         markAsRead,
         toggleSubscription
     } = useDiscussions(subjectId);
+    
+    const { subjectClasses } = useRegistrationData();
 
     const [replyToId, setReplyToId] = useState<string | null>(null);
     const [replyContent, setReplyContent] = useState('');
@@ -203,6 +206,7 @@ const DiscussionView: React.FC = () => {
 
     const discussion = discussions.find(d => d.id === discussionId);
     const discussionReplies = replies.filter(r => r.discussionId === discussionId);
+    const subjectClass = subjectClasses.find(sc => sc.id === discussion?.subjectClassId);
 
     useEffect(() => {
         if (discussion && user) {
@@ -272,6 +276,14 @@ const DiscussionView: React.FC = () => {
                             <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 mb-1 tracking-tight">{discussion.title}</h1>
                             <div className="flex items-center gap-2">
                                 <span className="font-bold text-blue-600 text-sm">{discussion.authorName || 'Instructor'}</span>
+                                {subjectClass && (
+                                    <>
+                                        <span className="text-slate-300">·</span>
+                                        <span className="text-xs font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                            {subjectClass.name}
+                                        </span>
+                                    </>
+                                )}
                                 <span className="text-slate-300">·</span>
                                 <span className="text-xs text-slate-400 font-medium">{formatDistanceToNow(new Date(discussion.createdAt), { addSuffix: true })}</span>
                             </div>

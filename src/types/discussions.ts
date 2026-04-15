@@ -14,6 +14,7 @@ export interface Discussion {
     requirePostBeforeView: boolean;
     isGroup: boolean;
     groupId?: string;
+    subjectClassId?: string;
     availableFrom: string;
     availableUntil?: string;
     allowThreadedReplies: boolean;

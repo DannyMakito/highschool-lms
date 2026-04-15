@@ -71,6 +71,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
                 setDiscussions((discRes.data || []).map(d => ({
                     ...d,
                     subjectId: d.subject_id,
+                    subjectClassId: d.subject_class_id,
                     authorId: d.author_id,
                     authorName: (d as any).profiles?.full_name || 'Anonymous Instructor',
                     authorRole: (d as any).profiles?.role || 'teacher',
@@ -142,6 +143,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
             .from('discussions')
             .insert({
                 subject_id: discussion.subjectId,
+                subject_class_id: discussion.subjectClassId,
                 title: discussion.title,
                 content: discussion.content,
                 author_id: discussion.authorId,
@@ -156,6 +158,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         const mappedD: Discussion = {
             ...newD,
             subjectId: newD.subject_id,
+            subjectClassId: newD.subject_class_id,
             authorId: newD.author_id,
             readByUsers: newD.read_by_users,
             subscribedUserIds: newD.subscribed_user_ids,
