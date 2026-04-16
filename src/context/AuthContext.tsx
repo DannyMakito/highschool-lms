@@ -12,6 +12,9 @@ interface User {
     name: string;
     email: string;
     role: UserRole;
+    pin?: string;
+    avatarUrl?: string;
+    createdAt?: string;
 }
 
 interface AuthContextType {
@@ -21,6 +24,7 @@ interface AuthContextType {
     logout: () => Promise<void>;
     isAuthenticated: boolean;
     loading: boolean;
+    refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -110,6 +114,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 name: profile.full_name,
                 email,
                 role: profile.role === "student" ? "learner" : (profile.role as UserRole),
+                pin: profile.pin || "",
+                avatarUrl: profile.avatar_url || "",
+                createdAt: profile.created_at,
             };
 
             setUser(userData);
@@ -292,6 +299,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    const refreshProfile = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) return;
+        await fetchProfile(session.user.id, session.user.email || "");
+    };
+
     const value = {
         user,
         role: user ? (user.role as UserRole) : null,
@@ -299,6 +312,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         isAuthenticated: !!user,
         loading,
+        refreshProfile,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

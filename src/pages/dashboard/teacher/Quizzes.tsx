@@ -41,10 +41,11 @@ import { cn } from "@/lib/utils";
 export default function Quizzes() {
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { teachers } = useSchoolData();
+    const { teachers, students } = useSchoolData();
     const { quizzes: allQuizzes, submissions, deleteQuizzes } = useSubjects();
 
     const teacherProfile = useMemo(() => teachers.find(t => t.id === user?.id), [teachers, user?.id]);
+    const avatarByStudentId = useMemo(() => new Map(students.map((student) => [student.id, student.avatarUrl || ""])), [students]);
 
     const quizzes = useMemo(() => {
         if (!teacherProfile) return [];
@@ -303,7 +304,7 @@ export default function Quizzes() {
                                                 <div className="flex -space-x-2">
                                                     {getQuizMetrics(quiz.id).uniqueLearners.slice(0, 3).map((learnerId, _) => (
                                                         <Avatar key={learnerId} className="h-7 w-7 ring-2 ring-white">
-                                                            <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${learnerId}`} />
+                                                            <AvatarImage src={avatarByStudentId.get(learnerId) || `https://api.dicebear.com/7.x/avataaars/svg?seed=${learnerId}`} />
                                                             <AvatarFallback>?</AvatarFallback>
                                                         </Avatar>
                                                     ))}
@@ -341,7 +342,7 @@ export default function Quizzes() {
                                     <td className="p-4">
                                         <div className="flex items-center gap-3">
                                             <Avatar className="h-8 w-8 ring-1 ring-slate-100">
-                                                <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`} />
+                                                <AvatarImage src={user?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`} />
                                                 <AvatarFallback>{user?.name?.[0]}</AvatarFallback>
                                             </Avatar>
                                             <span className="text-sm font-bold text-slate-600">{user?.name}</span>

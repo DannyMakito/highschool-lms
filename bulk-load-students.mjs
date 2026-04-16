@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { randomInt } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
@@ -19,6 +20,11 @@ if (!supabaseUrl || !serviceRoleKey) {
 }
 
 const supabase = createClient(supabaseUrl, serviceRoleKey);
+const dryRun = (process.env.DRY_RUN ?? 'true').toLowerCase() !== 'false';
+
+function generateStudentPin() {
+  return randomInt(100000, 1000000).toString();
+}
 
 // Raw data from PDF
 const rawData = `GLENBRACK HIGH SCHOOL
@@ -1571,6 +1577,11 @@ CLASSROOM: D13
 2026-04-14 Page 1 of 2 Copyright O d6 group 
 `;
 
+function sanitizeAdmnr(value) {
+  if (!value) return '';
+  return value.replace(/\D/g, '');
+}
+
 function parseStudents(rawData) {
   const lines = rawData.split('\n');
   const students = [];
@@ -1589,19 +1600,19 @@ function parseStudents(rawData) {
       currentSubject = trimmed.split(' ')[0] + ' ' + trimmed.split(' ')[1];
     } else if (trimmed.startsWith('MS ') || trimmed.startsWith('MR ') || trimmed.startsWith('MISS ')) {
       currentTeacher = trimmed;
-    } else if (trimmed.match(/^\d+\s+\d+\s+[A-Z]/)) {
+    } else if (trimmed.match(/^\d+\s+\d+[^\s]*\s+[A-Za-z]/)) {
       // Parse student line
       const parts = trimmed.split(/\s+/);
       if (parts.length >= 6) {
         const no = parts[0];
-        const admnr = parts[1];
+        const admnr = sanitizeAdmnr(parts[1]);
         const surname = parts[2].replace(',', '');
         const initials = parts[3];
         const preferred = parts[4].replace(/[()]/g, '');
         const gender = parts[5];
-        const classGroup = parts[6];
-        const luritsNumber = parts[7];
-        const familyCode = parts[8];
+        const classGroup = parts[6] || '';
+        const luritsNumber = sanitizeAdmnr(parts[7] || '');
+        const familyCode = sanitizeAdmnr(parts[8] || '');
 
         students.push({
           no,
@@ -1625,13 +1636,131 @@ function parseStudents(rawData) {
   return students;
 }
 
-async function bulkLoadStudents() {
-  const students = parseStudents(rawData);
-  console.log(`Parsed ${students.length} students`);
+function normalizeStudent(student) {
+  const normalized = {
+    ...student,
+    admnr: sanitizeAdmnr(student.admnr),
+    surname: (student.surname || '').replace(/[^A-Za-z' -]/g, '').trim(),
+    preferred: (student.preferred || '').replace(/[^A-Za-z' -]/g, '').trim(),
+    gender: (student.gender || '').toUpperCase().trim(),
+    classGroup: (student.classGroup || '').toUpperCase().trim(),
+    grade: (student.grade || '').trim(),
+    group: (student.group || '').trim(),
+    subject: (student.subject || '').trim(),
+    teacher: (student.teacher || '').trim(),
+    luritsNumber: sanitizeAdmnr(student.luritsNumber),
+    familyCode: sanitizeAdmnr(student.familyCode)
+  };
 
-  // Get all existing users
-  const { data: usersData } = await supabase.auth.admin.listUsers();
-  const userMap = new Map(usersData.users.map(u => [u.email, u.id]));
+  // common OCR slip where 0 is used for missing/unknown numeric field
+  if (normalized.luritsNumber === '0') normalized.luritsNumber = '';
+
+  return normalized;
+}
+
+function validateAndCleanStudents(students) {
+  const valid = [];
+  const duplicates = [];
+  const skipped = [];
+  const seenStudentIds = new Set();
+  const seenRecords = new Set();
+  const allowedSubjects = new Set(['BUSINESS STUDIES', 'PHYSICAL SCIENCES']);
+  const allowedGenders = new Set(['M', 'F']);
+
+  for (const rawStudent of students) {
+    const student = normalizeStudent(rawStudent);
+
+    if (!student.grade || !student.subject || !student.group) {
+      skipped.push({ reason: 'Missing grade/subject/group context', student });
+      continue;
+    }
+
+    if (!allowedSubjects.has(student.subject)) {
+      skipped.push({ reason: 'Unsupported subject', student });
+      continue;
+    }
+
+    // Use LURITS as primary stable ID when present; fallback to admin number.
+    const studentId = student.luritsNumber && student.luritsNumber.length >= 8
+      ? student.luritsNumber
+      : student.admnr;
+    if (!studentId || studentId.length < 6) {
+      skipped.push({ reason: 'Missing stable student identifier', student });
+      continue;
+    }
+    student.studentId = studentId;
+
+    if (!student.preferred || !student.surname) {
+      skipped.push({ reason: 'Missing student name', student });
+      continue;
+    }
+
+    if (!allowedGenders.has(student.gender)) {
+      skipped.push({ reason: 'Invalid gender', student });
+      continue;
+    }
+
+    const recordKey = `${student.studentId}-${student.subject}-${student.grade}`;
+    if (seenRecords.has(recordKey)) {
+      duplicates.push({ reason: 'Duplicate subject enrollment', student });
+      continue;
+    }
+    seenRecords.add(recordKey);
+
+    if (!seenStudentIds.has(student.studentId)) {
+      seenStudentIds.add(student.studentId);
+      valid.push(student);
+      continue;
+    }
+
+    // same student in another subject/grade is acceptable if not same recordKey
+    valid.push(student);
+  }
+
+  return { valid, duplicates, skipped };
+}
+
+async function bulkLoadStudents() {
+  const parsedStudents = parseStudents(rawData);
+  const { valid: students, duplicates, skipped } = validateAndCleanStudents(parsedStudents);
+  console.log(`Parsed rows: ${parsedStudents.length}`);
+  console.log(`Valid rows: ${students.length}`);
+  console.log(`Duplicate rows skipped: ${duplicates.length}`);
+  console.log(`Invalid rows skipped: ${skipped.length}`);
+  console.log(`Distinct student IDs: ${new Set(students.map(s => s.studentId)).size}`);
+
+  if (skipped.length > 0) {
+    console.log('Sample skipped rows:', skipped.slice(0, 10).map(s => ({
+      reason: s.reason,
+      studentId: s.student.studentId,
+      admnr: s.student.admnr,
+      name: `${s.student.surname} ${s.student.preferred}`,
+      grade: s.student.grade,
+      subject: s.student.subject
+    })));
+  }
+
+  if (dryRun) {
+    console.log('DRY_RUN enabled. No database writes were performed.');
+    return;
+  }
+
+  // Get all existing users (listUsers is paginated, so fetch all pages)
+  const userMap = new Map();
+  const perPage = 1000;
+  let page = 1;
+  while (true) {
+    const { data: usersData, error: usersError } = await supabase.auth.admin.listUsers({ page, perPage });
+    if (usersError) throw usersError;
+
+    const users = usersData?.users ?? [];
+    for (const user of users) {
+      if (user.email) userMap.set(user.email, user.id);
+    }
+
+    if (users.length < perPage) break;
+    page += 1;
+  }
 
   // Group by grade and subject
   const grouped = {};
@@ -1703,8 +1832,8 @@ async function bulkLoadStudents() {
     // Now create students
     for (const student of groupStudents) {
       // Create auth user or get existing
-      const email = `${student.admnr}@glenbrack.edu`;
-      const password = 'TempPass123!'; // TODO: generate proper pins
+      const email = `${student.studentId}@glenbrack.edu`;
+      const password = generateStudentPin();
 
       let userId;
       if (userMap.has(email)) {
@@ -1716,7 +1845,7 @@ async function bulkLoadStudents() {
           user_metadata: { full_name: `${student.surname} ${student.preferred}` }
         });
         if (authError) {
-          console.error('Auth error for', student.admnr, authError);
+          console.error('Auth error for', student.studentId, authError);
           continue;
         }
         userId = authUser.user.id;
@@ -1735,7 +1864,7 @@ async function bulkLoadStudents() {
           pin: password
         });
         if (profileError) {
-          console.error('Profile error for', student.admnr, profileError);
+          console.error('Profile error for', student.studentId, profileError);
           continue;
         }
       }
@@ -1746,18 +1875,15 @@ async function bulkLoadStudents() {
         // Create student record
         const { error: studentError } = await supabase.from('students').insert({
           id: userId,
-          first_name: student.preferred,
-          last_name: student.surname,
-          administration_number: student.admnr,
+          administration_number: student.studentId,
           gender: student.gender,
           admission_year: '2026',
           grade_id: gradeRecord.data.id,
           register_class_id: registerClass.data.id,
-          status: 'active',
-          pin: password
+          status: 'active'
         });
         if (studentError) {
-          console.error('Student error for', student.admnr, studentError);
+          console.error('Student error for', student.studentId, studentError);
           continue;
         }
       }
@@ -1771,12 +1897,12 @@ async function bulkLoadStudents() {
           subject_id: subjectRecord.data.id
         });
         if (assignError) {
-          console.error('Assignment error for', student.admnr, assignError);
+          console.error('Assignment error for', student.studentId, assignError);
           continue;
         }
       }
 
-      console.log(`Processed student: ${student.admnr} ${student.surname}`);
+      console.log(`Processed student: ${student.studentId} ${student.surname}`);
     }
   }
 

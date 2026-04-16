@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { BookmarkPlus, Download, FileText, Highlighter, Save, Trash2 } from "lucide-react";
+import { BookmarkPlus, Download, FileText, Highlighter, PanelRightClose, PanelRightOpen, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 type SavedPdfNote = {
@@ -32,6 +32,7 @@ export default function StudentPdfWorkspace({
     const [selectedText, setSelectedText] = useState("");
     const [draftNote, setDraftNote] = useState("");
     const [notes, setNotes] = useState<SavedPdfNote[]>([]);
+    const [showWorkspace, setShowWorkspace] = useState(true);
 
     useEffect(() => {
         try {
@@ -87,12 +88,24 @@ export default function StudentPdfWorkspace({
     const noteCountLabel = useMemo(() => `${notes.length} saved ${notes.length === 1 ? "draft" : "drafts"}`, [notes.length]);
 
     return (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h3 className="text-lg font-black text-slate-900">{title}</h3>
+                    <p className="text-sm text-muted-foreground">Switch between an immersive reading view and your notes workspace whenever you want.</p>
+                </div>
+                <Button type="button" variant="outline" onClick={() => setShowWorkspace((current) => !current)}>
+                    {showWorkspace ? <PanelRightClose className="mr-2 h-4 w-4" /> : <PanelRightOpen className="mr-2 h-4 w-4" />}
+                    {showWorkspace ? "Hide notes panel" : "Show notes panel"}
+                </Button>
+            </div>
+
+        <div className={`grid gap-6 ${showWorkspace ? "xl:grid-cols-[minmax(0,1fr)_360px]" : "grid-cols-1"}`}>
             <div className="min-h-[820px]">
                 <PDFViewer pdfUrl={pdfUrl} fileName={fileName} onTextSelect={setSelectedText} />
             </div>
 
-            <div className="space-y-4">
+            {showWorkspace ? <div className="space-y-4">
                 <Card className="border-muted/20 bg-card/80">
                     <CardHeader className="space-y-2">
                         <CardTitle className="flex items-center gap-2 text-lg">
@@ -180,7 +193,8 @@ export default function StudentPdfWorkspace({
                         )}
                     </CardContent>
                 </Card>
-            </div>
+            </div> : null}
+        </div>
         </div>
     );
 }

@@ -32,6 +32,8 @@ import SchoolClassManagement from "@/pages/dashboard/teacher/ClassManagement";
 import Discussions from "@/pages/dashboard/shared/discussions/Discussions";
 import DiscussionForm from "@/pages/dashboard/shared/discussions/DiscussionForm";
 import DiscussionView from "@/pages/dashboard/shared/discussions/DiscussionView";
+import NotificationsPage from "@/pages/dashboard/shared/NotificationsPage";
+import ProfilePage from "@/pages/dashboard/shared/ProfilePage";
 import StudentRegistration from "@/pages/dashboard/principal/StudentRegistration";
 import RegisterClassManagement from "@/pages/dashboard/principal/RegisterClassManagement";
 import SubjectClassManagement from "@/pages/dashboard/principal/SubjectClassManagement";
@@ -71,8 +73,11 @@ export function App() {
             <Route path="assignments" element={<StudentAssignments />} />
             <Route path="assignments/:id" element={<AssignmentView />} />
             <Route path="subjects/:id/discussions" element={<Discussions />} />
+            <Route path="subjects/:id/discussions/create" element={<DiscussionForm />} />
             <Route path="subjects/:id/discussions/view/:discussionId" element={<DiscussionView />} />
             <Route path="discussions" element={<Discussions />} />
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="profile" element={<ProfilePage />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
 
@@ -95,6 +100,8 @@ export function App() {
             <Route path="discussions" element={<Discussions />} />
             <Route path="discussions/create" element={<DiscussionForm />} />
             <Route path="subjects/:id/discussions/view/:discussionId" element={<DiscussionView />} />
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="profile" element={<ProfilePage />} />
 
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
@@ -113,6 +120,8 @@ export function App() {
             <Route path="subject-classes" element={<SubjectClassManagement />} />
             <Route path="grades" element={<GradeManagement />} />
             <Route path="directory" element={<StudentDirectory />} />
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="profile" element={<ProfilePage />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
 

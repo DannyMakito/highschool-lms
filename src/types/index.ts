@@ -243,6 +243,7 @@ export interface Teacher {
     gender: string;
     subjects: string[]; // Subject IDs
     pin: string;
+    avatarUrl?: string;
     createdAt: string;
 }
 
@@ -296,6 +297,7 @@ export interface Student {
     studentClass: string; // backward compat
     status: "active" | "inactive" | "transferred";
     pin: string;
+    avatarUrl?: string;
     createdAt: string;
     subjects?: StudentAssignedSubject[];
 }

@@ -66,6 +66,7 @@ export function SchoolDataProvider({ children }: { children: ReactNode }) {
                     name: p.full_name,
                     email: p.email,
                     pin: p.pin || '',
+                    avatarUrl: p.avatar_url || '',
                     gender: '',
                     subjects: assignmentsData?.filter(a => a.teacher_id === p.id).map(a => a.subject_id) || [],
                     createdAt: p.created_at
@@ -85,6 +86,7 @@ export function SchoolDataProvider({ children }: { children: ReactNode }) {
                     name: s.profiles?.full_name || '',
                     email: s.profiles?.email || '',
                     pin: s.profiles?.pin || '',
+                    avatarUrl: s.profiles?.avatar_url || '',
                     administrationNumber: s.administration_number,
                     gender: s.gender,
                     gradeId: s.grade_id,

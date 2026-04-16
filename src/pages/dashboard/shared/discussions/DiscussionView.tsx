@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDiscussions } from '@/hooks/useDiscussions';
 import { useAuth } from '@/context/AuthContext';
+import { useRegistrationData } from '@/hooks/useRegistrationData';
+import { useSchoolData } from '@/hooks/useSchoolData';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import TinyMCEEditor from '@/components/shared/TinyMCEEditor';
@@ -20,6 +22,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Discussion, DiscussionReply } from '@/types';
+import { getRolePathPrefix } from '@/lib/role-path';
 
 interface ReplyItemProps {
     reply: DiscussionReply;
@@ -188,6 +191,8 @@ const DiscussionView: React.FC = () => {
     const { id: subjectId, discussionId } = useParams();
     const navigate = useNavigate();
     const { user, role } = useAuth();
+    const { studentSubjectClasses, subjectClasses } = useRegistrationData();
+    const { classes } = useSchoolData();
     const {
         discussions,
         replies,
@@ -196,12 +201,28 @@ const DiscussionView: React.FC = () => {
         markAsRead,
         toggleSubscription
     } = useDiscussions(subjectId);
+    const rolePrefix = getRolePathPrefix(role);
 
     const [replyToId, setReplyToId] = useState<string | null>(null);
     const [replyContent, setReplyContent] = useState('');
     const [isTopicReplyOpen, setIsTopicReplyOpen] = useState(false);
 
-    const discussion = discussions.find(d => d.id === discussionId);
+    const visibleGroupIds = React.useMemo(() => {
+        if (!user) return [];
+        if (role === 'learner') {
+            return studentSubjectClasses.filter((item) => item.studentId === user.id).map((item) => item.subjectClassId);
+        }
+        if (role === 'teacher') {
+            return classes.filter((item) => item.teacherId === user.id).map((item) => item.id);
+        }
+        return subjectClasses.map((item) => item.id);
+    }, [classes, role, studentSubjectClasses, subjectClasses, user]);
+
+    const discussion = discussions.find(d => {
+        if (d.id !== discussionId) return false;
+        if (!d.isGroup || !d.groupId) return true;
+        return visibleGroupIds.includes(d.groupId);
+    });
     const discussionReplies = replies.filter(r => r.discussionId === discussionId);
 
     useEffect(() => {
@@ -244,13 +265,12 @@ const DiscussionView: React.FC = () => {
                 variant="ghost"
                 className="mb-6 -ml-2 text-slate-500 hover:text-blue-600"
                 onClick={() => {
-                    const prefix = role === 'learner' ? '/student' : '/teacher';
                     if (subjectId) {
-                        navigate(`${prefix}/subjects/${subjectId}/discussions`);
+                        navigate(`${rolePrefix}/subjects/${subjectId}/discussions`);
                     } else if (discussion?.subjectId) {
-                        navigate(`${prefix}/subjects/${discussion.subjectId}/discussions`);
+                        navigate(`${rolePrefix}/subjects/${discussion.subjectId}/discussions`);
                     } else {
-                        navigate(`${prefix}/discussions`);
+                        navigate(`${rolePrefix}/discussions`);
                     }
                 }}
             >

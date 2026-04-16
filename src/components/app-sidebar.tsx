@@ -9,6 +9,8 @@ import {
   GraduationCap,
   FileText,
   MessageSquare,
+  Bell,
+  UserCircle2,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -31,7 +33,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       user: {
         name: user?.name || "User",
         email: user?.email || "user@school.com",
-        avatar: "",
+        avatar: user?.avatarUrl || "",
       },
       teams: [
         {
@@ -82,6 +84,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: "Discussions",
               url: "/student/discussions",
               icon: MessageSquare,
+            },
+            {
+              title: "Notifications",
+              url: "/student/notifications",
+              icon: Bell,
+            },
+            {
+              title: "Profile",
+              url: "/student/profile",
+              icon: UserCircle2,
             }
           ],
         };
@@ -109,6 +121,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: "Discussions",
               url: "/teacher/discussions",
               icon: MessageSquare,
+            },
+            {
+              title: "Notifications",
+              url: "/teacher/notifications",
+              icon: Bell,
+            },
+            {
+              title: "Profile",
+              url: "/teacher/profile",
+              icon: UserCircle2,
             },
             {
               title: "Assessments",
@@ -159,6 +181,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: "School News",
               url: "/principal/announcements",
               icon: Megaphone,
+            },
+            {
+              title: "Notifications",
+              url: "/principal/notifications",
+              icon: Bell,
+            },
+            {
+              title: "Profile",
+              url: "/principal/profile",
+              icon: UserCircle2,
             }
           ],
         };

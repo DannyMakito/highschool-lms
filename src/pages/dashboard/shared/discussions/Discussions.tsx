@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useDiscussions } from '@/hooks/useDiscussions';
 import { useAuth } from '@/context/AuthContext';
 import { useSubjects } from '@/hooks/useSubjects';
+import { useRegistrationData } from '@/hooks/useRegistrationData';
+import { useSchoolData } from '@/hooks/useSchoolData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -21,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import type { Discussion } from '@/types';
+import { getRolePathPrefix } from '@/lib/role-path';
 
 interface DiscussionItemProps {
     discussion: Discussion;
@@ -52,7 +55,7 @@ const DiscussionItem = ({
             className="group flex items-center justify-between p-4 border-b hover:bg-slate-50 cursor-pointer bg-white transition-colors"
             onClick={() => {
                 const finalSubjectId = subjectId || discussion.subjectId;
-                const prefix = role === 'learner' ? '/student' : '/teacher';
+                const prefix = getRolePathPrefix(role as any);
                 navigate(`${prefix}/subjects/${finalSubjectId}/discussions/view/${discussion.id}`);
             }}
         >
@@ -120,6 +123,8 @@ const Discussions: React.FC = () => {
     const navigate = useNavigate();
     const { user, role } = useAuth();
     const { subjects } = useSubjects();
+    const { studentSubjectClasses, subjectClasses } = useRegistrationData();
+    const { classes } = useSchoolData();
     const { 
         discussions, 
         replies, 
@@ -131,6 +136,27 @@ const Discussions: React.FC = () => {
     const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
     const isTeacher = role === 'teacher' || role === 'principal';
+    const rolePrefix = getRolePathPrefix(role);
+
+    const visibleGroupIds = React.useMemo(() => {
+        if (!user) return [];
+        if (role === 'learner') {
+            return studentSubjectClasses
+                .filter((item) => item.studentId === user.id)
+                .map((item) => item.subjectClassId);
+        }
+        if (role === 'teacher') {
+            return classes.filter((item) => item.teacherId === user.id).map((item) => item.id);
+        }
+        return subjectClasses.map((item) => item.id);
+    }, [classes, role, studentSubjectClasses, subjectClasses, user]);
+
+    const visibleDiscussions = React.useMemo(() => {
+        return discussions.filter((discussion) => {
+            if (!discussion.isGroup || !discussion.groupId) return true;
+            return visibleGroupIds.includes(discussion.groupId);
+        });
+    }, [discussions, visibleGroupIds]);
 
     const getRepliesCount = (discussionId: string) => {
         return replies.filter(r => r.discussionId === discussionId).length;
@@ -141,7 +167,7 @@ const Discussions: React.FC = () => {
         return replies.filter(r => r.discussionId === discussionId && !r.readByUsers.includes(user.id)).length;
     };
 
-    const filteredDiscussions = discussions.filter(d => {
+    const filteredDiscussions = visibleDiscussions.filter(d => {
         const matchesSearch = d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             d.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             d.authorName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -192,10 +218,10 @@ const Discussions: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {isTeacher && (
+                    {(isTeacher || (role === 'learner' && !!subjectId)) && (
                         <Button
                             className="bg-blue-600 hover:bg-blue-700 text-white rounded shadow-sm flex items-center gap-2"
-                            onClick={() => navigate('create')}
+                            onClick={() => navigate(`${rolePrefix}/subjects/${subjectId}/discussions/create`)}
                         >
                             <Plus className="w-4 h-4" />
                             Discussion
