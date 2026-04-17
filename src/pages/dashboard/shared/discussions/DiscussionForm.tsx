@@ -63,6 +63,28 @@ const DiscussionForm: React.FC = () => {
         }
     }, [discussionId, discussions]);
 
+    const relevantSubjects = React.useMemo(() => {
+        if (user?.role === 'learner') {
+            const enrolledSubjectIds = studentSubjectClasses
+                .filter(ssc => ssc.studentId === user.id)
+                .map(ssc => {
+                    const sc = subjectClasses.find(c => c.id === ssc.subjectClassId);
+                    return sc?.subjectId;
+                })
+                .filter(Boolean);
+            return subjects.filter(s => enrolledSubjectIds.includes(s.id));
+        }
+
+        if (user?.role === 'teacher') {
+            const teachingSubjectIds = subjectClasses
+                .filter(sc => sc.teacherId === user.id)
+                .map(sc => sc.subjectId);
+            return subjects.filter(s => teachingSubjectIds.includes(s.id));
+        }
+
+        return subjects;
+    }, [subjects, subjectClasses, studentSubjectClasses, user]);
+
     const relevantClasses = React.useMemo(() => {
         const finalSubId = subjectId || selectedSubjectId;
         if (!finalSubId) return [];
@@ -115,7 +137,9 @@ const DiscussionForm: React.FC = () => {
             toast.success('Discussion created');
         }
 
-        navigate(`/teacher/subjects/${finalSubjectId}/discussions`);
+        // Navigate back to discussions list - works for both teachers and learners
+        const rolePrefix = user?.role === 'learner' ? '/student' : '/teacher';
+        navigate(`${rolePrefix}/subjects/${finalSubjectId}/discussions`);
     };
 
     return (
@@ -145,7 +169,7 @@ const DiscussionForm: React.FC = () => {
                                 <SelectValue placeholder="Which subject is this discussion for?" />
                             </SelectTrigger>
                             <SelectContent className="rounded-xl shadow-xl border-slate-100">
-                                {subjects.map(s => (
+                                {relevantSubjects.map(s => (
                                     <SelectItem key={s.id} value={s.id} className="rounded-lg">
                                         {s.name} (Grade {s.gradeTier})
                                     </SelectItem>

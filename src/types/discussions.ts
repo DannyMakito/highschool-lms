@@ -21,6 +21,8 @@ export interface Discussion {
     allowLiking: boolean;
     subscribedUserIds: string[];
     readByUsers: string[]; // Track who has read the TOPIC
+    isDeleted?: boolean;
+    deletedByRole?: string;
     createdAt: string;
     updatedAt: string;
 }

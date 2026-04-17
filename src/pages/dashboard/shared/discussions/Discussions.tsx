@@ -16,7 +16,8 @@ import {
     Bell,
     CheckCircle2,
     ChevronRight,
-    Filter
+    Filter,
+    Trash2
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -35,6 +36,8 @@ interface DiscussionItemProps {
     isTeacher: boolean;
     user: any;
     subjectClasses: any[];
+    onDelete?: (discussionId: string) => void;
+    isTeacherOfClass?: boolean;
 }
 
 const DiscussionItem = ({ 
@@ -48,9 +51,28 @@ const DiscussionItem = ({
     navigate, 
     isTeacher,
     user,
-    subjectClasses
+    subjectClasses,
+    onDelete,
+    isTeacherOfClass
 }: DiscussionItemProps) => {
     const subjectClass = subjectClasses.find(sc => sc.id === discussion.subjectClassId);
+
+    if (discussion.isDeleted) {
+        return (
+            <div className="flex items-center justify-between p-4 border-b bg-slate-50/50 italic text-slate-400">
+                <div className="flex items-center gap-3">
+                    <Trash2 className="w-4 h-4 text-slate-300" />
+                    <span className="text-sm">This discussion was deleted by a {discussion.deletedByRole || 'teacher'}.</span>
+                </div>
+                {!subjectId && (
+                    <Badge variant="outline" className="text-[10px] py-0 px-1 border-slate-200 text-slate-300">
+                        {subjects.find(s => s.id === discussion.subjectId)?.name || 'Unknown Subject'}
+                    </Badge>
+                )}
+            </div>
+        );
+    }
+
     return (
         <div
             className="group flex items-center justify-between p-4 border-b hover:bg-slate-50 cursor-pointer bg-white transition-colors"
@@ -110,13 +132,18 @@ const DiscussionItem = ({
                     </Badge>
                 </div>
 
-                {isTeacher && (
+                {isTeacherOfClass && (
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (onDelete) onDelete(discussion.id);
+                        }}
+                        title="Delete discussion"
                     >
-                        <Settings className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" />
                     </Button>
                 )}
             </div>
@@ -129,18 +156,35 @@ const Discussions: React.FC = () => {
     const navigate = useNavigate();
     const { user, role } = useAuth();
     const { subjects } = useSubjects();
-    const { subjectClasses } = useRegistrationData();
+    const { subjectClasses, studentSubjectClasses } = useRegistrationData();
     const { 
         discussions, 
         replies, 
         loading, 
-        markAsRead 
+        markAsRead,
+        deleteDiscussion
     } = useDiscussions(subjectId);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
     const isTeacher = role === 'teacher' || role === 'principal';
+
+    const handleDeleteDiscussion = async (discussionId: string) => {
+        if (window.confirm('Are you sure you want to delete this discussion? This action cannot be undone.')) {
+            try {
+                await deleteDiscussion(discussionId);
+            } catch (error) {
+                console.error('Failed to delete discussion:', error);
+            }
+        }
+    };
+
+    const isTeacherOfClass = (discussion: Discussion) => {
+        if (!isTeacher) return false;
+        const subjectClass = subjectClasses.find(sc => sc.id === discussion.subjectClassId);
+        return subjectClass && subjectClass.teacherId === user?.id;
+    };
 
     const getRepliesCount = (discussionId: string) => {
         return replies.filter(r => r.discussionId === discussionId).length;
@@ -151,7 +195,23 @@ const Discussions: React.FC = () => {
         return replies.filter(r => r.discussionId === discussionId && !r.readByUsers.includes(user.id)).length;
     };
 
+    const enrolledSubjectIds = React.useMemo(() => {
+        if (role !== 'learner' || !user) return null;
+        return studentSubjectClasses
+            .filter(ssc => ssc.studentId === user.id)
+            .map(ssc => {
+                const sc = subjectClasses.find(c => c.id === ssc.subjectClassId);
+                return sc?.subjectId;
+            })
+            .filter(Boolean);
+    }, [role, user, studentSubjectClasses, subjectClasses]);
+
     const filteredDiscussions = discussions.filter(d => {
+        // Enforce subject ownership for learners in global view
+        if (!subjectId && role === 'learner' && enrolledSubjectIds) {
+            if (!enrolledSubjectIds.includes(d.subjectId)) return false;
+        }
+
         const matchesSearch = d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             d.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             d.authorName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -202,15 +262,13 @@ const Discussions: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {isTeacher && (
-                        <Button
-                            className="bg-blue-600 hover:bg-blue-700 text-white rounded shadow-sm flex items-center gap-2"
-                            onClick={() => navigate('create')}
-                        >
-                            <Plus className="w-4 h-4" />
-                            Discussion
-                        </Button>
-                    )}
+                    <Button
+                        className="bg-blue-600 hover:bg-blue-700 text-white rounded shadow-sm flex items-center gap-2"
+                        onClick={() => navigate('create')}
+                    >
+                        <Plus className="w-4 h-4" />
+                        Discussion
+                    </Button>
                     <Button variant="outline" size="icon" className="bg-white border-slate-200">
                         <Settings className="w-4 h-4 text-slate-600" />
                     </Button>
@@ -238,6 +296,8 @@ const Discussions: React.FC = () => {
                             isTeacher={isTeacher}
                             user={user}
                             subjectClasses={subjectClasses}
+                            onDelete={handleDeleteDiscussion}
+                            isTeacherOfClass={isTeacherOfClass(d)}
                         />
                     ))}
                 </div>
@@ -267,6 +327,8 @@ const Discussions: React.FC = () => {
                             isTeacher={isTeacher}
                             user={user}
                             subjectClasses={subjectClasses}
+                            onDelete={handleDeleteDiscussion}
+                            isTeacherOfClass={isTeacherOfClass(d)}
                         />
                     ))
                 ) : (
@@ -297,6 +359,8 @@ const Discussions: React.FC = () => {
                             isTeacher={isTeacher}
                             user={user}
                             subjectClasses={subjectClasses}
+                            onDelete={handleDeleteDiscussion}
+                            isTeacherOfClass={isTeacherOfClass(d)}
                         />
                     ))}
                 </div>

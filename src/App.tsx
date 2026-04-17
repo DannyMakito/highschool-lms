@@ -1,5 +1,5 @@
 
-import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import RoleLayout from "@/layouts/RoleLayout";
 import StudentLayout from "@/layouts/StudentLayout";
@@ -44,6 +44,28 @@ import GradingQueue from "@/pages/dashboard/teacher/GradingQueue";
 
 
 import { Toaster } from "@/components/ui/sonner";
+import { TutorWidget } from "./components/tutor";
+
+// Component to conditionally show TutorWidget
+function ConditionalTutorWidget() {
+  const location = useLocation();
+  
+  // Hide tutor widget only during student quiz-taking activities
+  const isStudentTakingQuiz = location.pathname.includes('/student/quizzes/') && location.pathname.includes('/take');
+  
+  // Hide on quiz list pages for students
+  const isStudentQuizList = location.pathname === '/student/quizzes';
+  
+  // Hide on quiz detail pages for students (viewing quiz before taking)
+  const isStudentQuizDetail = location.pathname.match(/\/student\/quizzes\/[^/]+\/?$/) && !location.pathname.includes('/take');
+  
+  // Keep visible during quiz creation for teachers & principals
+  const shouldHideTutor = isStudentTakingQuiz || isStudentQuizList || isStudentQuizDetail;
+  
+  if (shouldHideTutor) return null;
+  
+  return <TutorWidget />;
+}
 
 export function App() {
   return (
@@ -71,8 +93,12 @@ export function App() {
             <Route path="assignments" element={<StudentAssignments />} />
             <Route path="assignments/:id" element={<AssignmentView />} />
             <Route path="subjects/:id/discussions" element={<Discussions />} />
+            <Route path="subjects/:id/discussions/create" element={<DiscussionForm />} />
+            <Route path="subjects/:id/discussions/edit/:discussionId" element={<DiscussionForm />} />
             <Route path="subjects/:id/discussions/view/:discussionId" element={<DiscussionView />} />
             <Route path="discussions" element={<Discussions />} />
+            <Route path="discussions/create" element={<DiscussionForm />} />
+            <Route path="discussions/edit/:discussionId" element={<DiscussionForm />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
 
@@ -94,6 +120,7 @@ export function App() {
             <Route path="subjects/:id/discussions/edit/:discussionId" element={<DiscussionForm />} />
             <Route path="discussions" element={<Discussions />} />
             <Route path="discussions/create" element={<DiscussionForm />} />
+            <Route path="discussions/edit/:discussionId" element={<DiscussionForm />} />
             <Route path="subjects/:id/discussions/view/:discussionId" element={<DiscussionView />} />
 
             <Route index element={<Navigate to="dashboard" replace />} />
@@ -113,10 +140,18 @@ export function App() {
             <Route path="subject-classes" element={<SubjectClassManagement />} />
             <Route path="grades" element={<GradeManagement />} />
             <Route path="directory" element={<StudentDirectory />} />
+            <Route path="subjects/:id/discussions" element={<Discussions />} />
+            <Route path="subjects/:id/discussions/create" element={<DiscussionForm />} />
+            <Route path="subjects/:id/discussions/edit/:discussionId" element={<DiscussionForm />} />
+            <Route path="subjects/:id/discussions/view/:discussionId" element={<DiscussionView />} />
+            <Route path="discussions" element={<Discussions />} />
+            <Route path="discussions/create" element={<DiscussionForm />} />
+            <Route path="discussions/edit/:discussionId" element={<DiscussionForm />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
 
         </Routes>
+        <ConditionalTutorWidget />
       </AuthProvider>
     </HashRouter>
   );
