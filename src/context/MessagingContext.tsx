@@ -212,6 +212,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         if (updates.requirePostBeforeView !== undefined) dbUpdates.require_post_before_view = updates.requirePostBeforeView;
         if (updates.isGroup !== undefined) dbUpdates.is_group = updates.isGroup;
         if (updates.groupId !== undefined) dbUpdates.group_id = updates.groupId;
+        if (updates.subjectClassId !== undefined) dbUpdates.subject_class_id = updates.subjectClassId;
         if (updates.availableFrom !== undefined) dbUpdates.available_from = updates.availableFrom;
         if (updates.availableUntil !== undefined) dbUpdates.available_until = updates.availableUntil || null;
         if (updates.allowThreadedReplies !== undefined) dbUpdates.allow_threaded_replies = updates.allowThreadedReplies;

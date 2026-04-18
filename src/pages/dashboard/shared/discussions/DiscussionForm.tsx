@@ -134,6 +134,7 @@ const DiscussionForm: React.FC = () => {
         const data = {
             ...formData,
             subjectId: finalSubjectId,
+            subjectClassId: finalGroupId,
             groupId: finalGroupId,
             authorId: user?.id || '1',
             authorName: user?.name || 'Instructor',
