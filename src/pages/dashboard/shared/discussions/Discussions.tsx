@@ -173,6 +173,9 @@ const Discussions: React.FC = () => {
 
     const isTeacher = role === 'teacher' || role === 'principal';
     const rolePrefix = getRolePathPrefix(role);
+    const discussionCreatePath = subjectId
+        ? `${rolePrefix}/subjects/${subjectId}/discussions/create`
+        : `${rolePrefix}/discussions/create`;
 
     const visibleGroupIds = React.useMemo(() => {
         if (!user) return [];
@@ -270,10 +273,10 @@ const Discussions: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {(isTeacher || (role === 'learner' && !!subjectId)) && (
+                    {(isTeacher || role === 'learner') && (
                         <Button
                             className="bg-blue-600 hover:bg-blue-700 text-white rounded shadow-sm flex items-center gap-2"
-                            onClick={() => navigate(`${rolePrefix}/subjects/${subjectId}/discussions/create`)}
+                            onClick={() => navigate(discussionCreatePath)}
                         >
                             <Plus className="w-4 h-4" />
                             Discussion
