@@ -168,6 +168,7 @@ export function RegistrationDataProvider({ children }: { children: ReactNode }) 
                     name: s.profiles?.full_name || s.full_name || '',
                     email: s.profiles?.email || s.email || '',
                     pin: s.profiles?.pin || s.pin || '',
+                    avatarUrl: s.profiles?.avatar_url || '',
                     administrationNumber: s.administration_number,
                     admissionYear: s.admission_year,
                     gradeId: s.grade_id,

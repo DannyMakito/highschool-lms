@@ -36,6 +36,7 @@ import 'react-circular-progressbar/dist/styles.css';
 import { useNavigate, useParams } from "react-router-dom";
 import { useSubjects } from "@/hooks/useSubjects";
 import { useAuth } from "@/context/AuthContext";
+import { useSchoolData } from "@/hooks/useSchoolData";
 import { cn } from "@/lib/utils";
 
 
@@ -45,7 +46,9 @@ export default function QuizAnalytics() {
     const navigate = useNavigate();
     const { id } = useParams();
     const { quizzes, subjects, submissions } = useSubjects();
+    const { students } = useSchoolData();
     const [selectedStudent, setSelectedStudent] = useState<any>(null);
+    const avatarByStudentId = new Map(students.map((student) => [student.id, student.avatarUrl || ""]));
 
     const quiz = quizzes.find(q => q.id === id);
 
@@ -337,7 +340,7 @@ export default function QuizAnalytics() {
                                                 <td className="p-4">
                                                     <div className="flex items-center gap-3">
                                                         <Avatar className="h-9 w-9 ring-1 ring-slate-100">
-                                                            <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${s.studentId}`} />
+                                                            <AvatarImage src={avatarByStudentId.get(s.studentId) || `https://api.dicebear.com/7.x/avataaars/svg?seed=${s.studentId}`} />
                                                             <AvatarFallback>{(s.studentName || 'S')[0]}</AvatarFallback>
                                                         </Avatar>
                                                         <span className="font-bold text-slate-800">{s.studentName || 'Anonymous Student'}</span>
@@ -383,7 +386,7 @@ export default function QuizAnalytics() {
                         <div className="flex items-start justify-between">
                             <div className="flex items-center gap-4">
                                 <Avatar className="h-14 w-14 ring-4 ring-indigo-50">
-                                    <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedStudent?.studentId}`} />
+                                    <AvatarImage src={avatarByStudentId.get(selectedStudent?.studentId) || `https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedStudent?.studentId}`} />
                                     <AvatarFallback>{selectedStudent?.studentName?.[0]}</AvatarFallback>
                                 </Avatar>
                                 <div>

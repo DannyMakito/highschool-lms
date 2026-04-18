@@ -12,7 +12,9 @@ import {
     ArrowLeft,
     BookOpen,
     Download,
-    FileText
+    FileText,
+    PanelLeftClose,
+    PanelLeftOpen
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -28,6 +30,7 @@ export default function LessonView() {
     const { id: subjectId, lessonId } = useParams();
     const navigate = useNavigate();
     const { subjects, getSubjectTopics, getTopicLessons, isLessonCompleted, toggleLessonCompletion, setLastLesson } = useSubjects();
+    const [showOutline, setShowOutline] = React.useState(true);
 
     React.useEffect(() => {
         if (subjectId && lessonId) {
@@ -93,7 +96,7 @@ export default function LessonView() {
     return (
         <div className="flex h-screen overflow-hidden bg-background">
             {/* Outline Sidebar */}
-            <div className="hidden lg:flex w-80 border-r flex-col min-h-0 bg-card/40 backdrop-blur-md">
+            {showOutline ? <div className="hidden lg:flex w-80 border-r flex-col min-h-0 bg-card/40 backdrop-blur-md">
                 <div className="p-6 border-b space-y-4">
                     <Button variant="ghost" size="sm" onClick={() => navigate(`/student/subjects/${subjectId}/outline`)} className="-ml-2 text-muted-foreground hover:text-foreground">
                         <ArrowLeft className="h-4 w-4 mr-2" />
@@ -150,7 +153,7 @@ export default function LessonView() {
                         })}
                     </div>
                 </ScrollArea>
-            </div>
+            </div> : null}
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col min-h-0 bg-background/95">
@@ -160,8 +163,18 @@ export default function LessonView() {
                         <div className="flex flex-col gap-4 pb-2">
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                 <div className="space-y-1">
-                                    <h1 className="text-4xl lg:text-5xl font-black tracking-tight text-indigo-400">{currentLesson.title}</h1>
-                                    <p className="text-indigo-400 font-medium">Part of {subject.name} • {currentIndex + 1} of {totalLessons} lessons</p>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Button type="button" variant="outline" className="hidden lg:inline-flex" onClick={() => setShowOutline((current) => !current)}>
+                                            {showOutline ? <PanelLeftClose className="mr-2 h-4 w-4" /> : <PanelLeftOpen className="mr-2 h-4 w-4" />}
+                                            {showOutline ? "Hide outline" : "Show outline"}
+                                        </Button>
+                                        <Button type="button" variant="outline" className="lg:hidden" onClick={() => navigate(`/student/subjects/${subjectId}/outline`)}>
+                                            <PanelLeftOpen className="mr-2 h-4 w-4" />
+                                            Course outline
+                                        </Button>
+                                    </div>
+                                    <h1 className="text-4xl lg:text-5xl font-black tracking-tight text-slate-100">{currentLesson.title}</h1>
+                                    <p className="text-slate-400 font-medium">Part of {subject.name} • {currentIndex + 1} of {totalLessons} lessons</p>
                                 </div>
                                 <div className="flex items-center gap-3 shrink-0">
                                     {completed ? (

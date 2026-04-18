@@ -4,6 +4,7 @@ import { useDiscussions } from '@/hooks/useDiscussions';
 import { useAuth } from '@/context/AuthContext';
 import { useSubjects } from '@/hooks/useSubjects';
 import { useRegistrationData } from '@/hooks/useRegistrationData';
+import { useSchoolData } from '@/hooks/useSchoolData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -23,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import type { Discussion } from '@/types';
+import { getRolePathPrefix } from '@/lib/role-path';
 
 interface DiscussionItemProps {
     discussion: Discussion;
@@ -78,7 +80,7 @@ const DiscussionItem = ({
             className="group flex items-center justify-between p-4 border-b hover:bg-slate-50 cursor-pointer bg-white transition-colors"
             onClick={() => {
                 const finalSubjectId = subjectId || discussion.subjectId;
-                const prefix = role === 'learner' ? '/student' : '/teacher';
+                const prefix = getRolePathPrefix(role as any);
                 navigate(`${prefix}/subjects/${finalSubjectId}/discussions/view/${discussion.id}`);
             }}
         >
@@ -156,7 +158,8 @@ const Discussions: React.FC = () => {
     const navigate = useNavigate();
     const { user, role } = useAuth();
     const { subjects } = useSubjects();
-    const { subjectClasses, studentSubjectClasses } = useRegistrationData();
+    const { studentSubjectClasses, subjectClasses } = useRegistrationData();
+    const { classes } = useSchoolData();
     const { 
         discussions, 
         replies, 
@@ -169,6 +172,27 @@ const Discussions: React.FC = () => {
     const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
     const isTeacher = role === 'teacher' || role === 'principal';
+    const rolePrefix = getRolePathPrefix(role);
+
+    const visibleGroupIds = React.useMemo(() => {
+        if (!user) return [];
+        if (role === 'learner') {
+            return studentSubjectClasses
+                .filter((item) => item.studentId === user.id)
+                .map((item) => item.subjectClassId);
+        }
+        if (role === 'teacher') {
+            return classes.filter((item) => item.teacherId === user.id).map((item) => item.id);
+        }
+        return subjectClasses.map((item) => item.id);
+    }, [classes, role, studentSubjectClasses, subjectClasses, user]);
+
+    const visibleDiscussions = React.useMemo(() => {
+        return discussions.filter((discussion) => {
+            if (!discussion.isGroup || !discussion.groupId) return true;
+            return visibleGroupIds.includes(discussion.groupId);
+        });
+    }, [discussions, visibleGroupIds]);
 
     const handleDeleteDiscussion = async (discussionId: string) => {
         if (window.confirm('Are you sure you want to delete this discussion? This action cannot be undone.')) {
@@ -195,23 +219,7 @@ const Discussions: React.FC = () => {
         return replies.filter(r => r.discussionId === discussionId && !r.readByUsers.includes(user.id)).length;
     };
 
-    const enrolledSubjectIds = React.useMemo(() => {
-        if (role !== 'learner' || !user) return null;
-        return studentSubjectClasses
-            .filter(ssc => ssc.studentId === user.id)
-            .map(ssc => {
-                const sc = subjectClasses.find(c => c.id === ssc.subjectClassId);
-                return sc?.subjectId;
-            })
-            .filter(Boolean);
-    }, [role, user, studentSubjectClasses, subjectClasses]);
-
-    const filteredDiscussions = discussions.filter(d => {
-        // Enforce subject ownership for learners in global view
-        if (!subjectId && role === 'learner' && enrolledSubjectIds) {
-            if (!enrolledSubjectIds.includes(d.subjectId)) return false;
-        }
-
+    const filteredDiscussions = visibleDiscussions.filter(d => {
         const matchesSearch = d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             d.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             d.authorName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -262,13 +270,15 @@ const Discussions: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <Button
-                        className="bg-blue-600 hover:bg-blue-700 text-white rounded shadow-sm flex items-center gap-2"
-                        onClick={() => navigate('create')}
-                    >
-                        <Plus className="w-4 h-4" />
-                        Discussion
-                    </Button>
+                    {(isTeacher || (role === 'learner' && !!subjectId)) && (
+                        <Button
+                            className="bg-blue-600 hover:bg-blue-700 text-white rounded shadow-sm flex items-center gap-2"
+                            onClick={() => navigate(`${rolePrefix}/subjects/${subjectId}/discussions/create`)}
+                        >
+                            <Plus className="w-4 h-4" />
+                            Discussion
+                        </Button>
+                    )}
                     <Button variant="outline" size="icon" className="bg-white border-slate-200">
                         <Settings className="w-4 h-4 text-slate-600" />
                     </Button>

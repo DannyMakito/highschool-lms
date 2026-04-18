@@ -4,6 +4,7 @@ import { useDiscussions } from '@/hooks/useDiscussions';
 import { useAuth } from '@/context/AuthContext';
 import { useSubjects } from '@/hooks/useSubjects';
 import { useRegistrationData } from '@/hooks/useRegistrationData';
+import { useSchoolData } from '@/hooks/useSchoolData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,17 +20,20 @@ import {
 import TinyMCEEditor from '@/components/shared/TinyMCEEditor';
 import { Calendar as CalendarIcon, Save, X, BookOpen, Users } from 'lucide-react';
 import { toast } from 'sonner';
+import { getRolePathPrefix } from '@/lib/role-path';
 
 const DiscussionForm: React.FC = () => {
     const { id: subjectId, discussionId } = useParams();
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, role } = useAuth();
     const { subjects } = useSubjects();
-    const { subjectClasses, studentSubjectClasses } = useRegistrationData();
+    const { studentSubjectClasses, subjectClasses } = useRegistrationData();
+    const { classes } = useSchoolData();
     const { discussions, addDiscussion, updateDiscussion } = useDiscussions(subjectId);
+    const rolePrefix = getRolePathPrefix(role);
 
     const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjectId || '');
-    const [selectedClassId, setSelectedClassId] = useState<string>('');
+    const [selectedGroupId, setSelectedGroupId] = useState<string>('all');
 
     const [formData, setFormData] = useState({
         title: '',
@@ -58,58 +62,57 @@ const DiscussionForm: React.FC = () => {
                     availableFrom: existing.availableFrom.split('T')[0],
                     availableUntil: existing.availableUntil ? existing.availableUntil.split('T')[0] : '',
                 });
-                if (existing.subjectClassId) setSelectedClassId(existing.subjectClassId);
+                setSelectedGroupId(existing.groupId || 'all');
             }
         }
     }, [discussionId, discussions]);
 
-    const relevantSubjects = React.useMemo(() => {
-        if (user?.role === 'learner') {
-            const enrolledSubjectIds = studentSubjectClasses
-                .filter(ssc => ssc.studentId === user.id)
-                .map(ssc => {
-                    const sc = subjectClasses.find(c => c.id === ssc.subjectClassId);
-                    return sc?.subjectId;
-                })
-                .filter(Boolean);
-            return subjects.filter(s => enrolledSubjectIds.includes(s.id));
+    const availableSubjects = React.useMemo(() => {
+        if (role !== 'learner' || !user) return subjects;
+        const allowedSubjectIds = new Set(
+            studentSubjectClasses
+                .filter((item) => item.studentId === user.id)
+                .map((item) => subjectClasses.find((subjectClass) => subjectClass.id === item.subjectClassId)?.subjectId)
+                .filter(Boolean)
+        );
+        return subjects.filter((subject) => allowedSubjectIds.has(subject.id));
+    }, [role, studentSubjectClasses, subjectClasses, subjects, user]);
+
+    const teacherClassOptions = React.useMemo(() => {
+        const targetSubjectId = subjectId || selectedSubjectId;
+        if (!targetSubjectId || !user) return [];
+        if (role === 'teacher') {
+            return classes.filter((item) => item.teacherId === user.id && item.subjectId === targetSubjectId);
         }
-
-        if (user?.role === 'teacher') {
-            const teachingSubjectIds = subjectClasses
-                .filter(sc => sc.teacherId === user.id)
-                .map(sc => sc.subjectId);
-            return subjects.filter(s => teachingSubjectIds.includes(s.id));
+        if (role === 'principal') {
+            return subjectClasses.filter((item) => item.subjectId === targetSubjectId);
         }
+        return [];
+    }, [classes, role, selectedSubjectId, subjectClasses, subjectId, user]);
 
-        return subjects;
-    }, [subjects, subjectClasses, studentSubjectClasses, user]);
-
-    const relevantClasses = React.useMemo(() => {
-        const finalSubId = subjectId || selectedSubjectId;
-        if (!finalSubId) return [];
-
-        const classesForSubject = subjectClasses.filter(sc => sc.subjectId === finalSubId);
-
-        if (user?.role === 'teacher') {
-            return classesForSubject.filter(sc => sc.teacherId === user.id);
-        }
-
-        if (user?.role === 'learner') {
-            const enrolledClassIds = studentSubjectClasses
-                .filter(ssc => ssc.studentId === user.id)
-                .map(ssc => ssc.subjectClassId);
-            return classesForSubject.filter(sc => enrolledClassIds.includes(sc.id));
-        }
-
-        return classesForSubject;
-    }, [subjectId, selectedSubjectId, subjectClasses, studentSubjectClasses, user]);
+    const learnerGroupId = React.useMemo(() => {
+        const targetSubjectId = subjectId || selectedSubjectId;
+        if (!targetSubjectId || !user) return '';
+        const membership = studentSubjectClasses.find((item) => {
+            if (item.studentId !== user.id) return false;
+            const subjectClass = subjectClasses.find((candidate) => candidate.id === item.subjectClassId);
+            return subjectClass?.subjectId === targetSubjectId;
+        });
+        return membership?.subjectClassId || '';
+    }, [selectedSubjectId, studentSubjectClasses, subjectClasses, subjectId, user]);
 
     useEffect(() => {
-        if (!discussionId && relevantClasses.length > 0 && !selectedClassId) {
-            setSelectedClassId(relevantClasses[0].id);
+        if (discussionId) return;
+        if (role === 'learner') {
+            setSelectedGroupId(learnerGroupId || 'all');
+            return;
         }
-    }, [relevantClasses, discussionId, selectedClassId]);
+        if (teacherClassOptions.length === 1) {
+            setSelectedGroupId(teacherClassOptions[0].id);
+            return;
+        }
+        setSelectedGroupId('all');
+    }, [discussionId, learnerGroupId, role, teacherClassOptions]);
 
     const handleSave = () => {
         const finalSubjectId = subjectId || selectedSubjectId;
@@ -119,14 +122,24 @@ const DiscussionForm: React.FC = () => {
             return;
         }
 
+        if (role === 'learner' && !learnerGroupId) {
+            toast.error('You are not linked to a visible subject class for this subject yet.');
+            return;
+        }
+
+        const finalGroupId = role === 'learner'
+            ? learnerGroupId
+            : (selectedGroupId !== 'all' ? selectedGroupId : undefined);
+
         const data = {
             ...formData,
             subjectId: finalSubjectId,
-            subjectClassId: selectedClassId,
+            groupId: finalGroupId,
             authorId: user?.id || '1',
             authorName: user?.name || 'Instructor',
             authorRole: user?.role || 'teacher',
             isClosed: false,
+            isGroup: role === 'learner' ? true : Boolean(finalGroupId),
         };
 
         if (discussionId) {
@@ -137,8 +150,7 @@ const DiscussionForm: React.FC = () => {
             toast.success('Discussion created');
         }
 
-        // Navigate back to discussions list - works for both teachers and learners
-        const rolePrefix = user?.role === 'learner' ? '/student' : '/teacher';
+
         navigate(`${rolePrefix}/subjects/${finalSubjectId}/discussions`);
     };
 
@@ -169,16 +181,39 @@ const DiscussionForm: React.FC = () => {
                                 <SelectValue placeholder="Which subject is this discussion for?" />
                             </SelectTrigger>
                             <SelectContent className="rounded-xl shadow-xl border-slate-100">
-                                {relevantSubjects.map(s => (
+                                {availableSubjects.map(s => (
                                     <SelectItem key={s.id} value={s.id} className="rounded-lg">
                                         {s.name} (Grade {s.gradeTier})
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-                        <p className="text-xs text-slate-400 font-medium">This discussion will be visible to all students enrolled in this subject.</p>
+                        <p className="text-xs text-slate-400 font-medium">
+                            {role === 'learner'
+                                ? 'Your post will stay transparent inside your linked subject class.'
+                                : 'This discussion can be shared with the whole subject or a specific class group.'}
+                        </p>
                     </div>
                 )}
+
+                {(role === 'teacher' || role === 'principal') && (subjectId || selectedSubjectId) ? (
+                    <div className="space-y-2 bg-slate-50 p-6 rounded-2xl border border-slate-200/70">
+                        <Label className="text-sm font-bold text-slate-700">Class Group Visibility</Label>
+                        <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
+                            <SelectTrigger className="h-12 bg-white border-slate-200 rounded-xl font-medium">
+                                <SelectValue placeholder="Choose who can see this discussion" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl shadow-xl border-slate-100">
+                                <SelectItem value="all">All classes in this subject</SelectItem>
+                                {teacherClassOptions.map((subjectClass) => (
+                                    <SelectItem key={subjectClass.id} value={subjectClass.id}>
+                                        {subjectClass.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                ) : null}
 
                 <div className="space-y-2">
                     <Input
@@ -189,29 +224,7 @@ const DiscussionForm: React.FC = () => {
                     />
                 </div>
 
-                <div className="space-y-4 bg-slate-50/50 p-6 rounded-2xl border border-slate-100/50">
-                    <div className="flex items-center gap-2 mb-2">
-                        <Users className="w-4 h-4 text-slate-600" />
-                        <Label className="text-sm font-bold text-slate-700 uppercase tracking-widest">Select Class Group</Label>
-                    </div>
-                    <Select value={selectedClassId} onValueChange={setSelectedClassId}>
-                        <SelectTrigger className="h-12 bg-white border-slate-200 rounded-xl font-medium">
-                            <SelectValue placeholder="Which class group is this for?" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl shadow-xl border-slate-100">
-                            {relevantClasses.map(sc => (
-                                <SelectItem key={sc.id} value={sc.id} className="rounded-lg">
-                                    {sc.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <p className="text-xs text-slate-400 font-medium">
-                        {user?.role === 'teacher' 
-                            ? "Only students in the selected class group will see this discussion." 
-                            : "Your post will be visible to your class group and your teacher."}
-                    </p>
-                </div>
+
 
                 <div className="space-y-2">
                     <TinyMCEEditor
@@ -254,6 +267,7 @@ const DiscussionForm: React.FC = () => {
                                     <Checkbox
                                         id="pinned"
                                         checked={formData.isPinned}
+                                        disabled={role === 'learner'}
                                         onCheckedChange={(checked) => setFormData({ ...formData, isPinned: !!checked })}
                                     />
                                     <Label htmlFor="pinned" className="text-slate-600 font-normal">Pin this discussion</Label>
@@ -268,10 +282,13 @@ const DiscussionForm: React.FC = () => {
                                     <div className="flex items-center space-x-2">
                                         <Checkbox
                                             id="is-group"
-                                            checked={formData.isGroup}
+                                            checked={role === 'learner' ? true : formData.isGroup}
+                                            disabled={role === 'learner'}
                                             onCheckedChange={(checked) => setFormData({ ...formData, isGroup: !!checked })}
                                         />
-                                        <Label htmlFor="is-group" className="text-slate-600 font-normal">This is a Group Discussion</Label>
+                                        <Label htmlFor="is-group" className="text-slate-600 font-normal">
+                                            {role === 'learner' ? 'Learner discussions stay inside the linked class group' : 'This is a Group Discussion'}
+                                        </Label>
                                     </div>
                                 </CardContent>
                             </Card>

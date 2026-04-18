@@ -3,11 +3,11 @@ import {
   BadgeCheck,
   Bell,
   ChevronsUpDown,
-  CreditCard,
   LogOut,
-  Sparkles,
+  UserCircle2,
 } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
+import { getRolePathPrefix } from "@/lib/role-path"
 
 import {
   Avatar,
@@ -40,8 +40,9 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
-  const { logout } = useAuth()
+  const { logout, role } = useAuth()
   const navigate = useNavigate()
+  const rolePrefix = getRolePathPrefix(role)
 
   const handleLogout = async () => {
     await logout()
@@ -88,22 +89,15 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <Sparkles />
-                Upgrade to Pro
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate(`${rolePrefix}/profile`)}>
                 <BadgeCheck />
+                Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate(`${rolePrefix}/profile`)}>
+                <UserCircle2 />
                 Account
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCard />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate(`${rolePrefix}/notifications`)}>
                 <Bell />
                 Notifications
               </DropdownMenuItem>

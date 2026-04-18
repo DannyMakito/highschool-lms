@@ -12,6 +12,8 @@ import { MessagingProvider } from "@/context/MessagingContext";
 import { useMessaging } from "@/hooks/useMessaging";
 import { AssignmentsProvider } from "@/context/AssignmentsContext";
 import { useAssignments } from "@/hooks/useAssignments";
+import { NotificationsProvider } from "@/context/NotificationsContext";
+import { NotificationsPopup } from "@/components/notifications/NotificationsPopup";
 import {
     SidebarInset,
     SidebarProvider,
@@ -89,7 +91,10 @@ export default function PrincipalLayout() {
                 <SchoolDataProvider>
                     <MessagingProvider>
                         <AssignmentsProvider>
-                            <PrincipalPortalContent />
+                            <NotificationsProvider>
+                                <NotificationsPopup />
+                                <PrincipalPortalContent />
+                            </NotificationsProvider>
                         </AssignmentsProvider>
                     </MessagingProvider>
                 </SchoolDataProvider>

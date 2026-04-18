@@ -73,6 +73,15 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
                     subjectId: d.subject_id,
                     subjectClassId: d.subject_class_id,
                     authorId: d.author_id,
+                    isPinned: d.is_pinned ?? d.isPinned ?? false,
+                    isClosed: d.is_closed ?? d.isClosed ?? false,
+                    requirePostBeforeView: d.require_post_before_view ?? d.requirePostBeforeView ?? false,
+                    isGroup: d.is_group ?? d.isGroup ?? false,
+                    groupId: d.group_id ?? d.groupId ?? undefined,
+                    availableFrom: d.available_from ?? d.availableFrom ?? d.created_at,
+                    availableUntil: d.available_until ?? d.availableUntil ?? undefined,
+                    allowThreadedReplies: d.allow_threaded_replies ?? d.allowThreadedReplies ?? true,
+                    allowLiking: d.allow_liking ?? d.allowLiking ?? false,
                     authorName: (d as any).profiles?.full_name || 'Anonymous Instructor',
                     authorRole: (d as any).profiles?.role || 'teacher',
                     authorAvatar: (d as any).profiles?.avatar_url || '',
@@ -87,6 +96,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
                 setReplies((repliesRes.data || []).map(r => ({
                     ...r,
                     discussionId: r.discussion_id,
+                    parentId: r.parent_id ?? r.parentId ?? undefined,
                     authorId: r.author_id,
                     authorName: (r as any).profiles?.full_name || 'User',
                     authorRole: (r as any).profiles?.role || 'learner',
@@ -149,6 +159,15 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
                 title: discussion.title,
                 content: discussion.content,
                 author_id: discussion.authorId,
+                is_pinned: discussion.isPinned ?? false,
+                is_closed: discussion.isClosed ?? false,
+                require_post_before_view: discussion.requirePostBeforeView ?? false,
+                is_group: discussion.isGroup ?? false,
+                group_id: discussion.groupId || null,
+                available_from: discussion.availableFrom || new Date().toISOString(),
+                available_until: discussion.availableUntil || null,
+                allow_threaded_replies: discussion.allowThreadedReplies ?? true,
+                allow_liking: discussion.allowLiking ?? false,
                 read_by_users: [discussion.authorId],
                 subscribed_user_ids: [discussion.authorId]
             })
@@ -162,6 +181,18 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
             subjectId: newD.subject_id,
             subjectClassId: newD.subject_class_id,
             authorId: newD.author_id,
+            isPinned: newD.is_pinned ?? false,
+            isClosed: newD.is_closed ?? false,
+            requirePostBeforeView: newD.require_post_before_view ?? false,
+            isGroup: newD.is_group ?? false,
+            groupId: newD.group_id ?? undefined,
+            availableFrom: newD.available_from ?? newD.created_at,
+            availableUntil: newD.available_until ?? undefined,
+            allowThreadedReplies: newD.allow_threaded_replies ?? true,
+            allowLiking: newD.allow_liking ?? false,
+            authorName: discussion.authorName,
+            authorRole: discussion.authorRole,
+            authorAvatar: discussion.authorAvatar || '',
             readByUsers: newD.read_by_users,
             subscribedUserIds: newD.subscribed_user_ids,
             createdAt: newD.created_at,
@@ -176,6 +207,15 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         const dbUpdates: any = { updated_at: new Date().toISOString() };
         if (updates.title) dbUpdates.title = updates.title;
         if (updates.content) dbUpdates.content = updates.content;
+        if (updates.isPinned !== undefined) dbUpdates.is_pinned = updates.isPinned;
+        if (updates.isClosed !== undefined) dbUpdates.is_closed = updates.isClosed;
+        if (updates.requirePostBeforeView !== undefined) dbUpdates.require_post_before_view = updates.requirePostBeforeView;
+        if (updates.isGroup !== undefined) dbUpdates.is_group = updates.isGroup;
+        if (updates.groupId !== undefined) dbUpdates.group_id = updates.groupId;
+        if (updates.availableFrom !== undefined) dbUpdates.available_from = updates.availableFrom;
+        if (updates.availableUntil !== undefined) dbUpdates.available_until = updates.availableUntil || null;
+        if (updates.allowThreadedReplies !== undefined) dbUpdates.allow_threaded_replies = updates.allowThreadedReplies;
+        if (updates.allowLiking !== undefined) dbUpdates.allow_liking = updates.allowLiking;
 
         const { error } = await supabase.from('discussions').update(dbUpdates).eq('id', id);
         if (error) throw error;
@@ -217,6 +257,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
             .from('discussion_replies')
             .insert({
                 discussion_id: reply.discussionId,
+                parent_id: reply.parentId || null,
                 author_id: reply.authorId,
                 content: reply.content,
                 read_by_users: [reply.authorId]
@@ -232,6 +273,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         const mappedR: DiscussionReply = {
             ...newR,
             discussionId: newR.discussion_id,
+            parentId: newR.parent_id ?? undefined,
             authorId: newR.author_id,
             likes: [],
             readByUsers: newR.read_by_users,
