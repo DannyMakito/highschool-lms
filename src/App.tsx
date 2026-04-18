@@ -145,6 +145,7 @@ export function App() {
             <Route path="register-classes" element={<RegisterClassManagement />} />
             <Route path="subject-classes" element={<SubjectClassManagement />} />
             <Route path="grades" element={<GradeManagement />} />
+            <Route path="directory" element={<StudentDirectory />} />
             <Route path="subjects/:id/discussions" element={<Discussions />} />
             <Route path="subjects/:id/discussions/create" element={<DiscussionForm />} />
             <Route path="subjects/:id/discussions/edit/:discussionId" element={<DiscussionForm />} />
