@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Bell,
   UserCircle2,
+  BarChart3,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -154,6 +155,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               url: "/principal/dashboard",
               icon: LayoutDashboard,
               isActive: true,
+            },
+            {
+              title: "Analytics",
+              url: "/principal/analytics",
+              icon: BarChart3,
             },
             {
               title: "Subjects",

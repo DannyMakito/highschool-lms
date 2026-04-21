@@ -11,6 +11,7 @@ import StudentSubjectOutline from "@/pages/dashboard/student/StudentSubjectOutli
 import LessonView from "@/pages/dashboard/student/LessonView";
 import TeacherDashboard from "@/pages/dashboard/teacher/TeacherDashboard";
 import PrincipalDashboard from "@/pages/dashboard/principal/PrincipalDashboard";
+import AnalyticsDashboard from "@/pages/dashboard/principal/AnalyticsDashboard";
 import SubjectManagement from "@/pages/dashboard/shared/SubjectManagement";
 import SubjectDetail from "@/pages/dashboard/shared/SubjectDetail";
 import CreateQuiz from "@/pages/dashboard/teacher/CreateQuiz";
@@ -135,6 +136,7 @@ export function App() {
           {/* Principal Routes */}
           <Route path="/principal" element={<PrincipalLayout />}>
             <Route path="dashboard" element={<PrincipalDashboard />} />
+            <Route path="analytics" element={<AnalyticsDashboard />} />
             <Route path="subjects" element={<SubjectManagement />} />
             <Route path="subjects/:id" element={<SubjectDetail />} />
             <Route path="subjects/:id/quizzes/create" element={<CreateQuiz />} />
