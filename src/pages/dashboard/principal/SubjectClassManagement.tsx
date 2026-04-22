@@ -16,9 +16,10 @@ import {
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Plus, BookOpen, Trash2, Eye, UserPlus, X, PencilLine } from "lucide-react";
+import { Plus, BookOpen, Trash2, Eye, UserPlus, X, PencilLine, Search } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type SubjectClassForm = {
     name: string;
@@ -60,6 +61,7 @@ export default function SubjectClassManagement() {
     const [addStudentId, setAddStudentId] = useState("");
     const [isAdding, setIsAdding] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [studentSearch, setStudentSearch] = useState("");
     const [filterGrade, setFilterGrade] = useState("all");
     const [filterSubject, setFilterSubject] = useState("all");
     const [form, setForm] = useState<SubjectClassForm>(EMPTY_FORM);
@@ -327,7 +329,7 @@ export default function SubjectClassManagement() {
                 </Table>
             </Card>
 
-            <Dialog open={isDetailOpen} onOpenChange={(open) => { setIsDetailOpen(open); if (!open) { setAddStudentId(""); setSelectedClassId(null); } }}>
+            <Dialog open={isDetailOpen} onOpenChange={(open) => { setIsDetailOpen(open); if (!open) { setAddStudentId(""); setStudentSearch(""); setSelectedClassId(null); } }}>
                 <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[620px]">
                     {selectedClass && (() => {
                         const subject = subjects.find(s => s.id === detailForm.subjectId);
@@ -338,13 +340,15 @@ export default function SubjectClassManagement() {
                         const isFull = classStudents.length >= detailForm.capacity;
                         const studentsToAdd = students.filter(student => student.gradeId === detailForm.gradeId && !enrolledIds.includes(student.id));
 
-                        const handleAddStudent = async () => {
-                            if (!addStudentId) return;
+                        const handleAddStudent = async (idOverride?: string) => {
+                            const idToAdd = idOverride || addStudentId;
+                            if (!idToAdd) return;
                             setIsAdding(true);
                             try {
-                                await manualAssignSubjectClass(addStudentId, selectedClass.id);
+                                await manualAssignSubjectClass(idToAdd, selectedClass.id);
                                 toast.success("Student added to class");
                                 setAddStudentId("");
+                                setStudentSearch("");
                             } catch {
                                 toast.error("Failed to add student");
                             } finally {
@@ -429,17 +433,59 @@ export default function SubjectClassManagement() {
                                         <span className="text-sm font-bold">Enrolled Students</span>
                                         <Badge>{classStudents.length}/{detailForm.capacity}</Badge>
                                     </div>
-                                    {!isFull && studentsToAdd.length > 0 && (
-                                        <div className="flex gap-2">
-                                            <Select value={addStudentId} onValueChange={setAddStudentId}>
-                                                <SelectTrigger className="flex-1"><SelectValue placeholder="Add learner to class" /></SelectTrigger>
-                                                <SelectContent>
-                                                    {studentsToAdd.map(student => <SelectItem key={student.id} value={student.id}>{student.name} ({student.administrationNumber})</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
-                                            <Button size="sm" onClick={handleAddStudent} disabled={!addStudentId || isAdding}>
-                                                <UserPlus className="h-4 w-4" />
-                                            </Button>
+                                    {!isFull && students.filter(s => s.gradeId === detailForm.gradeId && !enrolledIds.includes(s.id)).length > 0 && (
+                                        <div className="space-y-2">
+                                            <div className="relative">
+                                                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                                <Input
+                                                    placeholder="Search student name or admission number..."
+                                                    className="pl-9"
+                                                    value={studentSearch}
+                                                    onChange={(e) => setStudentSearch(e.target.value)}
+                                                />
+                                                {studentSearch && (
+                                                    <div className="absolute z-20 mt-1 w-full rounded-md border bg-popover shadow-lg">
+                                                        <ScrollArea className="h-full max-h-[200px]">
+                                                            <div className="p-1">
+                                                                {studentsToAdd.filter(s => 
+                                                                    s.name.toLowerCase().includes(studentSearch.toLowerCase()) || 
+                                                                    s.administrationNumber.toLowerCase().includes(studentSearch.toLowerCase())
+                                                                ).map(student => (
+                                                                    <button
+                                                                        key={student.id}
+                                                                        className="flex w-full flex-col items-start rounded-sm px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                                                                        onClick={() => handleAddStudent(student.id)}
+                                                                    >
+                                                                        <span className="font-bold">{student.name}</span>
+                                                                        <span className="text-[10px] text-muted-foreground">{student.administrationNumber}</span>
+                                                                    </button>
+                                                                ))}
+                                                                {studentsToAdd.filter(s => 
+                                                                    s.name.toLowerCase().includes(studentSearch.toLowerCase()) || 
+                                                                    s.administrationNumber.toLowerCase().includes(studentSearch.toLowerCase())
+                                                                ).length === 0 && (
+                                                                    <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                                                                        No students found in this grade
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </ScrollArea>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {!studentSearch && (
+                                                <div className="flex gap-2">
+                                                    <Select value={addStudentId} onValueChange={setAddStudentId}>
+                                                        <SelectTrigger className="flex-1"><SelectValue placeholder="Quick add from list..." /></SelectTrigger>
+                                                        <SelectContent>
+                                                            {studentsToAdd.map(student => <SelectItem key={student.id} value={student.id}>{student.name} ({student.administrationNumber})</SelectItem>)}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <Button size="sm" onClick={() => handleAddStudent()} disabled={!addStudentId || isAdding}>
+                                                        <UserPlus className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                     <div className="max-h-[300px] space-y-2 overflow-y-auto">

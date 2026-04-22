@@ -29,7 +29,7 @@ export function SchoolDataProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         if (authLoading) return;
-        
+
         if (!user) {
             setTeachers([]);
             setClasses([]);
@@ -109,7 +109,7 @@ export function SchoolDataProvider({ children }: { children: ReactNode }) {
 
     const addTeacher = async (teacher: Omit<Teacher, 'id' | 'createdAt'>) => {
         const { data: { session } } = await supabase.auth.getSession();
-        
+
         if (!session?.access_token) {
             throw new Error("You must be logged in to create a teacher. Please log out and back in.");
         }

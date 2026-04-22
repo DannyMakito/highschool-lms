@@ -58,6 +58,7 @@ interface RegistrationDataContextType {
     getStudentSubjects: (studentId: string) => StudentSubject[];
     autoAssignSubjectClasses: (studentId: string, subjectIds: string[], gradeId: string) => Promise<any>;
     manualAssignSubjectClass: (studentId: string, subjectClassId: string) => Promise<void>;
+    batchAssignSubjectClasses: (studentId: string, classIds: string[]) => Promise<void>;
     removeStudentFromSubjectClass: (studentId: string, subjectClassId: string) => Promise<void>;
     getStudentSubjectClasses: (studentId: string) => StudentSubjectClass[];
     getSubjectClassStudents: (subjectClassId: string) => Student[];
@@ -331,11 +332,10 @@ export function RegistrationDataProvider({ children }: { children: ReactNode }) 
             }
         });
 
-        if (error) {
-            // Create a more descriptive error
-            const errorMessage = (data as any)?.details || (data as any)?.error || error.message;
-            const err = new Error(errorMessage);
-            throw err;
+        if (error || (data as any)?.error) {
+            console.error("EDGE_FUNCTION_ERROR_DETAILS:", { error, data });
+            const message = (data as any)?.details || (data as any)?.error || error?.message || "Unknown registration error";
+            throw new Error(message);
         }
 
         const created = data as { id: string; created_at?: string; pin: string };
@@ -502,7 +502,7 @@ export function RegistrationDataProvider({ children }: { children: ReactNode }) 
     }, [studentSubjectClasses]);
 
     const autoAssignSubjectClasses = useCallback(async (studentId: string, subjectIds: string[], gradeId: string) => {
-            const newPlacements: Array<{ student_id: string; subject_class_id: string }> = [];
+        const newPlacements: Array<{ student_id: string; subject_class_id: string }> = [];
         for (const subjectId of subjectIds) {
             const matchingClasses = subjectClasses
                 .filter(sc => sc.subjectId === subjectId && sc.gradeId === gradeId);
@@ -595,6 +595,72 @@ export function RegistrationDataProvider({ children }: { children: ReactNode }) 
         });
     };
 
+    const batchAssignSubjectClasses = async (studentId: string, classIds: string[]) => {
+        if (classIds.length === 0) return;
+
+        const classesToAssign = subjectClasses.filter(sc => classIds.includes(sc.id));
+        const subjectsToAssign = [...new Set(classesToAssign.map(sc => sc.subjectId))];
+
+        // 1. Ensure all subjects are assigned
+        const existingSubjectIds = studentSubjects
+            .filter(ss => ss.studentId === studentId)
+            .map(ss => ss.subjectId);
+            
+        const missingSubjectIds = subjectsToAssign.filter(sid => !existingSubjectIds.includes(sid));
+
+        if (missingSubjectIds.length > 0) {
+            const { error: ssErr } = await supabase
+                .from('student_subjects')
+                .upsert(
+                    missingSubjectIds.map(sid => ({ student_id: studentId, subject_id: sid })),
+                    { onConflict: 'student_id,subject_id' }
+                );
+            
+            if (ssErr) {
+                console.error("Batch Assign - Subject Error:", ssErr);
+                throw ssErr;
+            }
+
+            const newSubjects = missingSubjectIds.map(sid => ({ 
+                id: `temp-${studentId}-${sid}`, 
+                studentId, 
+                subjectId: sid 
+            }));
+
+            setStudentSubjects(prev => [...prev, ...newSubjects]);
+        }
+
+        // 2. Clear existing placements for THESE subjects (to avoid duplicates/conflicts)
+        const { error: delError } = await supabase
+            .from('student_subject_classes')
+            .delete()
+            .eq('student_id', studentId)
+            .in('subject_class_id', subjectClasses.filter(sc => subjectsToAssign.includes(sc.subjectId)).map(sc => sc.id));
+
+        if (delError) {
+            console.error("Batch Assign - Delete Error:", delError);
+            throw delError;
+        }
+
+        // 3. Insert new placements
+        const { data: inserted, error: insError } = await supabase
+            .from('student_subject_classes')
+            .insert(classIds.map(cid => ({ student_id: studentId, subject_class_id: cid })))
+            .select();
+
+        if (insError) {
+            console.error("Batch Assign - Insert Error:", insError);
+            throw insError;
+        }
+
+        const mapped = (inserted || []).map(ssc => ({ ...ssc, studentId: ssc.student_id, subjectClassId: ssc.subject_class_id }));
+
+        setStudentSubjectClasses(prev => [
+            ...prev.filter(ssc => ssc.studentId !== studentId || !subjectsToAssign.includes(subjectClasses.find(sc => sc.id === ssc.subjectClassId)?.subjectId || '')),
+            ...mapped
+        ]);
+    };
+
     const getStudentSubjectClasses = (studentId: string) => {
         return studentSubjectClasses.filter(ssc => ssc.studentId === studentId);
     };
@@ -646,6 +712,7 @@ export function RegistrationDataProvider({ children }: { children: ReactNode }) 
         getStudentSubjects,
         autoAssignSubjectClasses,
         manualAssignSubjectClass,
+        batchAssignSubjectClasses,
         removeStudentFromSubjectClass,
         getStudentSubjectClasses,
         getSubjectClassStudents,

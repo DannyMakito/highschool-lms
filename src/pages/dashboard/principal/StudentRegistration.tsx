@@ -18,9 +18,10 @@ import { cn } from "@/lib/utils";
 
 export default function StudentRegistration() {
     const {
-        grades, registerClasses,
+        grades, registerClasses, subjectClasses,
         students, addStudent,
         autoAssignSubjectClasses, getRegisterClassStudents,
+        batchAssignSubjectClasses, getSubjectClassEnrollment,
     } = useRegistrationData();
     const { subjects } = useSubjects();
     const { teachers } = useSchoolData();
@@ -37,6 +38,7 @@ export default function StudentRegistration() {
         gradeId: "",
         registerClassId: "",
         selectedSubjects: [] as string[],
+        selectedClassIds: {} as Record<string, string>,
     });
 
     const selectedGrade = grades.find(g => g.id === form.gradeId);
@@ -51,6 +53,7 @@ export default function StudentRegistration() {
             firstName: "", lastName: "", gender: "", email: "",
             administrationNumber: "", admissionYear: new Date().getFullYear().toString(),
             gradeId: "", registerClassId: "", selectedSubjects: [],
+            selectedClassIds: {},
         });
         setStep(1);
     };
@@ -96,8 +99,17 @@ export default function StudentRegistration() {
             }, { subjectIds });
 
             try {
-                const placements = await autoAssignSubjectClasses(newStudent.id, subjectIds, form.gradeId);
-                toast.success(`${form.firstName} ${form.lastName} registered successfully! Placed into ${placements.length} subject class(es).`);
+                // Perform batch assignments for each selected class
+                const classAssignments = Object.values(form.selectedClassIds).filter(Boolean);
+                
+                if (classAssignments.length > 0) {
+                   await batchAssignSubjectClasses(newStudent.id, classAssignments);
+                   toast.success(`${form.firstName} ${form.lastName} registered and placed into ${classAssignments.length} specific classes.`);
+                } else {
+                    // Fallback to auto-assignment if no manual classes picked
+                    const placements = await autoAssignSubjectClasses(newStudent.id, subjectIds, form.gradeId);
+                    toast.success(`${form.firstName} ${form.lastName} registered successfully! Auto-placed into ${placements.length} classes.`);
+                }
             } catch (err) {
                 toast.warning(`${form.firstName} ${form.lastName} registered, but subject class placement failed. You can add them manually in Classes.`);
                 console.error("Subject class placement error:", err);
@@ -141,7 +153,8 @@ export default function StudentRegistration() {
                 {[
                     { id: 1, label: "Personal Info", icon: Users },
                     { id: 2, label: "Grading & Class", icon: School },
-                    { id: 3, label: "Subjects", icon: BookOpen }
+                    { id: 3, label: "Subjects", icon: BookOpen },
+                    { id: 4, label: "Placement", icon: CheckCircle2 }
                 ].map((s, i) => (
                     <div key={s.id} className="flex items-center flex-1 last:flex-none">
                         <div className="flex flex-col items-center gap-2">
@@ -154,7 +167,7 @@ export default function StudentRegistration() {
                             </div>
                             <span className={cn("text-xs font-black uppercase tracking-widest", step >= s.id ? "text-primary" : "text-muted-foreground")}>{s.label}</span>
                         </div>
-                        {i < 2 && (
+                        {i < 3 && (
                             <div className="flex-1 mx-4 h-[2px] bg-muted relative overflow-hidden">
                                 <div className={cn("absolute inset-0 bg-primary transition-all duration-500", step > s.id ? "translate-x-0" : "-translate-x-full")} />
                             </div>
@@ -166,12 +179,15 @@ export default function StudentRegistration() {
             <Card className="border-2 shadow-xl overflow-hidden">
                 <CardHeader className="bg-muted/30 border-b p-8">
                     <CardTitle className="text-2xl font-black">
-                        {step === 1 ? "Personal Details" : step === 2 ? "Grade & Class Selection" : "Subject Selection"}
+                        {step === 1 ? "Personal Details" : 
+                         step === 2 ? "Grade & Class Selection" : 
+                         step === 3 ? "Subject Selection" : "Specific Class Placement"}
                     </CardTitle>
                     <CardDescription className="font-bold">
                         {step === 1 ? "Enter name, gender and official identification data." :
                             step === 2 ? "Assign the student to a grade level and homeroom group." :
-                                "Choose core and elective subjects for the academic year."}
+                                step === 3 ? "Choose core and elective subjects for the academic year." :
+                                "Assign the student to specific subject class groups."}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="p-8">
@@ -351,6 +367,80 @@ export default function StudentRegistration() {
                             </div>
                         </div>
                     )}
+                    {/* Step 4: Class Placement */}
+                    {step === 4 && (
+                        <div className="space-y-6">
+                            <div className="p-6 bg-primary/5 border-2 border-primary/10 rounded-2xl mb-6">
+                                <h3 className="text-lg font-black mb-1">Specific Class Assignment</h3>
+                                <p className="text-sm font-medium text-muted-foreground">Select which class group the student will join for each selected subject.</p>
+                            </div>
+
+                            <div className="space-y-4">
+                                {form.selectedSubjects.map(subId => {
+                                    const subject = subjects.find(s => s.id === subId);
+                                    const availableClasses = subjectClasses.filter(sc => 
+                                        sc.subjectId === subId && sc.gradeId === form.gradeId
+                                    );
+
+                                    return (
+                                        <div key={subId} className="p-4 rounded-2xl border-2 bg-card space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <Badge variant="secondary" className="bg-primary/10 text-primary font-black uppercase text-[10px]">
+                                                        {subject?.category || "Subject"}
+                                                    </Badge>
+                                                    <span className="font-black text-sm">{subject?.name}</span>
+                                                </div>
+                                                <span className="text-[10px] text-muted-foreground font-black uppercase">
+                                                    {availableClasses.length} Available
+                                                </span>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                                {availableClasses.map(sc => {
+                                                    const enrolled = getSubjectClassEnrollment(sc.id);
+                                                    const isFull = enrolled >= (sc.capacity || 35);
+                                                    const isSelected = form.selectedClassIds[subId] === sc.id;
+
+                                                    return (
+                                                        <button
+                                                            key={sc.id}
+                                                            type="button"
+                                                            disabled={isFull}
+                                                            onClick={() => setForm(prev => ({
+                                                                ...prev,
+                                                                selectedClassIds: { ...prev.selectedClassIds, [subId]: sc.id }
+                                                            }))}
+                                                            className={cn(
+                                                                "p-3 rounded-xl border-2 text-left transition-all relative overflow-hidden group",
+                                                                isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-muted hover:border-primary/20",
+                                                                isFull && "opacity-40 grayscale pointer-events-none"
+                                                            )}
+                                                        >
+                                                            <div className="font-black text-sm">{sc.name}</div>
+                                                            <div className="flex items-center justify-between mt-2">
+                                                                <div className="text-[9px] font-black uppercase text-muted-foreground">Load</div>
+                                                                <span className="text-[10px] font-bold">{enrolled} / {sc.capacity || 35}</span>
+                                                            </div>
+                                                            <div className="mt-1 h-1 w-full bg-muted rounded-full overflow-hidden">
+                                                                <div 
+                                                                    className={cn("h-full", isFull ? "bg-red-500" : "bg-primary")} 
+                                                                    style={{ width: `${Math.min(100, (enrolled / (sc.capacity || 35)) * 100)}%` }} 
+                                                                />
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                                {availableClasses.length === 0 && (
+                                                    <p className="text-xs text-muted-foreground italic p-2">No classes created for this subject yet.</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
                 <CardFooter className="bg-muted/30 p-8 border-t flex justify-between gap-4">
                     {step > 1 ? (
@@ -370,28 +460,43 @@ export default function StudentRegistration() {
                                 if (!form.gradeId || !form.registerClassId) {
                                     toast.error("Grade and Class assignment required"); return;
                                 }
-                                if (isUpperGrade) {
-                                    setForm(prev => ({
-                                        ...prev,
-                                        selectedSubjects: coreSubjects.map(s => s.id),
-                                    }));
-                                    setStep(3);
-                                } else { handleRegister(); }
-                            } else {
+                                setForm(prev => ({
+                                    ...prev,
+                                    selectedSubjects: isUpperGrade ? prev.selectedSubjects : gradeSubjects.map(s => s.id),
+                                }));
+                                setStep(3);
+                            } else if (step === 3) {
                                 if (form.selectedSubjects.length === 0) {
                                     toast.error("Select at least one subject for this learner.");
+                                    return;
+                                }
+                                // Pre-select first available class for each subject to make it easier
+                                const initialClasses: Record<string, string> = { ...form.selectedClassIds };
+                                form.selectedSubjects.forEach(subId => {
+                                    if (!initialClasses[subId]) {
+                                        const first = subjectClasses.find(sc => sc.subjectId === subId && sc.gradeId === form.gradeId);
+                                        if (first) initialClasses[subId] = first.id;
+                                    }
+                                });
+                                setForm(prev => ({ ...prev, selectedClassIds: initialClasses }));
+                                setStep(4);
+                            } else {
+                                const unplacedSubjects = form.selectedSubjects.filter(subId => !form.selectedClassIds[subId]);
+                                if (unplacedSubjects.length > 0) {
+                                    const names = unplacedSubjects.map(id => subjects.find(s => s.id === id)?.name).join(", ");
+                                    toast.error(`Please select a class for: ${names}`);
                                     return;
                                 }
                                 handleRegister(form.selectedSubjects);
                             }
                         }}
                         className={cn("h-14 px-10 font-black rounded-xl gap-2 text-lg shadow-lg transition-all",
-                            step === 3 || (!isUpperGrade && step === 2) ? "bg-green-600 hover:bg-green-700 shadow-green-500/20" : "bg-primary hover:bg-primary/90 shadow-primary/20"
+                            step === 4 ? "bg-green-600 hover:bg-green-700 shadow-green-500/20" : "bg-primary hover:bg-primary/90 shadow-primary/20"
                         )}
                     >
-                        {step === 3 || (!isUpperGrade && step === 2) ? "Complete Enrollment" : "Next Phase"}
-                        {step < 3 && !(!isUpperGrade && step === 2) && <ChevronRight className="h-5 w-5" />}
-                        {(step === 3 || (!isUpperGrade && step === 2)) && <CheckCircle2 className="h-5 w-5" />}
+                        {step === 4 ? "Complete Enrollment" : "Next Phase"}
+                        {step < 4 && <ChevronRight className="h-5 w-5" />}
+                        {step === 4 && <CheckCircle2 className="h-5 w-5" />}
                     </Button>
                 </CardFooter>
             </Card>
