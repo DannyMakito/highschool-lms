@@ -1,5 +1,5 @@
 
-import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import RoleLayout from "@/layouts/RoleLayout";
 import StudentLayout from "@/layouts/StudentLayout";
@@ -11,6 +11,7 @@ import StudentSubjectOutline from "@/pages/dashboard/student/StudentSubjectOutli
 import LessonView from "@/pages/dashboard/student/LessonView";
 import TeacherDashboard from "@/pages/dashboard/teacher/TeacherDashboard";
 import PrincipalDashboard from "@/pages/dashboard/principal/PrincipalDashboard";
+import AnalyticsDashboard from "@/pages/dashboard/principal/AnalyticsDashboard";
 import SubjectManagement from "@/pages/dashboard/shared/SubjectManagement";
 import SubjectDetail from "@/pages/dashboard/shared/SubjectDetail";
 import CreateQuiz from "@/pages/dashboard/teacher/CreateQuiz";
@@ -46,6 +47,28 @@ import GradingQueue from "@/pages/dashboard/teacher/GradingQueue";
 
 
 import { Toaster } from "@/components/ui/sonner";
+import { TutorWidget } from "./components/tutor";
+
+// Component to conditionally show TutorWidget
+function ConditionalTutorWidget() {
+  const location = useLocation();
+  
+  // Hide tutor widget only during student quiz-taking activities
+  const isStudentTakingQuiz = location.pathname.includes('/student/quizzes/') && location.pathname.includes('/take');
+  
+  // Hide on quiz list pages for students
+  const isStudentQuizList = location.pathname === '/student/quizzes';
+  
+  // Hide on quiz detail pages for students (viewing quiz before taking)
+  const isStudentQuizDetail = location.pathname.match(/\/student\/quizzes\/[^/]+\/?$/) && !location.pathname.includes('/take');
+  
+  // Keep visible during quiz creation for teachers & principals
+  const shouldHideTutor = isStudentTakingQuiz || isStudentQuizList || isStudentQuizDetail;
+  
+  if (shouldHideTutor) return null;
+  
+  return <TutorWidget />;
+}
 
 export function App() {
   return (
@@ -74,8 +97,11 @@ export function App() {
             <Route path="assignments/:id" element={<AssignmentView />} />
             <Route path="subjects/:id/discussions" element={<Discussions />} />
             <Route path="subjects/:id/discussions/create" element={<DiscussionForm />} />
+            <Route path="subjects/:id/discussions/edit/:discussionId" element={<DiscussionForm />} />
             <Route path="subjects/:id/discussions/view/:discussionId" element={<DiscussionView />} />
             <Route path="discussions" element={<Discussions />} />
+            <Route path="discussions/create" element={<DiscussionForm />} />
+            <Route path="discussions/edit/:discussionId" element={<DiscussionForm />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route index element={<Navigate to="dashboard" replace />} />
@@ -99,6 +125,7 @@ export function App() {
             <Route path="subjects/:id/discussions/edit/:discussionId" element={<DiscussionForm />} />
             <Route path="discussions" element={<Discussions />} />
             <Route path="discussions/create" element={<DiscussionForm />} />
+            <Route path="discussions/edit/:discussionId" element={<DiscussionForm />} />
             <Route path="subjects/:id/discussions/view/:discussionId" element={<DiscussionView />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
@@ -109,6 +136,7 @@ export function App() {
           {/* Principal Routes */}
           <Route path="/principal" element={<PrincipalLayout />}>
             <Route path="dashboard" element={<PrincipalDashboard />} />
+            <Route path="analytics" element={<AnalyticsDashboard />} />
             <Route path="subjects" element={<SubjectManagement />} />
             <Route path="subjects/:id" element={<SubjectDetail />} />
             <Route path="subjects/:id/quizzes/create" element={<CreateQuiz />} />
@@ -120,12 +148,20 @@ export function App() {
             <Route path="subject-classes" element={<SubjectClassManagement />} />
             <Route path="grades" element={<GradeManagement />} />
             <Route path="directory" element={<StudentDirectory />} />
+            <Route path="subjects/:id/discussions" element={<Discussions />} />
+            <Route path="subjects/:id/discussions/create" element={<DiscussionForm />} />
+            <Route path="subjects/:id/discussions/edit/:discussionId" element={<DiscussionForm />} />
+            <Route path="subjects/:id/discussions/view/:discussionId" element={<DiscussionView />} />
+            <Route path="discussions" element={<Discussions />} />
+            <Route path="discussions/create" element={<DiscussionForm />} />
+            <Route path="discussions/edit/:discussionId" element={<DiscussionForm />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
 
         </Routes>
+        <ConditionalTutorWidget />
       </AuthProvider>
     </HashRouter>
   );

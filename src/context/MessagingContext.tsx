@@ -71,6 +71,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
                 setDiscussions((discRes.data || []).map(d => ({
                     ...d,
                     subjectId: d.subject_id,
+                    subjectClassId: d.subject_class_id,
                     authorId: d.author_id,
                     isPinned: d.is_pinned ?? d.isPinned ?? false,
                     isClosed: d.is_closed ?? d.isClosed ?? false,
@@ -86,6 +87,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
                     authorAvatar: (d as any).profiles?.avatar_url || '',
                     readByUsers: d.read_by_users || [],
                     subscribedUserIds: d.subscribed_user_ids || [],
+                    isDeleted: d.is_deleted,
+                    deletedByRole: d.deleted_by_role,
                     createdAt: d.created_at,
                     updatedAt: d.updated_at
                 })));
@@ -152,6 +155,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
             .from('discussions')
             .insert({
                 subject_id: discussion.subjectId,
+                subject_class_id: discussion.subjectClassId,
                 title: discussion.title,
                 content: discussion.content,
                 author_id: discussion.authorId,
@@ -175,6 +179,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         const mappedD: Discussion = {
             ...newD,
             subjectId: newD.subject_id,
+            subjectClassId: newD.subject_class_id,
             authorId: newD.author_id,
             isPinned: newD.is_pinned ?? false,
             isClosed: newD.is_closed ?? false,
@@ -207,6 +212,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         if (updates.requirePostBeforeView !== undefined) dbUpdates.require_post_before_view = updates.requirePostBeforeView;
         if (updates.isGroup !== undefined) dbUpdates.is_group = updates.isGroup;
         if (updates.groupId !== undefined) dbUpdates.group_id = updates.groupId;
+        if (updates.subjectClassId !== undefined) dbUpdates.subject_class_id = updates.subjectClassId;
         if (updates.availableFrom !== undefined) dbUpdates.available_from = updates.availableFrom;
         if (updates.availableUntil !== undefined) dbUpdates.available_until = updates.availableUntil || null;
         if (updates.allowThreadedReplies !== undefined) dbUpdates.allow_threaded_replies = updates.allowThreadedReplies;
@@ -219,11 +225,32 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     };
 
     const deleteDiscussion = async (id: string) => {
-        const { error } = await supabase.from('discussions').delete().eq('id', id);
-        if (error) throw error;
+        const disc = discussions.find(d => d.id === id);
+        if (!disc) return;
 
-        setDiscussions(prev => prev.filter(d => d.id !== id));
-        setReplies(prev => prev.filter(r => r.discussionId !== id));
+        // Soft delete if teacher/principal is deleting someone else's post
+        if ((user?.role === 'teacher' || user?.role === 'principal') && disc.authorId !== user?.id) {
+            const { error } = await supabase
+                .from('discussions')
+                .update({ 
+                    is_deleted: true, 
+                    deleted_by_role: user.role 
+                })
+                .eq('id', id);
+            
+            if (error) throw error;
+
+            setDiscussions(prev => prev.map(d => 
+                d.id === id ? { ...d, isDeleted: true, deletedByRole: user.role } : d
+            ));
+        } else {
+            // Hard delete for own posts or when student deletes their own
+            const { error } = await supabase.from('discussions').delete().eq('id', id);
+            if (error) throw error;
+
+            setDiscussions(prev => prev.filter(d => d.id !== id));
+            setReplies(prev => prev.filter(r => r.discussionId !== id));
+        }
     };
 
     const addReply = async (reply: Omit<DiscussionReply, 'id' | 'createdAt' | 'likes' | 'readByUsers'>) => {

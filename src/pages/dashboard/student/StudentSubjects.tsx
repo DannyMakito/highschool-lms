@@ -47,7 +47,7 @@ export default function StudentSubjects() {
     return (
         <div className="space-y-8 max-w-7xl mx-auto">
             <div className="flex flex-col gap-2">
-                <h1 className="text-4xl font-black tracking-tight">My Courses</h1>
+                <h1 className="text-4xl font-black text-slate-800 tracking-tight">My Courses</h1>
                 <p className="text-muted-foreground">Courses you've started learning. Pick up where you left off.</p>
             </div>
 

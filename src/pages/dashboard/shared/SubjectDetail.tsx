@@ -426,7 +426,10 @@ export default function SubjectDetail() {
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                    <Button variant="outline" className="border-indigo-200 hover:bg-indigo-50 text-indigo-600" onClick={() => navigate(`/teacher/subjects/${id}/discussions`)}>
+                    <Button variant="outline" className="border-indigo-200 hover:bg-indigo-50 text-indigo-600" onClick={() => {
+                        const prefix = user?.role === 'learner' ? '/student' : user?.role === 'principal' ? '/principal' : '/teacher';
+                        navigate(`${prefix}/subjects/${id}/discussions`);
+                    }}>
                         <MessageSquare className="mr-2 h-4 w-4" />
                         Discussions
                     </Button>

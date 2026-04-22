@@ -17,7 +17,8 @@ import {
     Bell,
     CheckCircle2,
     ChevronRight,
-    Filter
+    Filter,
+    Trash2
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,9 @@ interface DiscussionItemProps {
     navigate: (path: string) => void;
     isTeacher: boolean;
     user: any;
+    subjectClasses: any[];
+    onDelete?: (discussionId: string) => void;
+    isTeacherOfClass?: boolean;
 }
 
 const DiscussionItem = ({ 
@@ -48,8 +52,29 @@ const DiscussionItem = ({
     role, 
     navigate, 
     isTeacher,
-    user
+    user,
+    subjectClasses,
+    onDelete,
+    isTeacherOfClass
 }: DiscussionItemProps) => {
+    const subjectClass = subjectClasses.find(sc => sc.id === discussion.subjectClassId);
+
+    if (discussion.isDeleted) {
+        return (
+            <div className="flex items-center justify-between p-4 border-b bg-slate-50/50 italic text-slate-400">
+                <div className="flex items-center gap-3">
+                    <Trash2 className="w-4 h-4 text-slate-300" />
+                    <span className="text-sm">This discussion was deleted by a {discussion.deletedByRole || 'teacher'}.</span>
+                </div>
+                {!subjectId && (
+                    <Badge variant="outline" className="text-[10px] py-0 px-1 border-slate-200 text-slate-300">
+                        {subjects.find(s => s.id === discussion.subjectId)?.name || 'Unknown Subject'}
+                    </Badge>
+                )}
+            </div>
+        );
+    }
+
     return (
         <div
             className="group flex items-center justify-between p-4 border-b hover:bg-slate-50 cursor-pointer bg-white transition-colors"
@@ -78,6 +103,11 @@ const DiscussionItem = ({
                                 {subjects.find(s => s.id === discussion.subjectId)?.name || 'Unknown Subject'}
                             </Badge>
                         )}
+                        {subjectClass && (
+                            <Badge variant="secondary" className="text-[10px] py-0 px-1 bg-slate-100 text-slate-500 font-bold tracking-tight">
+                                {subjectClass.name}
+                            </Badge>
+                        )}
                         <span>Last post {format(new Date(discussion.updatedAt), 'MMM d, yyyy')}</span>
                         {discussion.availableUntil && (
                             <span className="text-slate-400">Available until {format(new Date(discussion.availableUntil), 'MMM d')}</span>
@@ -104,13 +134,18 @@ const DiscussionItem = ({
                     </Badge>
                 </div>
 
-                {isTeacher && (
+                {isTeacherOfClass && (
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (onDelete) onDelete(discussion.id);
+                        }}
+                        title="Delete discussion"
                     >
-                        <Settings className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" />
                     </Button>
                 )}
             </div>
@@ -129,7 +164,8 @@ const Discussions: React.FC = () => {
         discussions, 
         replies, 
         loading, 
-        markAsRead 
+        markAsRead,
+        deleteDiscussion
     } = useDiscussions(subjectId);
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -137,6 +173,9 @@ const Discussions: React.FC = () => {
 
     const isTeacher = role === 'teacher' || role === 'principal';
     const rolePrefix = getRolePathPrefix(role);
+    const discussionCreatePath = subjectId
+        ? `${rolePrefix}/subjects/${subjectId}/discussions/create`
+        : `${rolePrefix}/discussions/create`;
 
     const visibleGroupIds = React.useMemo(() => {
         if (!user) return [];
@@ -157,6 +196,22 @@ const Discussions: React.FC = () => {
             return visibleGroupIds.includes(discussion.groupId);
         });
     }, [discussions, visibleGroupIds]);
+
+    const handleDeleteDiscussion = async (discussionId: string) => {
+        if (window.confirm('Are you sure you want to delete this discussion? This action cannot be undone.')) {
+            try {
+                await deleteDiscussion(discussionId);
+            } catch (error) {
+                console.error('Failed to delete discussion:', error);
+            }
+        }
+    };
+
+    const isTeacherOfClass = (discussion: Discussion) => {
+        if (!isTeacher) return false;
+        const subjectClass = subjectClasses.find(sc => sc.id === discussion.subjectClassId);
+        return subjectClass && subjectClass.teacherId === user?.id;
+    };
 
     const getRepliesCount = (discussionId: string) => {
         return replies.filter(r => r.discussionId === discussionId).length;
@@ -218,10 +273,10 @@ const Discussions: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {(isTeacher || (role === 'learner' && !!subjectId)) && (
+                    {(isTeacher || role === 'learner') && (
                         <Button
                             className="bg-blue-600 hover:bg-blue-700 text-white rounded shadow-sm flex items-center gap-2"
-                            onClick={() => navigate(`${rolePrefix}/subjects/${subjectId}/discussions/create`)}
+                            onClick={() => navigate(discussionCreatePath)}
                         >
                             <Plus className="w-4 h-4" />
                             Discussion
@@ -237,7 +292,7 @@ const Discussions: React.FC = () => {
             {pinnedDiscussions.length > 0 && (
                 <div className="mb-8 border rounded overflow-hidden">
                     <div className="bg-slate-100 px-4 py-2 border-b flex items-center gap-2">
-                        <chevronright className="w-4 h-4 text-slate-400" />
+                        <ChevronRight className="w-4 h-4 text-slate-400" />
                         <h3 className="text-sm font-bold text-slate-700">Pinned Discussions</h3>
                     </div>
                     {pinnedDiscussions.map(d => (
@@ -253,6 +308,9 @@ const Discussions: React.FC = () => {
                             navigate={navigate}
                             isTeacher={isTeacher}
                             user={user}
+                            subjectClasses={subjectClasses}
+                            onDelete={handleDeleteDiscussion}
+                            isTeacherOfClass={isTeacherOfClass(d)}
                         />
                     ))}
                 </div>
@@ -281,6 +339,9 @@ const Discussions: React.FC = () => {
                             navigate={navigate}
                             isTeacher={isTeacher}
                             user={user}
+                            subjectClasses={subjectClasses}
+                            onDelete={handleDeleteDiscussion}
+                            isTeacherOfClass={isTeacherOfClass(d)}
                         />
                     ))
                 ) : (
@@ -310,6 +371,9 @@ const Discussions: React.FC = () => {
                             navigate={navigate}
                             isTeacher={isTeacher}
                             user={user}
+                            subjectClasses={subjectClasses}
+                            onDelete={handleDeleteDiscussion}
+                            isTeacherOfClass={isTeacherOfClass(d)}
                         />
                     ))}
                 </div>

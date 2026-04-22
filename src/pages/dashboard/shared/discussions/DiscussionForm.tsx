@@ -18,7 +18,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import TinyMCEEditor from '@/components/shared/TinyMCEEditor';
-import { Calendar as CalendarIcon, Save, X, BookOpen } from 'lucide-react';
+import { Calendar as CalendarIcon, Save, X, BookOpen, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { getRolePathPrefix } from '@/lib/role-path';
 
@@ -134,6 +134,7 @@ const DiscussionForm: React.FC = () => {
         const data = {
             ...formData,
             subjectId: finalSubjectId,
+            subjectClassId: finalGroupId,
             groupId: finalGroupId,
             authorId: user?.id || '1',
             authorName: user?.name || 'Instructor',
@@ -149,6 +150,7 @@ const DiscussionForm: React.FC = () => {
             addDiscussion(data);
             toast.success('Discussion created');
         }
+
 
         navigate(`${rolePrefix}/subjects/${finalSubjectId}/discussions`);
     };
@@ -222,6 +224,8 @@ const DiscussionForm: React.FC = () => {
                         className="text-lg font-semibold h-12 border-slate-300"
                     />
                 </div>
+
+
 
                 <div className="space-y-2">
                     <TinyMCEEditor

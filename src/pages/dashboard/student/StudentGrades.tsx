@@ -380,7 +380,7 @@ export default function StudentGrades() {
     return (
         <div className="w-full px-4 py-6 md:px-8 lg:px-12 space-y-8">
             <div className="flex flex-col gap-2">
-                <h1 className="text-4xl font-extrabold tracking-tight">My Grades</h1>
+                <h1 className="text-4xl font-black text-slate-800  font-extrabold tracking-tight">My Grades</h1>
                 <p className="text-xl text-muted-foreground mt-2">
                     Open a subject to see its gradebook setup, assessment list, and how each result feeds into your term and year mark.
                 </p>

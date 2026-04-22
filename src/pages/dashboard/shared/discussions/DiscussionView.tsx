@@ -8,6 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import TinyMCEEditor from '@/components/shared/TinyMCEEditor';
 import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
     Reply as ReplyIcon,
     ThumbsUp,
     ThumbsDown,
@@ -16,7 +22,8 @@ import {
     MoreHorizontal,
     CheckCircle,
     Bell,
-    ChevronLeft
+    ChevronLeft,
+    Trash2
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
@@ -199,7 +206,8 @@ const DiscussionView: React.FC = () => {
         addReply,
         toggleLike,
         markAsRead,
-        toggleSubscription
+        toggleSubscription,
+        deleteDiscussion
     } = useDiscussions(subjectId);
     const rolePrefix = getRolePathPrefix(role);
 
@@ -224,6 +232,7 @@ const DiscussionView: React.FC = () => {
         return visibleGroupIds.includes(d.groupId);
     });
     const discussionReplies = replies.filter(r => r.discussionId === discussionId);
+    const subjectClass = subjectClasses.find(sc => sc.id === discussion?.subjectClassId);
 
     useEffect(() => {
         if (discussion && user) {
@@ -231,11 +240,61 @@ const DiscussionView: React.FC = () => {
         }
     }, [discussion?.id, user?.id]);
 
-    if (!discussion) return <div>Discussion not found</div>;
+    if (!discussion) return <div className="p-12 text-center text-slate-500 font-medium">Discussion not found</div>;
+
+    if (discussion.isDeleted) {
+        return (
+            <div className="w-full px-4 md:px-8 lg:px-12 py-20 text-center space-y-6 animate-in fade-in zoom-in duration-300">
+                <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Trash2 className="w-10 h-10 text-slate-300" />
+                </div>
+                <div className="space-y-2">
+                    <h1 className="text-3xl font-black text-slate-400 tracking-tight">Post Removed</h1>
+                    <p className="text-slate-500 max-w-md mx-auto italic text-lg leading-relaxed font-serif">
+                        "This discussion was deleted by a {discussion.deletedByRole || 'teacher'}"
+                    </p>
+                </div>
+                <div className="pt-4">
+                    <Button 
+                        variant="outline" 
+                        onClick={() => navigate(-1)}
+                        className="rounded-full px-8 border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all"
+                    >
+                        <ChevronLeft className="w-4 h-4 mr-2" />
+                        Return to Discussions
+                    </Button>
+                </div>
+            </div>
+        );
+    }
 
     const isSubscribed = user && discussion.subscribedUserIds.includes(user.id);
     const hasPosted = user && (role === 'teacher' || role === 'principal' || discussionReplies.some(r => r.authorId === user.id));
     const showReplies = !discussion.requirePostBeforeView || hasPosted;
+    
+    const isTeacher = role === 'teacher' || role === 'principal';
+    const isTeacherOfClass = isTeacher && subjectClass && subjectClass.teacherId === user?.id;
+
+    const handleDeleteDiscussion = async () => {
+        if (window.confirm('Are you sure you want to delete this discussion? This action cannot be undone.')) {
+            try {
+                await deleteDiscussion(discussion.id);
+                toast.success('Discussion deleted');
+                // Navigate back to discussions list
+                const prefix = role === 'learner' ? '/student' : '/teacher';
+                if (subjectId) {
+                    navigate(`${prefix}/subjects/${subjectId}/discussions`);
+                } else if (discussion?.subjectId) {
+                    navigate(`${prefix}/subjects/${discussion.subjectId}/discussions`);
+                } else {
+                    navigate(`${prefix}/discussions`);
+                }
+            } catch (error) {
+                console.error('Failed to delete discussion:', error);
+                toast.error('Failed to delete discussion');
+            }
+        }
+    };
 
     const handlePostReply = (parentId?: string) => {
         if (!replyContent) {
@@ -292,6 +351,14 @@ const DiscussionView: React.FC = () => {
                             <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 mb-1 tracking-tight">{discussion.title}</h1>
                             <div className="flex items-center gap-2">
                                 <span className="font-bold text-blue-600 text-sm">{discussion.authorName || 'Instructor'}</span>
+                                {subjectClass && (
+                                    <>
+                                        <span className="text-slate-300">·</span>
+                                        <span className="text-xs font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                            {subjectClass.name}
+                                        </span>
+                                    </>
+                                )}
                                 <span className="text-slate-300">·</span>
                                 <span className="text-xs text-slate-400 font-medium">{formatDistanceToNow(new Date(discussion.createdAt), { addSuffix: true })}</span>
                             </div>
@@ -306,9 +373,24 @@ const DiscussionView: React.FC = () => {
                             <Bell className={cn("w-3.5 h-3.5 mr-2", isSubscribed ? "text-green-600 fill-current" : "text-slate-400")} />
                             {isSubscribed ? "Subscribed" : "Notify Me"}
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-slate-400 hover:bg-slate-100">
-                            <MoreHorizontal className="w-4 h-4" />
-                        </Button>
+                        {isTeacherOfClass && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-slate-400 hover:bg-slate-100">
+                                        <MoreHorizontal className="w-4 h-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48">
+                                    <DropdownMenuItem
+                                        className="text-red-600 cursor-pointer flex items-center gap-2"
+                                        onClick={handleDeleteDiscussion}
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                        Delete Discussion
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
                     </div>
                 </div>
 
