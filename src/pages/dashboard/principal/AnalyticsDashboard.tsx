@@ -1,13 +1,28 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  BookOpen,
+  Clock,
+  Gauge,
+  RefreshCcw,
+  TrendingUp,
+  UserCheck,
+  Users,
+} from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -16,502 +31,742 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Users,
-  BookOpen,
-  TrendingUp,
-  Clock,
-  FileText,
-  MessageSquare,
-  AlertTriangle,
-  Zap,
-  Activity,
-  Target,
-  BarChart3,
-  Eye
-} from "lucide-react";
-import { useState, useEffect } from 'react';
-import supabase from '@/lib/supabase';
-import { Skeleton } from "@/components/ui/skeleton";
+import supabase from "@/lib/supabase";
 
-interface AnalyticsData {
-  // Adoption
+type SessionEvent = {
+  userId: string;
+  loginAt: string;
+  logoutAt?: string;
+  durationSeconds?: number;
+};
+
+type ContentEvent = {
+  userId: string;
+  contentType: string;
+  contentId: string;
+  action: string;
+  timestamp: string;
+};
+
+type TeacherEvent = {
+  teacherId: string;
+  action: string;
+  contentId: string;
+  timestamp: string;
+};
+
+type SystemEvent = {
+  eventType: string;
+  details: unknown;
+  timestamp: string;
+};
+
+type DailyTrend = {
+  day: string;
+  logins: number;
+  interactions: number;
+  submissions: number;
+};
+
+type ActivityItem = {
+  id: string;
+  category: "login" | "engagement" | "teacher" | "system";
+  label: string;
+  timestamp: string;
+};
+
+type AnalyticsSnapshot = {
   totalLoginsToday: number;
   uniqueActiveUsersToday: number;
   studentsLoggedInWeekly: number;
   totalStudents: number;
   teachersActiveWeekly: number;
   totalTeachers: number;
-
-  // Engagement
   lessonsOpenedToday: number;
-  averageSessionDuration: number;
+  lessonCompletionsToday: number;
   assignmentSubmissionsToday: number;
   totalAssignments: number;
-
-  // Teacher Activity
   lessonsUploadedToday: number;
   assignmentsCreatedToday: number;
   feedbackGivenToday: number;
+  errorsToday: number;
+  averageLoadTimeMs: number;
+  averageSessionMinutes: number;
+  trends: DailyTrend[];
+  actionBreakdown: Array<{ label: string; value: number }>;
+  recentActivity: ActivityItem[];
+  recentSessions: SessionEvent[];
+  recentInteractions: ContentEvent[];
+  sourceHints: string[];
+};
 
-  // Performance
-  errorRate: number;
-  averageLoadTime: number;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function parseDurationToSeconds(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, value);
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const asNumber = Number(trimmed);
+    if (!Number.isNaN(asNumber)) {
+      return Math.max(0, asNumber);
+    }
+
+    const match = trimmed.match(/(\d+(?:\.\d+)?)/);
+    if (match) {
+      return Math.max(0, Number(match[1]));
+    }
+  }
+
+  return undefined;
 }
 
-interface LoginDetail {
-  user_id: string;
-  login_time: string;
-  logout_time?: string;
-  session_duration?: string;
-  user_name?: string;
-  user_role?: string;
+function isValidIso(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime());
 }
 
-interface ContentInteractionDetail {
-  user_id: string;
-  content_type: string;
-  content_id: string;
-  action: string;
-  timestamp: string;
-  duration?: string;
-  user_name?: string;
+function getEventDate(value: string): Date {
+  return new Date(value);
 }
 
-interface TeacherActivityDetail {
-  teacher_id: string;
-  action: string;
-  content_id: string;
-  timestamp: string;
-  teacher_name?: string;
+function normalizeAction(action: string): string {
+  const normalized = action.toLowerCase().trim();
+  if (normalized === "viewed") return "open";
+  if (normalized === "completed") return "complete";
+  return normalized;
 }
 
-interface SystemPerformanceDetail {
-  event_type: string;
-  details: any;
-  timestamp: string;
+function actionLabel(action: string): string {
+  switch (normalizeAction(action)) {
+    case "open":
+      return "Opened";
+    case "complete":
+      return "Completed";
+    case "submitted":
+      return "Submitted";
+    case "watched":
+      return "Watched";
+    case "lesson_uploaded":
+      return "Lesson Uploaded";
+    case "assignment_created":
+      return "Assignment Created";
+    case "feedback_given":
+      return "Feedback Given";
+    default:
+      return action.replace(/_/g, " ");
+  }
 }
 
-type DetailData = LoginDetail[] | ContentInteractionDetail[] | TeacherActivityDetail[] | SystemPerformanceDetail[];
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleString();
+}
+
+async function tryQueryWithTimestamp(
+  table: string,
+  select: string,
+  timestampColumn: string,
+  sinceIso: string
+) {
+  const { data, error } = await supabase
+    .from(table)
+    .select(select)
+    .gte(timestampColumn, sinceIso)
+    .order(timestampColumn, { ascending: false })
+    .limit(2000);
+
+  if (error) {
+    return null;
+  }
+
+  return data ?? [];
+}
+
+async function fetchSessionEvents(sinceIso: string): Promise<{ rows: SessionEvent[]; sourceHint: string }> {
+  const attempts = [
+    {
+      select: "user_id,login_time,logout_time,session_duration",
+      time: "login_time",
+      sourceHint: "user_sessions.login_time",
+      map: (row: Record<string, unknown>): SessionEvent | null => {
+        if (!isValidIso(row.login_time)) return null;
+        return {
+          userId: String(row.user_id ?? ""),
+          loginAt: row.login_time,
+          logoutAt: isValidIso(row.logout_time) ? row.logout_time : undefined,
+          durationSeconds: parseDurationToSeconds(row.session_duration),
+        };
+      },
+    },
+    {
+      select: "user_id,login_at,created_at,session_duration",
+      time: "login_at",
+      sourceHint: "user_sessions.login_at",
+      map: (row: Record<string, unknown>): SessionEvent | null => {
+        const loginAt = isValidIso(row.login_at)
+          ? row.login_at
+          : isValidIso(row.created_at)
+            ? row.created_at
+            : null;
+        if (!loginAt) return null;
+        return {
+          userId: String(row.user_id ?? ""),
+          loginAt,
+          durationSeconds: parseDurationToSeconds(row.session_duration),
+        };
+      },
+    },
+    {
+      select: "user_id,session_start,session_end,session_duration,created_at",
+      time: "session_start",
+      sourceHint: "user_sessions.session_start",
+      map: (row: Record<string, unknown>): SessionEvent | null => {
+        const loginAt = isValidIso(row.session_start)
+          ? row.session_start
+          : isValidIso(row.created_at)
+            ? row.created_at
+            : null;
+        if (!loginAt) return null;
+        return {
+          userId: String(row.user_id ?? ""),
+          loginAt,
+          logoutAt: isValidIso(row.session_end) ? row.session_end : undefined,
+          durationSeconds: parseDurationToSeconds(row.session_duration),
+        };
+      },
+    },
+    {
+      select: "user_id,action,event_type,occurred_at,created_at",
+      time: "created_at",
+      sourceHint: "user_sessions.created_at",
+      map: (row: Record<string, unknown>): SessionEvent | null => {
+        const candidateType = String(row.action ?? row.event_type ?? "").toLowerCase();
+        if (candidateType && candidateType !== "login") return null;
+
+        const loginAt = isValidIso(row.occurred_at)
+          ? row.occurred_at
+          : isValidIso(row.created_at)
+            ? row.created_at
+            : null;
+        if (!loginAt) return null;
+
+        return {
+          userId: String(row.user_id ?? ""),
+          loginAt,
+        };
+      },
+    },
+    {
+      select: "user_id,created_at",
+      time: "created_at",
+      sourceHint: "user_sessions.created_at",
+      map: (row: Record<string, unknown>): SessionEvent | null => {
+        if (!isValidIso(row.created_at)) return null;
+        return {
+          userId: String(row.user_id ?? ""),
+          loginAt: row.created_at,
+        };
+      },
+    },
+  ];
+
+  for (const attempt of attempts) {
+    const data = await tryQueryWithTimestamp("user_sessions", attempt.select, attempt.time, sinceIso);
+    if (!data) continue;
+
+    const rows = data
+      .map((row) => attempt.map(row as Record<string, unknown>))
+      .filter((row): row is SessionEvent => !!row && !!row.userId);
+    return { rows, sourceHint: attempt.sourceHint };
+  }
+
+  return { rows: [], sourceHint: "user_sessions.unavailable" };
+}
+
+async function fetchContentEvents(sinceIso: string): Promise<{ rows: ContentEvent[]; sourceHint: string }> {
+  const attempts = [
+    {
+      select: "user_id,content_type,content_id,action,timestamp",
+      time: "timestamp",
+      sourceHint: "content_interactions.timestamp",
+      map: (row: Record<string, unknown>): ContentEvent | null => {
+        if (!isValidIso(row.timestamp)) return null;
+        const action = String(row.action ?? "").toLowerCase();
+        return {
+          userId: String(row.user_id ?? ""),
+          contentType: String(row.content_type ?? "unknown").toLowerCase(),
+          contentId: String(row.content_id ?? "unknown"),
+          action,
+          timestamp: row.timestamp,
+        };
+      },
+    },
+    {
+      select: "user_id,content_type,content_id,interaction_type,created_at",
+      time: "created_at",
+      sourceHint: "content_interactions.interaction_type",
+      map: (row: Record<string, unknown>): ContentEvent | null => {
+        if (!isValidIso(row.created_at)) return null;
+        return {
+          userId: String(row.user_id ?? ""),
+          contentType: String(row.content_type ?? "lesson").toLowerCase(),
+          contentId: String(row.content_id ?? "unknown"),
+          action: String(row.interaction_type ?? "open").toLowerCase(),
+          timestamp: row.created_at,
+        };
+      },
+    },
+    {
+      select: "user_id,lesson_id,interaction_type,created_at",
+      time: "created_at",
+      sourceHint: "content_interactions.lesson_id",
+      map: (row: Record<string, unknown>): ContentEvent | null => {
+        if (!isValidIso(row.created_at)) return null;
+        return {
+          userId: String(row.user_id ?? ""),
+          contentType: "lesson",
+          contentId: String(row.lesson_id ?? "unknown"),
+          action: String(row.interaction_type ?? "open").toLowerCase(),
+          timestamp: row.created_at,
+        };
+      },
+    },
+    {
+      select: "user_id,content_id,action,occurred_at",
+      time: "occurred_at",
+      sourceHint: "content_interactions.occurred_at",
+      map: (row: Record<string, unknown>): ContentEvent | null => {
+        if (!isValidIso(row.occurred_at)) return null;
+        return {
+          userId: String(row.user_id ?? ""),
+          contentType: "lesson",
+          contentId: String(row.content_id ?? "unknown"),
+          action: String(row.action ?? "open").toLowerCase(),
+          timestamp: row.occurred_at,
+        };
+      },
+    },
+  ];
+
+  for (const attempt of attempts) {
+    const data = await tryQueryWithTimestamp("content_interactions", attempt.select, attempt.time, sinceIso);
+    if (!data) continue;
+
+    const rows = data
+      .map((row) => attempt.map(row as Record<string, unknown>))
+      .filter((row): row is ContentEvent => !!row && !!row.userId);
+    return { rows, sourceHint: attempt.sourceHint };
+  }
+
+  return { rows: [], sourceHint: "content_interactions.unavailable" };
+}
+
+async function fetchTeacherEvents(sinceIso: string): Promise<{ rows: TeacherEvent[]; sourceHint: string }> {
+  const attempts = [
+    {
+      select: "teacher_id,action,content_id,timestamp",
+      time: "timestamp",
+      sourceHint: "teacher_activities.timestamp",
+      map: (row: Record<string, unknown>): TeacherEvent | null => {
+        if (!isValidIso(row.timestamp)) return null;
+        return {
+          teacherId: String(row.teacher_id ?? ""),
+          action: String(row.action ?? "").toLowerCase(),
+          contentId: String(row.content_id ?? "unknown"),
+          timestamp: row.timestamp,
+        };
+      },
+    },
+    {
+      select: "teacher_id,action,content_id,created_at",
+      time: "created_at",
+      sourceHint: "teacher_activities.created_at",
+      map: (row: Record<string, unknown>): TeacherEvent | null => {
+        if (!isValidIso(row.created_at)) return null;
+        return {
+          teacherId: String(row.teacher_id ?? ""),
+          action: String(row.action ?? "").toLowerCase(),
+          contentId: String(row.content_id ?? "unknown"),
+          timestamp: row.created_at,
+        };
+      },
+    },
+  ];
+
+  for (const attempt of attempts) {
+    const data = await tryQueryWithTimestamp("teacher_activities", attempt.select, attempt.time, sinceIso);
+    if (!data) continue;
+
+    const rows = data
+      .map((row) => attempt.map(row as Record<string, unknown>))
+      .filter((row): row is TeacherEvent => !!row && !!row.teacherId);
+    return { rows, sourceHint: attempt.sourceHint };
+  }
+
+  return { rows: [], sourceHint: "teacher_activities.unavailable" };
+}
+
+async function fetchSystemEvents(sinceIso: string): Promise<{ rows: SystemEvent[]; sourceHint: string }> {
+  const attempts = [
+    {
+      select: "event_type,details,timestamp",
+      time: "timestamp",
+      sourceHint: "system_performance.timestamp",
+      map: (row: Record<string, unknown>): SystemEvent | null => {
+        if (!isValidIso(row.timestamp)) return null;
+        return {
+          eventType: String(row.event_type ?? "unknown").toLowerCase(),
+          details: row.details,
+          timestamp: row.timestamp,
+        };
+      },
+    },
+    {
+      select: "event_type,details,created_at",
+      time: "created_at",
+      sourceHint: "system_performance.created_at",
+      map: (row: Record<string, unknown>): SystemEvent | null => {
+        if (!isValidIso(row.created_at)) return null;
+        return {
+          eventType: String(row.event_type ?? "unknown").toLowerCase(),
+          details: row.details,
+          timestamp: row.created_at,
+        };
+      },
+    },
+  ];
+
+  for (const attempt of attempts) {
+    const data = await tryQueryWithTimestamp("system_performance", attempt.select, attempt.time, sinceIso);
+    if (!data) continue;
+
+    const rows = data
+      .map((row) => attempt.map(row as Record<string, unknown>))
+      .filter((row): row is SystemEvent => !!row);
+    return { rows, sourceHint: attempt.sourceHint };
+  }
+
+  return { rows: [], sourceHint: "system_performance.unavailable" };
+}
+
+async function fetchCountFromTable(
+  table: string,
+  select: string,
+  timeColumn: string,
+  sinceIso: string
+): Promise<number> {
+  const { data, error } = await supabase
+    .from(table)
+    .select(select)
+    .gte(timeColumn, sinceIso)
+    .limit(2000);
+
+  if (error) return 0;
+  return (data ?? []).length;
+}
 
 export default function AnalyticsDashboard() {
-  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // Modal state
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailData, setDetailData] = useState<DetailData>([]);
-  const [detailTitle, setDetailTitle] = useState("");
-  const [detailType, setDetailType] = useState<"logins" | "engagement" | "teacher" | "performance">("logins");
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  useEffect(() => {
-    fetchAnalytics();
-  }, []);
-
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
 
-      const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
-      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const weekAgoStr = weekAgo.toISOString().split('T')[0];
+      const now = Date.now();
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const startOfTodayIso = startOfToday.toISOString();
+      const startOfWeekIso = new Date(startOfToday.getTime() - 6 * DAY_MS).toISOString();
 
-      // Adoption metrics
-      const { data: sessionsToday, error: sessionsError } = await supabase
-        .from('user_sessions')
-        .select('user_id, login_time, logout_time, session_duration')
-        .gte('login_time', `${todayStr}T00:00:00.000Z`)
-        .lt('login_time', `${todayStr}T23:59:59.999Z`);
+      const [
+        sessionsResult,
+        contentResult,
+        teacherResult,
+        systemResult,
+        profilesResult,
+        assignmentsResult,
+      ] = await Promise.all([
+        fetchSessionEvents(startOfWeekIso),
+        fetchContentEvents(startOfWeekIso),
+        fetchTeacherEvents(startOfWeekIso),
+        fetchSystemEvents(startOfWeekIso),
+        supabase.from("profiles").select("id,role,full_name"),
+        supabase.from("assignments").select("id"),
+      ]);
 
-      if (sessionsError) throw sessionsError;
+      const profiles = profilesResult.error ? [] : profilesResult.data ?? [];
+      const profileMap = new Map<string, { role?: string; full_name?: string }>();
+      profiles.forEach((profile) => {
+        profileMap.set(profile.id, {
+          role: profile.role,
+          full_name: profile.full_name,
+        });
+      });
 
-      const totalLoginsToday = sessionsToday?.length || 0;
-      const uniqueActiveUsersToday = new Set(sessionsToday?.map(s => s.user_id)).size;
+      const sessions = sessionsResult.rows;
+      const contentEvents = contentResult.rows;
+      const teacherEvents = teacherResult.rows;
+      const systemEvents = systemResult.rows;
 
-      // Students logged in weekly
-      const { data: students, error: studentsError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('role', 'student');
+      const sessionsToday = sessions.filter((event) => getEventDate(event.loginAt) >= startOfToday);
+      const contentToday = contentEvents.filter((event) => getEventDate(event.timestamp) >= startOfToday);
+      const teacherToday = teacherEvents.filter((event) => getEventDate(event.timestamp) >= startOfToday);
+      const systemToday = systemEvents.filter((event) => getEventDate(event.timestamp) >= startOfToday);
 
-      if (studentsError) throw studentsError;
+      const weeklyActiveUsers = new Set(sessions.map((event) => event.userId));
+      const uniqueActiveUsersToday = new Set(sessionsToday.map((event) => event.userId)).size;
 
-      const { data: sessionsWeekly, error: sessionsWeeklyError } = await supabase
-        .from('user_sessions')
-        .select('user_id')
-        .gte('login_time', `${weekAgoStr}T00:00:00.000Z`);
+      const studentProfiles = profiles.filter((p) => p.role === "student");
+      const teacherProfiles = profiles.filter((p) => p.role === "teacher");
 
-      if (sessionsWeeklyError) throw sessionsWeeklyError;
+      const studentsLoggedInWeekly = studentProfiles.filter((p) => weeklyActiveUsers.has(p.id)).length;
+      const teachersActiveWeekly = teacherProfiles.filter((p) => weeklyActiveUsers.has(p.id)).length;
 
-      const activeUserIds = new Set(sessionsWeekly?.map(s => s.user_id));
-      const studentsLoggedInWeekly = students?.filter(s => activeUserIds.has(s.id)).length || 0;
-      const totalStudents = students?.length || 0;
+      const lessonOpenActions = new Set(["open", "viewed"]);
+      const lessonCompleteActions = new Set(["complete", "completed"]);
+      const assignmentSubmissionActions = new Set(["submitted", "complete", "completed"]);
 
-      // Teachers active weekly
-      const { data: teachers, error: teachersError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('role', 'teacher');
+      const lessonsOpenedToday = contentToday.filter(
+        (event) => event.contentType === "lesson" && lessonOpenActions.has(event.action)
+      ).length;
 
-      if (teachersError) throw teachersError;
+      const lessonCompletionsToday = contentToday.filter(
+        (event) => event.contentType === "lesson" && lessonCompleteActions.has(event.action)
+      ).length;
 
-      const teachersActiveWeekly = teachers?.filter(t => activeUserIds.has(t.id)).length || 0;
-      const totalTeachers = teachers?.length || 0;
+      const analyticsAssignmentSubmissions = contentToday.filter(
+        (event) =>
+          event.contentType === "assignment" && assignmentSubmissionActions.has(normalizeAction(event.action))
+      ).length;
 
-      // Engagement metrics - lessons opened today
-      const { data: lessonViews, error: lessonViewsError } = await supabase
-        .from('content_interactions')
-        .select('*')
-        .eq('content_type', 'lesson')
-        .eq('action', 'viewed')
-        .gte('timestamp', `${todayStr}T00:00:00.000Z`);
+      const fallbackAssignmentSubmissions = await fetchCountFromTable(
+        "assignment_submissions",
+        "id",
+        "submitted_at",
+        startOfTodayIso
+      );
 
-      if (lessonViewsError) throw lessonViewsError;
+      const assignmentSubmissionsToday =
+        analyticsAssignmentSubmissions > 0 ? analyticsAssignmentSubmissions : fallbackAssignmentSubmissions;
 
-      const lessonsOpenedToday = lessonViews?.length || 0;
+      const sessionDurations = sessions
+        .map((event) => event.durationSeconds)
+        .filter((duration): duration is number => typeof duration === "number" && duration > 0);
 
-      // Average session duration
-      const validSessions = sessionsToday?.filter(s => s.session_duration) || [];
-      const averageSessionDuration = validSessions.length > 0
-        ? validSessions.reduce((acc, s) => {
-            const durationStr = s.session_duration;
-            const seconds = durationStr ? parseInt(durationStr.split(' ')[0]) : 0;
-            return acc + seconds;
-          }, 0) / validSessions.length
-        : 0;
+      const averageSessionMinutes =
+        sessionDurations.length > 0
+          ? sessionDurations.reduce((sum, duration) => sum + duration, 0) / sessionDurations.length / 60
+          : 0;
 
-      // Assignment submissions today
-      const { data: assignmentSubmissions, error: submissionsError } = await supabase
-        .from('content_interactions')
-        .select('*')
-        .eq('content_type', 'assignment')
-        .eq('action', 'submitted')
-        .gte('timestamp', `${todayStr}T00:00:00.000Z`);
+      const lessonsUploadedTracked = teacherToday.filter((event) => event.action === "lesson_uploaded").length;
+      const assignmentsCreatedTracked = teacherToday.filter((event) => event.action === "assignment_created").length;
+      const feedbackGivenToday = teacherToday.filter((event) => event.action === "feedback_given").length;
 
-      if (submissionsError) throw submissionsError;
+      const fallbackLessonsToday = await fetchCountFromTable("lessons", "id", "created_at", startOfTodayIso);
+      const fallbackAssignmentsToday = await fetchCountFromTable("assignments", "id", "created_at", startOfTodayIso);
 
-      const assignmentSubmissionsToday = assignmentSubmissions?.length || 0;
+      const lessonsUploadedToday = lessonsUploadedTracked > 0 ? lessonsUploadedTracked : fallbackLessonsToday;
+      const assignmentsCreatedToday =
+        assignmentsCreatedTracked > 0 ? assignmentsCreatedTracked : fallbackAssignmentsToday;
 
-      // Total assignments (from teacher_activities)
-      const { data: allAssignments, error: assignmentsError } = await supabase
-        .from('teacher_activities')
-        .select('content_id')
-        .eq('action', 'assignment_created');
+      const errorsToday = systemToday.filter((event) => event.eventType === "error").length;
+      const loadTimeEvents = systemToday
+        .filter((event) => event.eventType === "load_time")
+        .map((event) => {
+          if (!event.details || typeof event.details !== "object") return null;
+          const maybeLoadTime = (event.details as Record<string, unknown>).load_time_ms;
+          return typeof maybeLoadTime === "number" ? maybeLoadTime : Number(maybeLoadTime ?? NaN);
+        })
+        .filter((value): value is number => Number.isFinite(value) && value > 0);
 
-      if (assignmentsError) throw assignmentsError;
+      const averageLoadTimeMs =
+        loadTimeEvents.length > 0
+          ? loadTimeEvents.reduce((sum, value) => sum + value, 0) / loadTimeEvents.length
+          : 0;
 
-      const totalAssignments = new Set(allAssignments?.map(a => a.content_id)).size;
+      const trends: DailyTrend[] = Array.from({ length: 7 }).map((_, index) => {
+        const dayStart = new Date(startOfToday.getTime() - (6 - index) * DAY_MS);
+        const dayEnd = new Date(dayStart.getTime() + DAY_MS);
+        const label = dayStart.toLocaleDateString(undefined, { weekday: "short" });
 
-      // Teacher activity - lessons uploaded today
-      const { data: lessonsUploaded, error: lessonsError } = await supabase
-        .from('teacher_activities')
-        .select('*')
-        .eq('action', 'lesson_uploaded')
-        .gte('timestamp', `${todayStr}T00:00:00.000Z`);
+        const dayLogins = sessions.filter((event) => {
+          const time = getEventDate(event.loginAt).getTime();
+          return time >= dayStart.getTime() && time < dayEnd.getTime();
+        }).length;
 
-      if (lessonsError) throw lessonsError;
+        const dayInteractions = contentEvents.filter((event) => {
+          const time = getEventDate(event.timestamp).getTime();
+          return time >= dayStart.getTime() && time < dayEnd.getTime();
+        }).length;
 
-      const lessonsUploadedToday = lessonsUploaded?.length || 0;
+        const daySubmissions = contentEvents.filter((event) => {
+          const time = getEventDate(event.timestamp).getTime();
+          return (
+            time >= dayStart.getTime() &&
+            time < dayEnd.getTime() &&
+            event.contentType === "assignment" &&
+            assignmentSubmissionActions.has(normalizeAction(event.action))
+          );
+        }).length;
 
-      // Assignments created today
-      const { data: assignmentsCreated, error: assignmentsCreatedError } = await supabase
-        .from('teacher_activities')
-        .select('*')
-        .eq('action', 'assignment_created')
-        .gte('timestamp', `${todayStr}T00:00:00.000Z`);
+        return {
+          day: label,
+          logins: dayLogins,
+          interactions: dayInteractions,
+          submissions: daySubmissions,
+        };
+      });
 
-      if (assignmentsCreatedError) throw assignmentsCreatedError;
+      const actionCounts = contentToday.reduce((acc, event) => {
+        const key = normalizeAction(event.action);
+        acc.set(key, (acc.get(key) ?? 0) + 1);
+        return acc;
+      }, new Map<string, number>());
 
-      const assignmentsCreatedToday = assignmentsCreated?.length || 0;
+      const actionBreakdown = Array.from(actionCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([action, value]) => ({ label: actionLabel(action), value }));
 
-      // Feedback given today
-      const { data: feedbackGiven, error: feedbackError } = await supabase
-        .from('teacher_activities')
-        .select('*')
-        .eq('action', 'feedback_given')
-        .gte('timestamp', `${todayStr}T00:00:00.000Z`);
+      const recentActivity: ActivityItem[] = [
+        ...sessions.slice(0, 20).map((event, index) => {
+          const name = profileMap.get(event.userId)?.full_name ?? "Unknown user";
+          return {
+            id: `login-${event.userId}-${index}`,
+            category: "login" as const,
+            label: `${name} logged in`,
+            timestamp: event.loginAt,
+          };
+        }),
+        ...contentEvents.slice(0, 20).map((event, index) => {
+          const name = profileMap.get(event.userId)?.full_name ?? "Unknown user";
+          return {
+            id: `content-${event.userId}-${index}`,
+            category: "engagement" as const,
+            label: `${name} ${actionLabel(event.action).toLowerCase()} ${event.contentType}`,
+            timestamp: event.timestamp,
+          };
+        }),
+        ...teacherEvents.slice(0, 20).map((event, index) => {
+          const name = profileMap.get(event.teacherId)?.full_name ?? "Unknown teacher";
+          return {
+            id: `teacher-${event.teacherId}-${index}`,
+            category: "teacher" as const,
+            label: `${name} ${actionLabel(event.action).toLowerCase()}`,
+            timestamp: event.timestamp,
+          };
+        }),
+        ...systemEvents.slice(0, 10).map((event, index) => ({
+          id: `system-${event.eventType}-${index}`,
+          category: "system" as const,
+          label: event.eventType === "error" ? "System error captured" : "Page performance recorded",
+          timestamp: event.timestamp,
+        })),
+      ]
+        .sort((a, b) => getEventDate(b.timestamp).getTime() - getEventDate(a.timestamp).getTime())
+        .slice(0, 12);
 
-      if (feedbackError) throw feedbackError;
-
-      const feedbackGivenToday = feedbackGiven?.length || 0;
-
-      // Performance metrics
-      const { data: errorsToday, error: errorsError } = await supabase
-        .from('system_performance')
-        .select('*')
-        .eq('event_type', 'error')
-        .gte('timestamp', `${todayStr}T00:00:00.000Z`);
-
-      if (errorsError) throw errorsError;
-
-      const errorRate = errorsToday?.length || 0;
-
-      const { data: loadTimes, error: loadTimesError } = await supabase
-        .from('system_performance')
-        .select('details')
-        .eq('event_type', 'load_time')
-        .gte('timestamp', `${todayStr}T00:00:00.000Z`);
-
-      if (loadTimesError) throw loadTimesError;
-
-      const validLoadTimes = loadTimes?.filter(lt => lt.details?.load_time_ms).map(lt => lt.details.load_time_ms) || [];
-      const averageLoadTime = validLoadTimes.length > 0
-        ? validLoadTimes.reduce((acc, time) => acc + time, 0) / validLoadTimes.length
-        : 0;
-
-      setData({
-        totalLoginsToday,
+      setSnapshot({
+        totalLoginsToday: sessionsToday.length,
         uniqueActiveUsersToday,
         studentsLoggedInWeekly,
-        totalStudents,
+        totalStudents: studentProfiles.length,
         teachersActiveWeekly,
-        totalTeachers,
+        totalTeachers: teacherProfiles.length,
         lessonsOpenedToday,
-        averageSessionDuration,
+        lessonCompletionsToday,
         assignmentSubmissionsToday,
-        totalAssignments,
+        totalAssignments: assignmentsResult.error ? 0 : (assignmentsResult.data ?? []).length,
         lessonsUploadedToday,
         assignmentsCreatedToday,
         feedbackGivenToday,
-        errorRate,
-        averageLoadTime,
+        errorsToday,
+        averageLoadTimeMs,
+        averageSessionMinutes,
+        trends,
+        actionBreakdown,
+        recentActivity,
+        recentSessions: sessionsToday.slice(0, 6),
+        recentInteractions: contentToday.slice(0, 6),
+        sourceHints: [
+          sessionsResult.sourceHint,
+          contentResult.sourceHint,
+          teacherResult.sourceHint,
+          systemResult.sourceHint,
+        ],
       });
-    } catch (err: any) {
-      setError(err.message);
+      setLastUpdated(new Date(now));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to load analytics";
+      setError(message);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // DETAIL FETCHING FUNCTIONS
-  // ─────────────────────────────────────────────────────────────────────────
-  const fetchLoginDetails = async () => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+  useEffect(() => {
+    void fetchAnalytics();
+  }, []);
 
-    const { data: sessions, error } = await supabase
-      .from('user_sessions')
-      .select(`
-        user_id,
-        login_time,
-        logout_time,
-        session_duration,
-        profiles:user_id (
-          full_name,
-          role
-        )
-      `)
-      .gte('login_time', `${todayStr}T00:00:00.000Z`)
-      .lt('login_time', `${todayStr}T23:59:59.999Z`)
-      .order('login_time', { ascending: false });
-
-    if (error) throw error;
-
-    return sessions?.map(session => ({
-      user_id: session.user_id,
-      login_time: session.login_time,
-      logout_time: session.logout_time,
-      session_duration: session.session_duration,
-      user_name: session.profiles?.full_name || 'Unknown',
-      user_role: session.profiles?.role || 'Unknown',
-    })) || [];
-  };
-
-  const fetchEngagementDetails = async (type: 'lessons' | 'assignments') => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-
-    const contentType = type === 'lessons' ? 'lesson' : 'assignment';
-    const action = type === 'lessons' ? 'viewed' : 'submitted';
-
-    const { data: interactions, error } = await supabase
-      .from('content_interactions')
-      .select(`
-        user_id,
-        content_type,
-        content_id,
-        action,
-        timestamp,
-        duration,
-        profiles:user_id (
-          full_name
-        )
-      `)
-      .eq('content_type', contentType)
-      .eq('action', action)
-      .gte('timestamp', `${todayStr}T00:00:00.000Z`)
-      .order('timestamp', { ascending: false });
-
-    if (error) throw error;
-
-    return interactions?.map(interaction => ({
-      user_id: interaction.user_id,
-      content_type: interaction.content_type,
-      content_id: interaction.content_id,
-      action: interaction.action,
-      timestamp: interaction.timestamp,
-      duration: interaction.duration,
-      user_name: interaction.profiles?.full_name || 'Unknown',
-    })) || [];
-  };
-
-  const fetchTeacherActivityDetails = async (type: 'lessons' | 'assignments' | 'feedback') => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-
-    let action: string;
-    if (type === 'lessons') action = 'lesson_uploaded';
-    else if (type === 'assignments') action = 'assignment_created';
-    else action = 'feedback_given';
-
-    const { data: activities, error } = await supabase
-      .from('teacher_activities')
-      .select(`
-        teacher_id,
-        action,
-        content_id,
-        timestamp,
-        profiles:teacher_id (
-          full_name
-        )
-      `)
-      .eq('action', action)
-      .gte('timestamp', `${todayStr}T00:00:00.000Z`)
-      .order('timestamp', { ascending: false });
-
-    if (error) throw error;
-
-    return activities?.map(activity => ({
-      teacher_id: activity.teacher_id,
-      action: activity.action,
-      content_id: activity.content_id,
-      timestamp: activity.timestamp,
-      teacher_name: activity.profiles?.full_name || 'Unknown',
-    })) || [];
-  };
-
-  const fetchPerformanceDetails = async () => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-
-    const { data: performance, error } = await supabase
-      .from('system_performance')
-      .select('*')
-      .gte('timestamp', `${todayStr}T00:00:00.000Z`)
-      .order('timestamp', { ascending: false });
-
-    if (error) throw error;
-
-    return performance || [];
-  };
-
-  const fetchWeeklyActiveUsers = async (role: 'student' | 'teacher') => {
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const weekAgoStr = weekAgo.toISOString().split('T')[0];
-
-    const { data: sessions, error } = await supabase
-      .from('user_sessions')
-      .select(`
-        user_id,
-        login_time,
-        profiles:user_id (
-          full_name,
-          role
-        )
-      `)
-      .gte('login_time', `${weekAgoStr}T00:00:00.000Z`)
-      .eq('profiles.role', role)
-      .order('login_time', { ascending: false });
-
-    if (error) throw error;
-
-    // Get unique users
-    const uniqueUsers = new Map();
-    sessions?.forEach(session => {
-      if (!uniqueUsers.has(session.user_id)) {
-        uniqueUsers.set(session.user_id, {
-          user_id: session.user_id,
-          login_time: session.login_time,
-          user_name: session.profiles?.full_name || 'Unknown',
-          user_role: session.profiles?.role || role,
-        });
-      }
-    });
-
-    return Array.from(uniqueUsers.values());
-  };
-
-  const handleCardClick = async (metricType: typeof detailType, title: string) => {
-    setDetailLoading(true);
-    setDetailModalOpen(true);
-    setDetailTitle(title);
-    setDetailType(metricType);
-
-    try {
-      let data: DetailData = [];
-
-      switch (metricType) {
-        case 'logins':
-          if (title === 'Total Logins Today') {
-            data = await fetchLoginDetails();
-          } else if (title === 'Student Adoption') {
-            // Fetch students who logged in this week
-            data = await fetchWeeklyActiveUsers('student');
-          } else if (title === 'Teacher Activity') {
-            // Fetch teachers who logged in this week
-            data = await fetchWeeklyActiveUsers('teacher');
-          }
-          break;
-        case 'engagement':
-          if (title.includes('Lessons')) {
-            data = await fetchEngagementDetails('lessons');
-          } else if (title.includes('Assignment')) {
-            data = await fetchEngagementDetails('assignments');
-          }
-          break;
-        case 'teacher':
-          if (title.includes('Lessons')) {
-            data = await fetchTeacherActivityDetails('lessons');
-          } else if (title.includes('Assignments')) {
-            data = await fetchTeacherActivityDetails('assignments');
-          } else if (title.includes('Feedback')) {
-            data = await fetchTeacherActivityDetails('feedback');
-          }
-          break;
-        case 'performance':
-          data = await fetchPerformanceDetails();
-          break;
-      }
-
-      setDetailData(data);
-    } catch (err: any) {
-      console.error('Error fetching details:', err);
-      setDetailData([]);
-    } finally {
-      setDetailLoading(false);
+  const rates = useMemo(() => {
+    if (!snapshot) {
+      return {
+        adoptionRate: 0,
+        teacherActivityRate: 0,
+        assignmentSubmissionRate: 0,
+      };
     }
-  };
+
+    const adoptionRate =
+      snapshot.totalStudents > 0
+        ? Math.round((snapshot.studentsLoggedInWeekly / snapshot.totalStudents) * 100)
+        : 0;
+    const teacherActivityRate =
+      snapshot.totalTeachers > 0
+        ? Math.round((snapshot.teachersActiveWeekly / snapshot.totalTeachers) * 100)
+        : 0;
+    const assignmentSubmissionRate =
+      snapshot.totalAssignments > 0
+        ? Math.round((snapshot.assignmentSubmissionsToday / snapshot.totalAssignments) * 100)
+        : 0;
+
+    return {
+      adoptionRate,
+      teacherActivityRate,
+      assignmentSubmissionRate,
+    };
+  }, [snapshot]);
 
   if (loading) {
     return (
-      <div className="space-y-8 pb-12">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <Skeleton className="h-8 w-64" />
-            <Skeleton className="h-4 w-96" />
-          </div>
+      <div className="space-y-6 pb-12">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-96" />
         </div>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Card key={i} className="p-6">
-              <Skeleton className="h-4 w-32 mb-2" />
-              <Skeleton className="h-8 w-16" />
-              <Skeleton className="h-3 w-24 mt-1" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, idx) => (
+            <Card key={idx}>
+              <CardHeader>
+                <Skeleton className="h-4 w-28" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="mt-2 h-3 w-24" />
+              </CardContent>
             </Card>
           ))}
         </div>
@@ -519,411 +774,295 @@ export default function AnalyticsDashboard() {
     );
   }
 
-  if (error) {
+  if (error || !snapshot) {
     return (
-      <div className="space-y-8 pb-12">
-        <div className="text-center py-12">
-          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Analytics</h2>
-          <p className="text-gray-600">{error}</p>
-        </div>
+      <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
+        <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-red-600" />
+        <h2 className="text-lg font-semibold text-red-900">Unable to load analytics</h2>
+        <p className="mt-2 text-sm text-red-800">{error ?? "Unknown error"}</p>
+        <Button className="mt-4" variant="secondary" onClick={() => void fetchAnalytics()}>
+          Retry
+        </Button>
       </div>
     );
   }
 
-  if (!data) return null;
-
-  const adoptionRate = data.totalStudents > 0 ? Math.round((data.studentsLoggedInWeekly / data.totalStudents) * 100) : 0;
-  const teacherActivityRate = data.totalTeachers > 0 ? Math.round((data.teachersActiveWeekly / data.totalTeachers) * 100) : 0;
-  const engagementRate = data.totalAssignments > 0 ? Math.round((data.assignmentSubmissionsToday / data.totalAssignments) * 100) : 0;
-
   return (
-    <div className="space-y-8 pb-12">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-transparent">
-            Analytics Dashboard
-          </h1>
-          <p className="text-muted-foreground font-medium">
-            Real-time insights into platform adoption, engagement, and performance.
+    <div className="space-y-6 pb-12">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-slate-900">Analytics Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Live operational signal from usage, learning activity, and system health.
           </p>
         </div>
-        <Badge variant="secondary" className="px-4 py-2 text-sm font-medium">
-          Last updated: {new Date().toLocaleTimeString()}
-        </Badge>
-      </div>
 
-      {/* Adoption Metrics */}
-      <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-          <Target className="h-6 w-6 text-blue-500" />
-          Adoption Metrics
-        </h2>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <Card 
-            className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => handleCardClick('logins', 'Total Logins Today')}
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary">
+            Updated {lastUpdated ? lastUpdated.toLocaleTimeString() : "just now"}
+          </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={refreshing}
+            onClick={() => void fetchAnalytics(true)}
           >
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-bold text-blue-900">Total Logins Today</CardTitle>
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-blue-600" />
-                <Eye className="h-3 w-3 text-blue-500 opacity-60" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-black text-blue-900">{data.totalLoginsToday}</div>
-              <p className="text-xs text-blue-700 mt-1">Sessions started</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 cursor-pointer hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-bold text-green-900">Unique Active Users</CardTitle>
-              <div className="flex items-center gap-2">
-                <Activity className="h-4 w-4 text-green-600" />
-                <Eye className="h-3 w-3 text-green-500 opacity-60" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-black text-green-900">{data.uniqueActiveUsersToday}</div>
-              <p className="text-xs text-green-700 mt-1">Distinct users today</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 cursor-pointer hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-bold text-purple-900">Student Adoption</CardTitle>
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-purple-600" />
-                <Eye className="h-3 w-3 text-purple-500 opacity-60" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-black text-purple-900">{adoptionRate}%</div>
-              <p className="text-xs text-purple-700 mt-1">{data.studentsLoggedInWeekly}/{data.totalStudents} active this week</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 cursor-pointer hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-bold text-orange-900">Teacher Activity</CardTitle>
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-orange-600" />
-                <Eye className="h-3 w-3 text-orange-500 opacity-60" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-black text-orange-900">{teacherActivityRate}%</div>
-              <p className="text-xs text-orange-700 mt-1">{data.teachersActiveWeekly}/{data.totalTeachers} active this week</p>
-            </CardContent>
-          </Card>
+            <RefreshCcw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
         </div>
       </div>
 
-      {/* Engagement Metrics */}
-      <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-          <BarChart3 className="h-6 w-6 text-emerald-500" />
-          Engagement Metrics
-        </h2>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <Card 
-            className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200 cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => handleCardClick('engagement', 'Lessons Opened Today')}
-          >
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-bold text-emerald-900">Lessons Opened Today</CardTitle>
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-emerald-600" />
-                <Eye className="h-3 w-3 text-emerald-500 opacity-60" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-black text-emerald-900">{data.lessonsOpenedToday}</div>
-              <p className="text-xs text-emerald-700 mt-1">Content interactions</p>
-            </CardContent>
-          </Card>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center justify-between text-sm text-blue-900">
+              Active Users Today
+              <Users className="h-4 w-4 text-blue-600" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-black text-blue-900">{snapshot.uniqueActiveUsersToday}</p>
+            <p className="text-xs text-blue-700">{snapshot.totalLoginsToday} total logins</p>
+          </CardContent>
+        </Card>
 
-          <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 border-cyan-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-bold text-cyan-900">Avg Session Duration</CardTitle>
-              <Clock className="h-4 w-4 text-cyan-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-black text-cyan-900">{Math.round(data.averageSessionDuration)}m</div>
-              <p className="text-xs text-cyan-700 mt-1">Minutes per session</p>
-            </CardContent>
-          </Card>
+        <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center justify-between text-sm text-emerald-900">
+              Lesson Activity
+              <BookOpen className="h-4 w-4 text-emerald-600" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-black text-emerald-900">{snapshot.lessonsOpenedToday}</p>
+            <p className="text-xs text-emerald-700">
+              {snapshot.lessonCompletionsToday} completions today
+            </p>
+          </CardContent>
+        </Card>
 
-          <Card 
-            className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200 cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => handleCardClick('engagement', 'Assignment Submissions')}
-          >
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-bold text-indigo-900">Assignment Submissions</CardTitle>
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-indigo-600" />
-                <Eye className="h-3 w-3 text-indigo-500 opacity-60" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-black text-indigo-900">{data.assignmentSubmissionsToday}</div>
-              <p className="text-xs text-indigo-700 mt-1">Submitted today</p>
-            </CardContent>
-          </Card>
+        <Card className="border-violet-200 bg-gradient-to-br from-violet-50 to-violet-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center justify-between text-sm text-violet-900">
+              Assignment Submissions
+              <TrendingUp className="h-4 w-4 text-violet-600" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-black text-violet-900">{snapshot.assignmentSubmissionsToday}</p>
+            <p className="text-xs text-violet-700">
+              {rates.assignmentSubmissionRate}% of {snapshot.totalAssignments} assignments
+            </p>
+          </CardContent>
+        </Card>
 
-          <Card className="bg-gradient-to-br from-pink-50 to-pink-100 border-pink-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-bold text-pink-900">Engagement Rate</CardTitle>
-              <Target className="h-4 w-4 text-pink-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-black text-pink-900">{engagementRate}%</div>
-              <p className="text-xs text-pink-700 mt-1">Of total assignments</p>
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center justify-between text-sm text-amber-900">
+              System Health
+              <Gauge className="h-4 w-4 text-amber-600" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-black text-amber-900">{snapshot.errorsToday}</p>
+            <p className="text-xs text-amber-700">
+              {Math.round(snapshot.averageLoadTimeMs)}ms average load time
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Teacher Activity */}
-      <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-          <Users className="h-6 w-6 text-amber-500" />
-          Teacher Activity
-        </h2>
-        <div className="grid gap-6 md:grid-cols-3">
-          <Card 
-            className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200 cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => handleCardClick('teacher', 'Lessons Uploaded Today')}
-          >
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-bold text-amber-900">Lessons Uploaded Today</CardTitle>
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-amber-600" />
-                <Eye className="h-3 w-3 text-amber-500 opacity-60" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-black text-amber-900">{data.lessonsUploadedToday}</div>
-              <p className="text-xs text-amber-700 mt-1">New content added</p>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="bg-gradient-to-br from-rose-50 to-rose-100 border-rose-200 cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => handleCardClick('teacher', 'Assignments Created')}
-          >
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-bold text-rose-900">Assignments Created</CardTitle>
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-rose-600" />
-                <Eye className="h-3 w-3 text-rose-500 opacity-60" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-black text-rose-900">{data.assignmentsCreatedToday}</div>
-              <p className="text-xs text-rose-700 mt-1">Created today</p>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200 cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => handleCardClick('teacher', 'Feedback Given')}
-          >
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-bold text-teal-900">Feedback Given</CardTitle>
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-teal-600" />
-                <Eye className="h-3 w-3 text-teal-500 opacity-60" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-black text-teal-900">{data.feedbackGivenToday}</div>
-              <p className="text-xs text-teal-700 mt-1">Student interactions</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Performance Metrics */}
-      <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-          <Zap className="h-6 w-6 text-red-500" />
-          System Performance
-        </h2>
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card 
-            className="bg-gradient-to-br from-red-50 to-red-100 border-red-200 cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => handleCardClick('performance', 'Error Rate')}
-          >
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-bold text-red-900">Error Rate</CardTitle>
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-red-600" />
-                <Eye className="h-3 w-3 text-red-500 opacity-60" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-black text-red-900">{data.errorRate}%</div>
-              <p className="text-xs text-red-700 mt-1">System errors</p>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200 cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => handleCardClick('performance', 'Avg Load Time')}
-          >
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-bold text-gray-900">Avg Load Time</CardTitle>
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-gray-600" />
-                <Eye className="h-3 w-3 text-gray-500 opacity-60" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-black text-gray-900">{data.averageLoadTime}ms</div>
-              <p className="text-xs text-gray-700 mt-1">Page load performance</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Detail Modal */}
-      <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{detailTitle}</DialogTitle>
-            <DialogDescription>
-              Detailed breakdown of {detailTitle.toLowerCase()} for today
-            </DialogDescription>
-          </DialogHeader>
-
-          {detailLoading ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Adoption</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Student weekly adoption</span>
+              <span className="font-semibold">{rates.adoptionRate}%</span>
             </div>
-          ) : detailData.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              No data available for this metric today.
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Students active</span>
+              <span className="font-semibold">
+                {snapshot.studentsLoggedInWeekly}/{snapshot.totalStudents}
+              </span>
             </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Teacher activity rate</span>
+              <span className="font-semibold">{rates.teacherActivityRate}%</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Teacher Output Today</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Lessons uploaded</span>
+              <span className="font-semibold">{snapshot.lessonsUploadedToday}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Assignments created</span>
+              <span className="font-semibold">{snapshot.assignmentsCreatedToday}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Feedback events</span>
+              <span className="font-semibold">{snapshot.feedbackGivenToday}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Session Quality</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Avg session length</span>
+              <span className="font-semibold">{Math.round(snapshot.averageSessionMinutes)} min</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Recent logins</span>
+              <span className="font-semibold">{snapshot.recentSessions.length}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Recent interactions</span>
+              <span className="font-semibold">{snapshot.recentInteractions.length}</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Activity className="h-4 w-4 text-sky-600" />
+              Last 7 Days Trend
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={snapshot.trends} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorLogins" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorInteractions" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#059669" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#059669" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="day" tickLine={false} axisLine={false} />
+                <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip />
+                <Area
+                  type="monotone"
+                  dataKey="logins"
+                  stroke="#2563eb"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorLogins)"
+                  name="Logins"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="interactions"
+                  stroke="#059669"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorInteractions)"
+                  name="Interactions"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <UserCheck className="h-4 w-4 text-indigo-600" />
+              Interaction Mix Today
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {snapshot.actionBreakdown.length === 0 && (
+              <p className="text-sm text-muted-foreground">No content interaction events recorded today.</p>
+            )}
+            {snapshot.actionBreakdown.map((item) => {
+              const maxValue = snapshot.actionBreakdown[0]?.value ?? 1;
+              const widthPercent = Math.max(8, Math.round((item.value / maxValue) * 100));
+              return (
+                <div key={item.label} className="space-y-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{item.label}</span>
+                    <span className="font-semibold">{item.value}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-100">
+                    <div
+                      className="h-2 rounded-full bg-gradient-to-r from-indigo-500 to-sky-500"
+                      style={{ width: `${widthPercent}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Clock className="h-4 w-4 text-slate-600" />
+            Recent Platform Activity
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {snapshot.recentActivity.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No recent events were found.</p>
           ) : (
-            <div className="mt-4">
-              {detailType === 'logins' && (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Login Time</TableHead>
-                      <TableHead>Logout Time</TableHead>
-                      <TableHead>Session Duration</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(detailData as LoginDetail[]).map((item, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">{item.user_name}</TableCell>
-                        <TableCell>
-                          <Badge variant={item.user_role === 'student' ? 'default' : 'secondary'}>
-                            {item.user_role}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{new Date(item.login_time).toLocaleString()}</TableCell>
-                        <TableCell>{item.logout_time ? new Date(item.logout_time).toLocaleString() : 'Active'}</TableCell>
-                        <TableCell>{item.session_duration || 'N/A'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-
-              {detailType === 'engagement' && (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Content Type</TableHead>
-                      <TableHead>Content ID</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Time</TableHead>
-                      <TableHead>Duration</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(detailData as ContentInteractionDetail[]).map((item, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">{item.user_name}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{item.content_type}</Badge>
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">{item.content_id}</TableCell>
-                        <TableCell>{item.action}</TableCell>
-                        <TableCell>{new Date(item.timestamp).toLocaleString()}</TableCell>
-                        <TableCell>{item.duration || 'N/A'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-
-              {detailType === 'teacher' && (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Teacher</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Content ID</TableHead>
-                      <TableHead>Time</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(detailData as TeacherActivityDetail[]).map((item, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">{item.teacher_name}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{item.action.replace('_', ' ')}</Badge>
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">{item.content_id}</TableCell>
-                        <TableCell>{new Date(item.timestamp).toLocaleString()}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-
-              {detailType === 'performance' && (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Event Type</TableHead>
-                      <TableHead>Details</TableHead>
-                      <TableHead>Time</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(detailData as SystemPerformanceDetail[]).map((item, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <Badge variant={item.event_type === 'error' ? 'destructive' : 'default'}>
-                            {item.event_type}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="max-w-md">
-                          <pre className="text-xs whitespace-pre-wrap">
-                            {typeof item.details === 'object' ? JSON.stringify(item.details, null, 2) : item.details}
-                          </pre>
-                        </TableCell>
-                        <TableCell>{new Date(item.timestamp).toLocaleString()}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Event</TableHead>
+                  <TableHead>Timestamp</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {snapshot.recentActivity.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize">
+                        {item.category}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{item.label}</TableCell>
+                    <TableCell>{formatTime(item.timestamp)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
-        </DialogContent>
-      </Dialog>
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span>Data sources:</span>
+        {snapshot.sourceHints.map((source) => (
+          <Badge key={source} variant="secondary" className="font-mono text-[10px]">
+            {source}
+          </Badge>
+        ))}
+      </div>
     </div>
   );
 }
