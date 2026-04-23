@@ -1,6 +1,7 @@
-import { type DragEvent, useRef, useState } from "react";
+import { type DragEvent, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAssignments } from "@/hooks/useAssignments";
+import { useEngagementTracking } from "@/hooks/useEngagementTracking";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +29,7 @@ export default function AssignmentView() {
     const navigate = useNavigate();
     const { user } = useAuth();
     const { assignments, submissions, submitWork, getRubric } = useAssignments();
+    const { trackAssignmentViewed, trackAssignmentSubmitted } = useEngagementTracking();
 
     const assignment = assignments.find(a => a.id === assignmentId);
     const submission = submissions.find(s => s.assignmentId === assignmentId && s.studentId === user?.id);
@@ -37,6 +39,15 @@ export default function AssignmentView() {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const trackedViewForAssignment = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (!assignmentId) return;
+        if (trackedViewForAssignment.current === assignmentId) return;
+
+        trackedViewForAssignment.current = assignmentId;
+        void trackAssignmentViewed(assignmentId);
+    }, [assignmentId, trackAssignmentViewed]);
 
     if (!assignment) return <div>Assignment not found</div>;
 
@@ -124,6 +135,10 @@ export default function AssignmentView() {
                 content: submissionContent,
                 fileType: submissionFileType,
             });
+
+            if (assignmentId) {
+                void trackAssignmentSubmitted(assignmentId);
+            }
 
             toast.success("Assignment submitted successfully", { id: "assignment-submit" });
             setContent("");

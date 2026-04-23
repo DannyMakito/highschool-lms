@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import RichTextEditor from "@/components/shared/TinyMCEEditor";
 import { useAssignments } from "@/hooks/useAssignments";
 import { useSubjects } from "@/hooks/useSubjects";
+import { useTeacherTracking } from "@/hooks/useTeacherTracking";
 import { useAuth } from "@/context/AuthContext";
 import { useSchoolData } from "@/hooks/useSchoolData";
 import { Button } from "@/components/ui/button";
@@ -83,6 +84,7 @@ const createDefaultAssignmentState = (): AssignmentFormState => {
 
 export default function AssignmentManagement() {
     const { user } = useAuth();
+    const { trackAssignmentCreated } = useTeacherTracking();
     const { teachers } = useSchoolData();
     const {
         assignments: allAssignments,
@@ -340,7 +342,10 @@ export default function AssignmentManagement() {
                 }
                 toast.success("Assessment updated successfully");
             } else {
-                await addAssignment(payload);
+                const createdAssignment = await addAssignment(payload);
+                if (createdAssignment?.id) {
+                    void trackAssignmentCreated(createdAssignment.id);
+                }
                 toast.success("Assessment created successfully");
             }
             setIsEditorOpen(false);

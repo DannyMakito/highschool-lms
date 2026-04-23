@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import supabase from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 
 // ============================================================================
@@ -14,7 +14,7 @@ export const useEngagementTracking = () => {
   // ─────────────────────────────────────────────────────────────────────────
   const trackLessonViewed = useCallback(
     async (lessonId: string) => {
-      if (!user) return;
+      if (!user || user.role !== 'learner') return;
 
       try {
         const { error } = await supabase.from('content_interactions').insert({
@@ -44,7 +44,7 @@ export const useEngagementTracking = () => {
   // ─────────────────────────────────────────────────────────────────────────
   const trackVideoWatched = useCallback(
     async (lessonId: string, durationSeconds: number) => {
-      if (!user) return;
+      if (!user || user.role !== 'learner') return;
 
       try {
         const { error } = await supabase.from('content_interactions').insert({
@@ -77,7 +77,7 @@ export const useEngagementTracking = () => {
   // ─────────────────────────────────────────────────────────────────────────
   const trackAssignmentViewed = useCallback(
     async (assignmentId: string) => {
-      if (!user) return;
+      if (!user || user.role !== 'learner') return;
 
       try {
         const { error } = await supabase.from('content_interactions').insert({
@@ -106,7 +106,7 @@ export const useEngagementTracking = () => {
   // ─────────────────────────────────────────────────────────────────────────
   const trackAssignmentSubmitted = useCallback(
     async (assignmentId: string) => {
-      if (!user) return;
+      if (!user || user.role !== 'learner') return;
 
       try {
         const { error } = await supabase.from('content_interactions').insert({

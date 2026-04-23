@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAssignments } from "@/hooks/useAssignments";
+import { useTeacherTracking } from "@/hooks/useTeacherTracking";
 import type { Annotation } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,6 +29,7 @@ import PDFViewer from "@/components/PDFViewer";
 export default function SpeedGrader() {
     const { id: assignmentId } = useParams();
     const navigate = useNavigate();
+    const { trackFeedbackGiven } = useTeacherTracking();
     const {
         assignments,
         getAssignmentSubmissions,
@@ -152,6 +154,10 @@ export default function SpeedGrader() {
         console.log('[SpeedGrader] Saving grade:', { submissionId: selectedSubmissionId, ...gradeUpdate });
 
         updateGrade(selectedSubmissionId, gradeUpdate);
+
+        if (release && assignmentId) {
+            void trackFeedbackGiven(assignmentId);
+        }
 
         toast.success(release ? "✅ Grade released to student" : "💾 Changes saved as draft");
     };
@@ -628,3 +634,4 @@ export default function SpeedGrader() {
         </div>
     );
 }
+

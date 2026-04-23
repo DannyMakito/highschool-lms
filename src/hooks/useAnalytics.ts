@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import supabase from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 
 // ============================================================================
@@ -118,6 +118,17 @@ export const useAnalytics = () => {
     const existingSession = sessionStorage.getItem(SESSION_STORAGE_KEY);
     if (!existingSession) {
       trackLogin(user.id);
+    } else {
+      try {
+        const parsedSession = JSON.parse(existingSession) as AnalyticsSession;
+        if (parsedSession?.sessionId && parsedSession?.userId && parsedSession?.loginTime) {
+          sessionRef.current = parsedSession;
+        } else {
+          trackLogin(user.id);
+        }
+      } catch {
+        trackLogin(user.id);
+      }
     }
 
     const handleUserActivity = () => {
@@ -159,6 +170,12 @@ export const useAnalytics = () => {
       }
     };
   }, [user, trackLogin, trackLogout, resetInactivityTimer]);
+
+  useEffect(() => {
+    if (!user && sessionRef.current) {
+      void trackLogout('sign_out');
+    }
+  }, [user, trackLogout]);
 
   return {
     trackLogin,

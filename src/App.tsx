@@ -48,6 +48,8 @@ import GradingQueue from "@/pages/dashboard/teacher/GradingQueue";
 
 import { Toaster } from "@/components/ui/sonner";
 import { TutorWidget } from "./components/tutor";
+import { useAnalytics } from "@/hooks/useAnalytics";
+import { useSystemTracking } from "@/hooks/useSystemTracking";
 
 // Component to conditionally show TutorWidget
 function ConditionalTutorWidget() {
@@ -70,10 +72,17 @@ function ConditionalTutorWidget() {
   return <TutorWidget />;
 }
 
+function AnalyticsRuntimeTracker() {
+  useAnalytics();
+  useSystemTracking();
+  return null;
+}
+
 export function App() {
   return (
     <HashRouter>
       <AuthProvider>
+        <AnalyticsRuntimeTracker />
         <Toaster position="top-right" richColors />
         <Routes>
 

@@ -11,6 +11,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAssignments } from '@/hooks/useAssignments';
+import { useTeacherTracking } from '@/hooks/useTeacherTracking';
 import { useAuth } from '@/context/AuthContext';
 import { useSpeedGraderState } from '@/hooks/useSpeedGraderState';
 import { useAnnotations } from '@/hooks/useAnnotations';
@@ -42,6 +43,7 @@ export default function SpeedGraderV2() {
     const { id: assignmentId } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { trackFeedbackGiven } = useTeacherTracking();
     const { assignments, getAssignmentSubmissions, getRubric, updateGrade } = useAssignments();
 
     const assignment = assignments.find((a) => a.id === assignmentId);
@@ -244,6 +246,11 @@ export default function SpeedGraderV2() {
                 totalGrade: totalGrade,
             });
 
+            const feedbackTargetId = currentSubmission?.assignmentId || assignmentId;
+            if (feedbackTargetId) {
+                void trackFeedbackGiven(feedbackTargetId);
+            }
+
             markSaved();
             toast.success('✅ Grade released to student');
         } catch (err) {
@@ -252,7 +259,7 @@ export default function SpeedGraderV2() {
         } finally {
             setSaving(false);
         }
-    }, [state, user, saveAllGrades, markSaved, setSaving]);
+    }, [state, user, currentSubmission?.assignmentId, assignmentId, saveAllGrades, trackFeedbackGiven, markSaved, setSaving]);
 
     // ── Keyboard shortcuts ──
     useEffect(() => {

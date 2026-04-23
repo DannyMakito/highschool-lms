@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useSubjects } from "@/hooks/useSubjects";
+import { useEngagementTracking } from "@/hooks/useEngagementTracking";
 import { Button } from "@/components/ui/button";
 import {
     ChevronLeft,
@@ -30,6 +31,7 @@ export default function LessonView() {
     const { id: subjectId, lessonId } = useParams();
     const navigate = useNavigate();
     const { subjects, getSubjectTopics, getTopicLessons, isLessonCompleted, toggleLessonCompletion, setLastLesson } = useSubjects();
+    const { trackVideoWatched } = useEngagementTracking();
     const [showOutline, setShowOutline] = React.useState(true);
 
     React.useEffect(() => {
@@ -90,6 +92,14 @@ export default function LessonView() {
             navigate(`/student/subjects/${subjectId}/lessons/${nextLesson.id}`);
         } else {
             navigate(`/student/subjects/${subjectId}/outline`);
+        }
+    };
+
+    const handleVideoEnded = (event: React.SyntheticEvent<HTMLVideoElement>) => {
+        if (!lessonId) return;
+        const durationSeconds = Math.round(event.currentTarget.duration || 0);
+        if (durationSeconds > 0) {
+            void trackVideoWatched(lessonId, durationSeconds);
         }
     };
 
@@ -216,6 +226,7 @@ export default function LessonView() {
                                         controls
                                         className="w-full h-full"
                                         preload="metadata"
+                                        onEnded={handleVideoEnded}
                                     />
                                 ) : (
                                     <div className="w-full h-full flex flex-col items-center justify-center gap-4 text-white/80 px-8 text-center">

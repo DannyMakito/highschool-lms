@@ -4,7 +4,6 @@ import { createContext, useContext, useState, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import supabase from "@/lib/supabase";
-import { trackLoginSession } from "@/lib/analytics";
 
 export type UserRole = "learner" | "teacher" | "principal" | null;
 
@@ -278,7 +277,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const signedInUser = data.session?.user;
             if (signedInUser) {
                 await fetchProfile(signedInUser.id, signedInUser.email || "");
-                void trackLoginSession(signedInUser.id);
             }
 
             return { success: true };

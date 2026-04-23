@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSubjects } from "@/hooks/useSubjects";
+import { useTeacherTracking } from "@/hooks/useTeacherTracking";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Plus, ChevronLeft, Video, Save, Layout, HelpCircle, X, MessageSquare, Upload, Loader2, PlayCircle, FileText, Download } from "lucide-react";
@@ -30,6 +31,7 @@ export default function SubjectDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { trackLessonUploaded } = useTeacherTracking();
     const { subjects, addTopic, addLesson, updateLesson, deleteLesson, getSubjectTopics, getTopicLessons } = useSubjects();
     const subject = subjects.find(s => s.id === id);
 
@@ -356,11 +358,14 @@ export default function SubjectDetail() {
                     await removeUploadedResourceFile(currentLesson.resourceFilePath);
                 }
             } else {
-                await addLesson({
+                const createdLesson = await addLesson({
                     topicId: selectedTopicId,
                     ...lessonPayload,
                     order: getTopicLessons(selectedTopicId).length + 1,
                 });
+                if (createdLesson?.id) {
+                    void trackLessonUploaded(createdLesson.id);
+                }
             }
 
             resetLessonForm();

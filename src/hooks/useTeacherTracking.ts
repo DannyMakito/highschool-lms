@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import supabase from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 
 // ============================================================================
@@ -14,7 +14,7 @@ export const useTeacherTracking = () => {
   // ─────────────────────────────────────────────────────────────────────────
   const trackLessonUploaded = useCallback(
     async (lessonId: string) => {
-      if (!user) return;
+      if (!user || user.role !== 'teacher') return;
 
       try {
         const { error } = await supabase.from('teacher_activities').insert({
@@ -42,7 +42,7 @@ export const useTeacherTracking = () => {
   // ─────────────────────────────────────────────────────────────────────────
   const trackAssignmentCreated = useCallback(
     async (assignmentId: string) => {
-      if (!user) return;
+      if (!user || user.role !== 'teacher') return;
 
       try {
         const { error } = await supabase.from('teacher_activities').insert({
@@ -70,7 +70,7 @@ export const useTeacherTracking = () => {
   // ─────────────────────────────────────────────────────────────────────────
   const trackFeedbackGiven = useCallback(
     async (assignmentId: string) => {
-      if (!user) return;
+      if (!user || user.role !== 'teacher') return;
 
       try {
         const { error } = await supabase.from('teacher_activities').insert({
