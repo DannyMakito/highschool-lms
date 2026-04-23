@@ -28,7 +28,6 @@ export async function trackLoginSession(userId: string): Promise<void> {
             { user_id: userId, login_at: nowIso },
             { user_id: userId, session_start: nowIso },
             { user_id: userId, started_at: nowIso },
-            { user_id: userId, event_type: "login", occurred_at: nowIso },
             { user_id: userId },
         ],
         "trackLoginSession"
@@ -70,12 +69,6 @@ export async function trackContentInteraction({
                 content_type: "lesson",
                 interaction_type: interactionType,
                 created_at: nowIso,
-            },
-            {
-                user_id: userId,
-                content_id: lessonId,
-                action: interactionType,
-                occurred_at: nowIso,
             },
             { user_id: userId, lesson_id: lessonId },
         ],

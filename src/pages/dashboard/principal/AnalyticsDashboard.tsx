@@ -378,27 +378,6 @@ async function fetchSessionEvents(sinceIso: string): Promise<{ rows: SessionEven
       },
     },
     {
-      select: "user_id,action,event_type,occurred_at,created_at",
-      time: "created_at",
-      sourceHint: "user_sessions.created_at",
-      map: (row: Record<string, unknown>): SessionEvent | null => {
-        const candidateType = String(row.action ?? row.event_type ?? "").toLowerCase();
-        if (candidateType && candidateType !== "login") return null;
-
-        const loginAt = isValidIso(row.occurred_at)
-          ? row.occurred_at
-          : isValidIso(row.created_at)
-            ? row.created_at
-            : null;
-        if (!loginAt) return null;
-
-        return {
-          userId: String(row.user_id ?? ""),
-          loginAt,
-        };
-      },
-    },
-    {
       select: "user_id,created_at",
       time: "created_at",
       sourceHint: "user_sessions.created_at",
@@ -470,21 +449,6 @@ async function fetchContentEvents(sinceIso: string): Promise<{ rows: ContentEven
           contentId: String(row.lesson_id ?? "unknown"),
           action: String(row.interaction_type ?? "open").toLowerCase(),
           timestamp: row.created_at,
-        };
-      },
-    },
-    {
-      select: "user_id,content_id,action,occurred_at",
-      time: "occurred_at",
-      sourceHint: "content_interactions.occurred_at",
-      map: (row: Record<string, unknown>): ContentEvent | null => {
-        if (!isValidIso(row.occurred_at)) return null;
-        return {
-          userId: String(row.user_id ?? ""),
-          contentType: "lesson",
-          contentId: String(row.content_id ?? "unknown"),
-          action: String(row.action ?? "open").toLowerCase(),
-          timestamp: row.occurred_at,
         };
       },
     },
