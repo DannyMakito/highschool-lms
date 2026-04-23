@@ -545,18 +545,6 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
     };
 
     const setLastLesson = useCallback((subjectId: string, lessonId: string) => {
-        const isSameLesson =
-            data.lastLesson?.subjectId === subjectId &&
-            data.lastLesson?.lessonId === lessonId;
-
-        if (user && !isSameLesson) {
-            void trackContentInteraction({
-                userId: user.id,
-                lessonId,
-                interactionType: 'open',
-            });
-        }
-
         setData(prev => {
             if (prev.lastLesson?.subjectId === subjectId && prev.lastLesson?.lessonId === lessonId) {
                 return prev;
@@ -566,7 +554,7 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
                 lastLesson: { subjectId, lessonId }
             };
         });
-    }, [data.lastLesson?.lessonId, data.lastLesson?.subjectId, user]);
+    }, []);
 
     const value: SubjectsContextType = {
         subjects: data.subjects,

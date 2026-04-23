@@ -31,14 +31,33 @@ export default function LessonView() {
     const { id: subjectId, lessonId } = useParams();
     const navigate = useNavigate();
     const { subjects, getSubjectTopics, getTopicLessons, isLessonCompleted, toggleLessonCompletion, setLastLesson } = useSubjects();
-    const { trackVideoWatched } = useEngagementTracking();
+    const { trackLessonViewed, trackLessonTimeSpent, trackVideoWatched } = useEngagementTracking();
     const [showOutline, setShowOutline] = React.useState(true);
+    const lessonStartRef = React.useRef<number | null>(null);
 
     React.useEffect(() => {
         if (subjectId && lessonId) {
             setLastLesson(subjectId, lessonId);
         }
     }, [subjectId, lessonId, setLastLesson]);
+
+    React.useEffect(() => {
+        if (!lessonId) return;
+
+        lessonStartRef.current = Date.now();
+        void trackLessonViewed(lessonId);
+
+        return () => {
+            if (!lessonStartRef.current) return;
+
+            const durationSeconds = Math.round((Date.now() - lessonStartRef.current) / 1000);
+            lessonStartRef.current = null;
+
+            if (durationSeconds > 0) {
+                void trackLessonTimeSpent(lessonId, durationSeconds);
+            }
+        };
+    }, [lessonId, trackLessonViewed, trackLessonTimeSpent]);
 
     const subject = subjects.find(s => s.id === subjectId);
     if (!subject) return <div>Subject not found</div>;

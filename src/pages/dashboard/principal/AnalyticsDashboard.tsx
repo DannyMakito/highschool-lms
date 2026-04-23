@@ -183,6 +183,33 @@ function parseDurationToSeconds(value: unknown): number | undefined {
 
   if (typeof value === "string") {
     const trimmed = value.trim();
+
+    if (trimmed.includes(":")) {
+      const parts = trimmed.split(":").map((part) => part.trim());
+      if (parts.length === 3) {
+        const [hoursRaw, minutesRaw, secondsRaw] = parts;
+        const hours = Number(hoursRaw);
+        const minutes = Number(minutesRaw);
+        const seconds = Number(secondsRaw);
+        if (
+          Number.isFinite(hours) &&
+          Number.isFinite(minutes) &&
+          Number.isFinite(seconds)
+        ) {
+          return Math.max(0, Math.round(hours * 3600 + minutes * 60 + seconds));
+        }
+      }
+
+      if (parts.length === 2) {
+        const [minutesRaw, secondsRaw] = parts;
+        const minutes = Number(minutesRaw);
+        const seconds = Number(secondsRaw);
+        if (Number.isFinite(minutes) && Number.isFinite(seconds)) {
+          return Math.max(0, Math.round(minutes * 60 + seconds));
+        }
+      }
+    }
+
     const asNumber = Number(trimmed);
     if (!Number.isNaN(asNumber)) {
       return Math.max(0, asNumber);
@@ -195,6 +222,34 @@ function parseDurationToSeconds(value: unknown): number | undefined {
   }
 
   return undefined;
+}
+
+function resolveSessionDurationSeconds(
+  rawDuration: unknown,
+  loginAt: string,
+  logoutAt?: string
+): number | undefined {
+  const parsed = parseDurationToSeconds(rawDuration);
+  if (typeof parsed === "number" && parsed > 0) {
+    return parsed;
+  }
+
+  if (logoutAt && isValidIso(loginAt) && isValidIso(logoutAt)) {
+    const fallback = Math.max(
+      0,
+      Math.floor((new Date(logoutAt).getTime() - new Date(loginAt).getTime()) / 1000)
+    );
+    if (fallback > 0) return fallback;
+  }
+
+  return parsed;
+}
+
+function formatMinutesFromSeconds(seconds: number): number {
+  if (!Number.isFinite(seconds) || seconds <= 0) return 0;
+  const minutes = seconds / 60;
+  if (minutes > 0 && minutes < 0.1) return 0.1;
+  return Math.round(minutes * 10) / 10;
 }
 
 function isValidIso(value: unknown): value is string {
@@ -267,11 +322,16 @@ async function fetchSessionEvents(sinceIso: string): Promise<{ rows: SessionEven
       sourceHint: "user_sessions.login_time",
       map: (row: Record<string, unknown>): SessionEvent | null => {
         if (!isValidIso(row.login_time)) return null;
+        const logoutAt = isValidIso(row.logout_time) ? row.logout_time : undefined;
         return {
           userId: String(row.user_id ?? ""),
           loginAt: row.login_time,
-          logoutAt: isValidIso(row.logout_time) ? row.logout_time : undefined,
-          durationSeconds: parseDurationToSeconds(row.session_duration),
+          logoutAt,
+          durationSeconds: resolveSessionDurationSeconds(
+            row.session_duration,
+            row.login_time,
+            logoutAt
+          ),
         };
       },
     },
@@ -289,7 +349,7 @@ async function fetchSessionEvents(sinceIso: string): Promise<{ rows: SessionEven
         return {
           userId: String(row.user_id ?? ""),
           loginAt,
-          durationSeconds: parseDurationToSeconds(row.session_duration),
+          durationSeconds: resolveSessionDurationSeconds(row.session_duration, loginAt),
         };
       },
     },
@@ -304,11 +364,16 @@ async function fetchSessionEvents(sinceIso: string): Promise<{ rows: SessionEven
             ? row.created_at
             : null;
         if (!loginAt) return null;
+        const logoutAt = isValidIso(row.session_end) ? row.session_end : undefined;
         return {
           userId: String(row.user_id ?? ""),
           loginAt,
-          logoutAt: isValidIso(row.session_end) ? row.session_end : undefined,
-          durationSeconds: parseDurationToSeconds(row.session_duration),
+          logoutAt,
+          durationSeconds: resolveSessionDurationSeconds(
+            row.session_duration,
+            loginAt,
+            logoutAt
+          ),
         };
       },
     },
@@ -1014,7 +1079,7 @@ export default function AnalyticsDashboard() {
             logout_time: event.logoutAt ? formatTime(event.logoutAt) : "Active",
             duration:
               typeof event.durationSeconds === "number"
-                ? Math.round((event.durationSeconds / 60) * 10) / 10
+                ? formatMinutesFromSeconds(event.durationSeconds)
                 : "N/A",
           })),
         });
@@ -1333,7 +1398,7 @@ export default function AnalyticsDashboard() {
           .map((event) => ({
             user: profileFor(event.userId).name,
             role: profileFor(event.userId).role,
-            minutes: Math.round(((event.durationSeconds ?? 0) / 60) * 10) / 10,
+            minutes: formatMinutesFromSeconds(event.durationSeconds ?? 0),
             login_time: formatTime(event.loginAt),
           }));
 
@@ -1601,7 +1666,7 @@ export default function AnalyticsDashboard() {
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Avg session length</span>
               <div className="flex items-center gap-1">
-                <span className="font-semibold">{Math.round(snapshot.averageSessionMinutes)} min</span>
+                <span className="font-semibold">{snapshot.averageSessionMinutes.toFixed(1)} min</span>
                 {renderEyeButton("averageSessionMinutes", "Average Session Length")}
               </div>
             </div>
