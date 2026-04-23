@@ -52,7 +52,7 @@ export const useEngagementTracking = () => {
           content_type: 'video',
           content_id: lessonId, // Use lesson ID since videos are per lesson
           action: 'watched',
-          duration: `${durationSeconds} seconds`,
+          duration: durationSeconds,
           timestamp: new Date().toISOString(),
         });
 

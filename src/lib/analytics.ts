@@ -23,6 +23,7 @@ export async function trackLoginSession(userId: string): Promise<void> {
     await insertWithFallback(
         "user_sessions",
         [
+            { user_id: userId, login_time: nowIso },
             { user_id: userId, action: "login", created_at: nowIso },
             { user_id: userId, login_at: nowIso },
             { user_id: userId, session_start: nowIso },
@@ -46,9 +47,17 @@ export async function trackContentInteraction({
     interactionType,
 }: TrackContentInteractionParams): Promise<void> {
     const nowIso = new Date().toISOString();
+    const action = interactionType === "open" ? "viewed" : "completed";
     await insertWithFallback(
         "content_interactions",
         [
+            {
+                user_id: userId,
+                content_type: "lesson",
+                content_id: lessonId,
+                action,
+                timestamp: nowIso,
+            },
             {
                 user_id: userId,
                 lesson_id: lessonId,

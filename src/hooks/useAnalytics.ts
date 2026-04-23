@@ -73,7 +73,7 @@ export const useAnalytics = () => {
         .from('user_sessions')
         .update({
           logout_time: logoutTime,
-          session_duration: `${sessionDurationSeconds} seconds`,
+          session_duration: sessionDurationSeconds,
         })
         .eq('id', session.sessionId);
 
