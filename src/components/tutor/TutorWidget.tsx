@@ -13,7 +13,7 @@ function TutorPanel() {
         type="button"
         aria-label="Close chat"
         className={`
-          fixed inset-0 z-40 bg-black/40 backdrop-blur-sm
+          fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm
           transition-opacity duration-300 cursor-default
           ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"}
         `}
@@ -23,7 +23,7 @@ function TutorPanel() {
       {/* Slide-out Panel */}
       <div
         className={`
-          fixed top-0 right-0 z-50
+          fixed top-0 right-0 z-[120]
           h-full w-full sm:w-[640px] lg:w-[720px]
           transform transition-transform duration-300 ease-out
           ${isOpen ? "translate-x-0" : "translate-x-full"}
@@ -90,7 +90,7 @@ function TutorPanel() {
         type="button"
         onClick={toggleChat}
         className={`
-          fixed bottom-6 right-6 z-50
+          fixed bottom-6 right-6 z-[110]
           w-16 h-16
           bg-gradient-to-br from-cyan-400 to-blue-600
           hover:from-cyan-300 hover:to-blue-500

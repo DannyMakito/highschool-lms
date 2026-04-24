@@ -91,7 +91,7 @@ export const searchSubjects = tool({
     const lessons = (lessonsRes.data || []) as LessonRow[];
 
     const searchTerms = query.toLowerCase().split(/\s+/).filter((term) => term.length > 1);
-    if (searchTerms.length === 0) return { found: false, subjects: [] };
+    if (searchTerms.length === 0) return { found: false, reason: "empty_query", subjects: [], availableSubjects: subjects.map(s => s.name) };
 
     const scored = subjects
       .map((subject) => ({
@@ -125,8 +125,26 @@ export const searchSubjects = tool({
       };
     });
 
+    if (formatted.length === 0) {
+      return {
+        found: false,
+        reason: "no_matches",
+        query,
+        availableSubjects: subjects.map(s => s.name),
+        totalSubjects: subjects.length,
+        totalTopics: topics.length,
+        totalLessons: lessons.length,
+        message: subjects.length === 0
+          ? "No subjects have been created yet in the system."
+          : `No matches for "${query}", but ${subjects.length} subjects exist with ${lessons.length} lessons.`,
+        suggestions: subjects.length === 0
+          ? ["Create your first subject in the Subject Management page"]
+          : [`Try searching for: ${subjects.slice(0, 3).map(s => s.name).join(", ")}`],
+      };
+    }
+
     return {
-      found: formatted.length > 0,
+      found: true,
       message: `Found ${formatted.length} relevant subjects.`,
       subjects: formatted,
     };

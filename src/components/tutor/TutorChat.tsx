@@ -1,10 +1,13 @@
 import { useChat } from "@ai-sdk/react";
 import { streamText, convertToModelMessages, DirectChatTransport, ToolLoopAgent } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { useRef, useEffect, useState, type FormEvent } from "react";
+import { useRef, useEffect, useState, useMemo, type FormEvent } from "react";
 import { Send, Loader2 } from "lucide-react";
 import { TutorMessages } from "./TutorMessages";
 import { searchSubjects } from "@/lib/ai/tutor-tools";
+import { learnerTools } from "@/lib/ai/learner-tools";
+import { teacherTools } from "@/lib/ai/teacher-tools";
+import { principalTools } from "@/lib/ai/principal-tools";
 import { useAuth } from "@/context/AuthContext";
 
 // Custom scrollbar styling
@@ -34,31 +37,15 @@ const scrollbarStyle = `
   }
 `;
 
-export function TutorChat() {
-  const [inputValue, setInputValue] = useState("");
-  const { user, role } = useAuth();
+// ── Role-specific system prompt sections ──────────────────────────────────
 
-  // Inject scrollbar styles on mount
-  useEffect(() => {
-    if (!document.querySelector('style[data-tutor-scrollbar]')) {
-      const style = document.createElement('style');
-      style.setAttribute('data-tutor-scrollbar', 'true');
-      style.textContent = scrollbarStyle;
-      document.head.appendChild(style);
-    }
-  }, []);
+function buildSystemPrompt(role: string | undefined, userName: string | undefined): string {
+  const roleLabel = role || "student";
+  const nameStr = userName ? ` named ${userName}` : "";
 
-  const { messages, sendMessage, status, error } = useChat({
-    // In AI SDK v6, using DirectChatTransport is the official way 
-    // to handle generation directly on the client.
-    transport: new DirectChatTransport({
-      agent: new ToolLoopAgent({
-        model: createOpenRouter({
-          apiKey: import.meta.env.VITE_OPENROUTER_API_KEY || "",
-        })("openai/gpt-oss-120b"),
-        instructions: `You are a helpful high school learning assistant for our LMS. 
-The user is a ${role || "student"}${user?.name ? ` named ${user.name}` : ""}.
-Use the searchSubjects tool to find relevant content in the LMS database. 
+  const basePrompt = `You are a helpful high school learning assistant for our LMS. 
+The user is a ${roleLabel}${nameStr}.
+Use the searchSubjects tool to find relevant content in the LMS database.
 Always provide helpful, educational answers based on our lesson material.
 
 ## RESPONSE FORMAT (CRITICAL - FOLLOW EXACTLY):
@@ -74,18 +61,107 @@ Always use this exact markdown format for ALL links:
 [Link Text Here](/student/subjects/subjectId/outline)
 [Lesson Name](/student/subjects/subjectId/lessons/lessonId)
 
-Example:
-- Check out this lesson: [Introduction to Business](/student/subjects/e1caa676-8310-4ca6-b29b-541dacc45cad/lessons/abc123)
-- Full subject overview: [Business Studies](/student/subjects/e1caa676-8310-4ca6-b29b-541dacc45cad/outline)
-
 ## CONTENT RULES:
 - Quote or paraphrase lesson content when answering questions
 - Always recommend specific lessons for deeper learning using URLs from search results
 - Format URLs exactly as provided - NEVER modify paths or invent URLs
 - NEVER add "http://", "https://", or domain names to URLs
 
-You are a tutor who knows our curriculum well and helps everyone learn!`,
-        tools: { searchSubjects },
+## HANDLING EMPTY TOOL RESULTS:
+When a tool returns found: false, NEVER just say "no data found". Instead:
+- Use the "reason" field to understand WHY there's no data
+- Use any "context", "availableSubjects", or "suggestions" fields to guide the user
+- Suggest next steps, encourage the user, or offer to try a different approach`;
+
+  const roleSpecific: Record<string, string> = {
+    learner: `
+## YOUR ROLE-SPECIFIC TOOLS (LEARNER):
+You have access to these learner-focused tools:
+- **analyzeMyProgress**: Get a full progress snapshot (quiz scores, assignments, lesson completion)
+- **findMyWeaknesses**: Identify topics where the student struggles
+- **generateStudyPlan**: Create a personalized study plan based on deadlines and weaknesses
+- **practiceQuestionGenerator**: Generate practice questions from lesson content
+- **studySessionPlanner**: Plan focused study sessions with Pomodoro-style scheduling
+- **explainConcept**: Get lesson content to explain concepts in simpler terms
+- **flashcardGenerator**: Create flashcard Q&A pairs for revision
+
+Use these tools proactively when the student asks about their grades, progress, study tips, or needs help understanding something. Be encouraging and supportive!`,
+
+    teacher: `
+## YOUR ROLE-SPECIFIC TOOLS (TEACHER):
+You have access to these teacher-focused tools:
+- **generateQuiz**: Generate quiz questions from lesson content
+- **reviewStudentWork**: Review student submissions and provide feedback suggestions
+- **classroomAnalytics**: Get engagement and performance analytics for your classes
+- **findStruggleAreas**: Identify topics where students struggle and find underperforming students
+- **teacherAtRiskStudentFinder**: Find at-risk students across your assigned subjects
+- **lessonPlanAssistant**: Help plan lesson topics and structure for a subject
+- **lessonContentGenerator**: Generate detailed lesson content for a specific topic
+
+Use these tools when the teacher asks about student performance, needs help creating content, or wants analytics. Be professional and data-driven.`,
+
+    principal: `
+## YOUR ROLE-SPECIFIC TOOLS (PRINCIPAL/ADMIN):
+You have access to these administrative tools:
+- **schoolPerformanceDashboard**: School-wide KPIs and performance metrics
+- **teacherEffectiveness**: Analyze teacher activity and student outcomes per teacher
+- **atRiskStudentFinder**: Find at-risk students school-wide
+- **departmentComparison**: Compare performance across subject departments
+- **attendanceTrends**: Analyze login/session data for engagement patterns
+- **resourceAllocation**: Identify subjects needing more resources
+
+Use these tools when the principal asks about school performance, teacher effectiveness, or needs strategic insights. Present data clearly with actionable recommendations.`,
+  };
+
+  return basePrompt + (roleSpecific[roleLabel] || roleSpecific.learner || "") + `
+
+You are a tutor who knows our curriculum well and helps everyone learn!`;
+}
+
+export function TutorChat() {
+  const [inputValue, setInputValue] = useState("");
+  const { user, role } = useAuth();
+
+  // Inject scrollbar styles on mount
+  useEffect(() => {
+    if (!document.querySelector('style[data-tutor-scrollbar]')) {
+      const style = document.createElement('style');
+      style.setAttribute('data-tutor-scrollbar', 'true');
+      style.textContent = scrollbarStyle;
+      document.head.appendChild(style);
+    }
+  }, []);
+
+  // Inject user ID for tools to access (they run outside React context)
+  useEffect(() => {
+    (globalThis as any).__aiTutorUserId = user?.id || null;
+    return () => { (globalThis as any).__aiTutorUserId = null; };
+  }, [user?.id]);
+
+  // Build role-based tools object
+  const tools = useMemo(() => {
+    const base: Record<string, any> = { searchSubjects };
+
+    if (role === "learner") return { ...base, ...learnerTools };
+    if (role === "teacher") return { ...base, ...teacherTools };
+    if (role === "principal") return { ...base, ...principalTools };
+
+    // Default: give learner tools for unknown roles
+    return { ...base, ...learnerTools };
+  }, [role]);
+
+  const systemPrompt = useMemo(() => buildSystemPrompt(role, user?.name), [role, user?.name]);
+
+  const { messages, sendMessage, status, error } = useChat({
+    // In AI SDK v6, using DirectChatTransport is the official way 
+    // to handle generation directly on the client.
+    transport: new DirectChatTransport({
+      agent: new ToolLoopAgent({
+        model: createOpenRouter({
+          apiKey: import.meta.env.VITE_OPENROUTER_API_KEY || "",
+        })("openai/gpt-oss-120b"),
+        instructions: systemPrompt,
+        tools,
         // maxSteps: 5 is handled implicitly by ToolLoopAgent 
       })
     }),
@@ -194,7 +270,7 @@ You are a tutor who knows our curriculum well and helps everyone learn!`,
           </button>
         </form>
         <p className="mt-3 text-sm text-slate-500 text-center">
-          Powered by AI • Learning assistant
+          Powered by Afrinexel • Learning assistant
         </p>
       </div>
     </div>
