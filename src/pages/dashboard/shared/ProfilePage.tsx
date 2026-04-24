@@ -43,7 +43,7 @@ export default function ProfilePage() {
     details.push(
       { label: "Administration Number", value: studentProfile.administrationNumber || "-", icon: UserRound },
       { label: "Grade", value: gradeName || studentProfile.grade || "-", icon: UserRound },
-      { label: "Register Class", value: registerClassName || studentProfile.studentClass || "-", icon: UserRound }
+      { label: "Register Class", value: registerClassName || studentProfile.studentClass || "Not assigned yet", icon: UserRound }
     );
   }
 

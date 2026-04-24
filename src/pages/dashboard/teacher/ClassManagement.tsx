@@ -1,23 +1,20 @@
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSchoolData } from "@/hooks/useSchoolData";
 import { useRegistrationData } from "@/hooks/useRegistrationData";
+import { useAssignments } from "@/hooks/useAssignments";
 import { useSubjects } from "@/hooks/useSubjects";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import {
     Plus,
-    Search,
-    Users,
     BookOpen,
-    UserPlus,
-    LayoutGrid,
-    MoreHorizontal,
     GraduationCap,
     School,
     ChevronRight,
     ArrowLeft,
-    ExternalLink
+    Eye,
+    BarChart3
 } from "lucide-react";
 import {
     Table,
@@ -42,18 +39,58 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import supabase from "@/lib/supabase";
+import { buildGradebookScoreMap, calculateWeightedGradebookTotal, normalizeMaxPoints } from "@/lib/gradebook";
+import type { AssignmentGroup, AssignmentSubmission, Quiz, QuizSubmission, Student, StudentGradebookScore } from "@/types";
+
+type StudentAssessmentRow = {
+    key: string;
+    title: string;
+    kind: "assignment" | "quiz";
+    dueDate: string | null;
+    status: string;
+    groupName: string;
+    groupWeightPercentage: number;
+    rawScore: number | null;
+    rawMax: number;
+    percentage: number | null;
+    countsTowardsFinal: boolean;
+};
+
+const formatDateLabel = (value?: string | null) => {
+    if (!value) return "No date";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "No date";
+    return parsed.toLocaleDateString();
+};
+
+const getStatusClassName = (status: string) => {
+    const normalized = status.toLowerCase();
+    if (normalized.includes("graded") || normalized.includes("completed")) return "bg-emerald-600 text-white";
+    if (normalized.includes("submitted")) return "bg-sky-600 text-white";
+    if (normalized.includes("open")) return "bg-amber-500 text-white";
+    if (normalized.includes("upcoming")) return "bg-slate-500 text-white";
+    if (normalized.includes("missing") || normalized.includes("closed")) return "bg-rose-600 text-white";
+    return "bg-muted text-foreground";
+};
 
 export default function SchoolClassManagement() {
     const { user, role } = useAuth();
     const { classes, students, addSchoolClass, addStudent, addStudentToSchoolClass } = useSchoolData();
     const { grades, registerClasses, subjectClasses, getSubjectClassStudents, getSubjectClassEnrollment, getRegisterClassStudents } = useRegistrationData();
-    const { subjects } = useSubjects();
+    const { assignments, submissions: assignmentSubmissions } = useAssignments();
+    const { subjects, quizzes, submissions: quizSubmissions } = useSubjects();
 
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
     const [selectedSchoolClassId, setSelectedSchoolClassId] = useState<string | null>(null);
     const [viewingClassId, setViewingClassId] = useState<string | null>(null);
     const [viewingClassType, setViewingClassType] = useState<'subject' | 'register'>('subject');
+    const [selectedStudentForDetails, setSelectedStudentForDetails] = useState<Student | null>(null);
+    const [selectedStudentForGrades, setSelectedStudentForGrades] = useState<Student | null>(null);
+    const [subjectGradebookGroups, setSubjectGradebookGroups] = useState<AssignmentGroup[]>([]);
+    const [studentGradebookScores, setStudentGradebookScores] = useState<StudentGradebookScore[]>([]);
+    const [isLoadingStudentGrades, setIsLoadingStudentGrades] = useState(false);
 
     const [newSchoolClass, setNewSchoolClass] = useState({
         name: "",
@@ -104,6 +141,246 @@ export default function SchoolClassManagement() {
         setIsAddStudentOpen(false);
         setNewStudent({ name: "", administrationNumber: "", gender: "", grade: "", studentClass: "" });
         toast.success("Student added to class");
+    };
+
+    const viewedClassStudents = useMemo(() => {
+        if (!viewingClassId) return [];
+        return viewingClassType === "subject"
+            ? getSubjectClassStudents(viewingClassId)
+            : getRegisterClassStudents(viewingClassId);
+    }, [getRegisterClassStudents, getSubjectClassStudents, viewingClassId, viewingClassType]);
+
+    const viewedSubjectClass = useMemo(() => {
+        if (viewingClassType !== "subject") return null;
+        return subjectClasses.find((subjectClass) => subjectClass.id === viewingClassId) || null;
+    }, [subjectClasses, viewingClassId, viewingClassType]);
+
+    const viewedSubject = useMemo(() => {
+        if (!viewedSubjectClass) return null;
+        return subjects.find((subject) => subject.id === viewedSubjectClass.subjectId) || null;
+    }, [subjects, viewedSubjectClass]);
+
+    const scoreMap = useMemo(() => buildGradebookScoreMap(studentGradebookScores), [studentGradebookScores]);
+    const groupById = useMemo(
+        () => new Map(subjectGradebookGroups.map((group) => [group.id, group])),
+        [subjectGradebookGroups]
+    );
+
+    const latestAssignmentSubmissions = useMemo(() => {
+        const map = new Map<string, AssignmentSubmission>();
+        if (!selectedStudentForGrades) return map;
+
+        assignmentSubmissions
+            .filter((submission) => submission.studentId === selectedStudentForGrades.id)
+            .forEach((submission) => {
+                const current = map.get(submission.assignmentId);
+                if (!current) {
+                    map.set(submission.assignmentId, submission);
+                    return;
+                }
+                const currentTime = new Date(current.submittedAt || "").getTime();
+                const nextTime = new Date(submission.submittedAt || "").getTime();
+                if (nextTime >= currentTime) {
+                    map.set(submission.assignmentId, submission);
+                }
+            });
+
+        return map;
+    }, [assignmentSubmissions, selectedStudentForGrades]);
+
+    const latestQuizSubmissions = useMemo(() => {
+        const map = new Map<string, QuizSubmission>();
+        if (!selectedStudentForGrades) return map;
+
+        quizSubmissions
+            .filter((submission) => submission.studentId === selectedStudentForGrades.id)
+            .forEach((submission) => {
+                const current = map.get(submission.quizId);
+                if (!current) {
+                    map.set(submission.quizId, submission);
+                    return;
+                }
+                const currentTime = new Date(current.completedAt || "").getTime();
+                const nextTime = new Date(submission.completedAt || "").getTime();
+                if (nextTime >= currentTime) {
+                    map.set(submission.quizId, submission);
+                }
+            });
+
+        return map;
+    }, [quizSubmissions, selectedStudentForGrades]);
+
+    const studentAssessmentRows = useMemo<StudentAssessmentRow[]>(() => {
+        if (!selectedStudentForGrades || !viewedSubjectClass) return [];
+
+        const subjectAssignments = assignments
+            .filter((assignment) => assignment.subjectId === viewedSubjectClass.subjectId && assignment.status === "published")
+            .map((assignment) => {
+                const submission = latestAssignmentSubmissions.get(assignment.id) || null;
+                const gradeVisible = Boolean(submission && submission.status === "graded");
+                const rawScore = gradeVisible ? Number(submission?.totalGrade || 0) : null;
+                const rawMax = Number(assignment.totalMarks || 0);
+                const percentage = rawScore !== null && rawMax > 0 ? (rawScore / rawMax) * 100 : null;
+                const availableAt = assignment.availableFrom ? new Date(assignment.availableFrom).getTime() : null;
+                const dueAt = new Date(assignment.dueDate).getTime();
+                const now = Date.now();
+
+                let status = "Open";
+                if (submission?.status === "graded") {
+                    status = "Graded";
+                } else if (submission) {
+                    status = "Submitted";
+                } else if (availableAt && availableAt > now) {
+                    status = "Upcoming";
+                } else if (dueAt < now) {
+                    status = "Missing";
+                }
+
+                const group = assignment.groupId ? groupById.get(assignment.groupId) : undefined;
+
+                return {
+                    key: `assignment:${assignment.id}`,
+                    title: assignment.title,
+                    kind: "assignment" as const,
+                    dueDate: assignment.dueDate,
+                    status,
+                    groupName: group?.name || "Unlinked",
+                    groupWeightPercentage: Number(group?.weightPercentage || 0),
+                    rawScore,
+                    rawMax,
+                    percentage,
+                    countsTowardsFinal: assignment.countsTowardsFinal ?? true,
+                };
+            });
+
+        const subjectQuizzes = quizzes
+            .filter((quiz) => quiz.subjectId === viewedSubjectClass.subjectId && quiz.status === "published")
+            .map((quiz) => {
+                const submission = latestQuizSubmissions.get(quiz.id) || null;
+                const rawScore = submission ? Number(submission.score || 0) : null;
+                const rawMax = Number(submission?.totalPoints || quiz.pointsPossible || 0);
+                const percentage = rawScore !== null && rawMax > 0 ? (rawScore / rawMax) * 100 : null;
+                const endDate = quiz.settings?.availability?.endDate || null;
+                const startDate = quiz.settings?.availability?.startDate || null;
+                const now = Date.now();
+                const startAt = startDate ? new Date(startDate).getTime() : null;
+                const endAt = endDate ? new Date(endDate).getTime() : null;
+
+                let status = "Open";
+                if (submission?.status === "completed") {
+                    status = "Completed";
+                } else if (submission?.status === "need-review") {
+                    status = "Needs Review";
+                } else if (startAt && startAt > now) {
+                    status = "Upcoming";
+                } else if (endAt && endAt < now) {
+                    status = "Closed";
+                }
+
+                const group = quiz.groupId ? groupById.get(quiz.groupId) : undefined;
+
+                return {
+                    key: `quiz:${quiz.id}`,
+                    title: quiz.title,
+                    kind: "quiz" as const,
+                    dueDate: endDate,
+                    status,
+                    groupName: group?.name || "Unlinked",
+                    groupWeightPercentage: Number(group?.weightPercentage || 0),
+                    rawScore,
+                    rawMax,
+                    percentage,
+                    countsTowardsFinal: quiz.countsTowardsFinal ?? true,
+                };
+            });
+
+        return [...subjectAssignments, ...subjectQuizzes].sort((a, b) => {
+            const aTime = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+            const bTime = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+            return bTime - aTime;
+        });
+    }, [
+        assignments,
+        groupById,
+        latestAssignmentSubmissions,
+        latestQuizSubmissions,
+        quizzes,
+        selectedStudentForGrades,
+        viewedSubjectClass,
+    ]);
+
+    const selectedStudentYearMark = useMemo(() => {
+        if (!selectedStudentForGrades) return 0;
+        return calculateWeightedGradebookTotal(subjectGradebookGroups, scoreMap, selectedStudentForGrades.id);
+    }, [scoreMap, selectedStudentForGrades, subjectGradebookGroups]);
+
+    const openStudentGrades = async (student: Student) => {
+        if (!viewedSubjectClass) {
+            toast.error("Learner grade view is only available in subject classes.");
+            return;
+        }
+
+        setSelectedStudentForGrades(student);
+        setIsLoadingStudentGrades(true);
+
+        try {
+            const [groupsRes, scoresRes] = await Promise.all([
+                supabase
+                    .from("assignment_groups")
+                    .select("*")
+                    .eq("subject_id", viewedSubjectClass.subjectId)
+                    .order("order", { ascending: true }),
+                supabase
+                    .from("student_gradebook_scores")
+                    .select("*")
+                    .eq("subject_id", viewedSubjectClass.subjectId)
+                    .eq("student_id", student.id),
+            ]);
+
+            if (groupsRes.error || scoresRes.error) {
+                console.error("Failed to load learner gradebook details", {
+                    groupsError: groupsRes.error,
+                    scoresError: scoresRes.error,
+                });
+                toast.error("Could not load learner grade data");
+                setSubjectGradebookGroups([]);
+                setStudentGradebookScores([]);
+                return;
+            }
+
+            setSubjectGradebookGroups((groupsRes.data || []).map((group) => ({
+                id: group.id,
+                subjectId: group.subject_id,
+                name: group.name,
+                weightPercentage: Number(group.weight_percentage || 0),
+                maxPoints: normalizeMaxPoints(group.max_points),
+                order: group.order ?? 0,
+            })));
+
+            setStudentGradebookScores((scoresRes.data || []).map((entry) => ({
+                id: entry.id,
+                subjectId: entry.subject_id,
+                assignmentGroupId: entry.assignment_group_id,
+                studentId: entry.student_id,
+                score: Number(entry.score || 0),
+                feedback: entry.feedback,
+                updatedAt: entry.updated_at,
+            })));
+        } catch (error) {
+            console.error("Unexpected learner grade load error", error);
+            toast.error("Could not load learner grade data");
+            setSubjectGradebookGroups([]);
+            setStudentGradebookScores([]);
+        } finally {
+            setIsLoadingStudentGrades(false);
+        }
+    };
+
+    const closeStudentGradesDialog = () => {
+        setSelectedStudentForGrades(null);
+        setSubjectGradebookGroups([]);
+        setStudentGradebookScores([]);
+        setIsLoadingStudentGrades(false);
     };
 
     return (
@@ -284,7 +561,7 @@ export default function SchoolClassManagement() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {(viewingClassType === 'subject' ? getSubjectClassStudents(viewingClassId || "") : getRegisterClassStudents(viewingClassId || "")).map((student) => {
+                                {viewedClassStudents.map((student) => {
                                     return (
                                         <TableRow key={student.id}>
                                             <TableCell className="font-medium">
@@ -301,14 +578,30 @@ export default function SchoolClassManagement() {
                                                 <Badge variant="outline" className="bg-slate-50">Grade {student.grade}{student.studentClass}</Badge>
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="ghost" size="icon">
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        title="View learner details"
+                                                        onClick={() => setSelectedStudentForDetails(student)}
+                                                    >
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        title={viewingClassType === "subject" ? "View learner grades" : "Only available for subject classes"}
+                                                        disabled={viewingClassType !== "subject"}
+                                                        onClick={() => void openStudentGrades(student)}
+                                                    >
+                                                        <BarChart3 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     );
                                 })}
-                                {((viewingClassType === 'subject' ? getSubjectClassStudents(viewingClassId || "") : getRegisterClassStudents(viewingClassId || "")).length === 0) && (
+                                {(viewedClassStudents.length === 0) && (
                                     <TableRow>
                                         <TableCell colSpan={5} className="h-48 text-center text-muted-foreground italic">
                                             No students enrolled in this class yet.
@@ -396,6 +689,191 @@ export default function SchoolClassManagement() {
                     <DialogFooter>
                         <Button onClick={handleAddStudent}>Enroll Student</Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={Boolean(selectedStudentForDetails)}
+                onOpenChange={(open) => {
+                    if (!open) setSelectedStudentForDetails(null);
+                }}
+            >
+                <DialogContent className="sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Learner Details</DialogTitle>
+                        <DialogDescription>
+                            Profile and enrollment information for {selectedStudentForDetails?.name || "selected learner"}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {selectedStudentForDetails ? (
+                        <div className="space-y-4">
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="rounded-xl border p-4">
+                                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Full Name</p>
+                                    <p className="mt-2 font-bold">{selectedStudentForDetails.name || "-"}</p>
+                                </div>
+                                <div className="rounded-xl border p-4">
+                                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Administration Number</p>
+                                    <p className="mt-2 font-bold">{selectedStudentForDetails.administrationNumber || "-"}</p>
+                                </div>
+                                <div className="rounded-xl border p-4">
+                                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Email</p>
+                                    <p className="mt-2 font-bold break-all">{selectedStudentForDetails.email || "-"}</p>
+                                </div>
+                                <div className="rounded-xl border p-4">
+                                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Gender</p>
+                                    <p className="mt-2 font-bold">{selectedStudentForDetails.gender || "-"}</p>
+                                </div>
+                                <div className="rounded-xl border p-4">
+                                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Grade / Class</p>
+                                    <p className="mt-2 font-bold">
+                                        {selectedStudentForDetails.grade || "-"} {selectedStudentForDetails.studentClass || ""}
+                                    </p>
+                                </div>
+                                <div className="rounded-xl border p-4">
+                                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Admission Year</p>
+                                    <p className="mt-2 font-bold">{selectedStudentForDetails.admissionYear || "-"}</p>
+                                </div>
+                            </div>
+                            <div className="rounded-xl border p-4">
+                                <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Assigned Subjects</p>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {(selectedStudentForDetails.subjects || []).length > 0 ? (
+                                        selectedStudentForDetails.subjects?.map((subject) => (
+                                            <Badge key={`${selectedStudentForDetails.id}-${subject.subject_id}`} variant="secondary">
+                                                {subject.subject_name}
+                                            </Badge>
+                                        ))
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground">No assigned subjects listed.</p>
+                                    )}
+                                </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Security PIN is intentionally hidden on this teacher view.
+                            </p>
+                        </div>
+                    ) : null}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={Boolean(selectedStudentForGrades)}
+                onOpenChange={(open) => {
+                    if (!open) closeStudentGradesDialog();
+                }}
+            >
+                <DialogContent className="max-w-5xl">
+                    <DialogHeader>
+                        <DialogTitle>Subject Grade Snapshot</DialogTitle>
+                        <DialogDescription>
+                            {selectedStudentForGrades?.name || "Learner"} | {viewedSubject?.name || "Subject"}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {isLoadingStudentGrades ? (
+                        <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
+                            Loading learner grade data...
+                        </div>
+                    ) : (
+                        <div className="space-y-5">
+                            <div className="grid gap-3 md:grid-cols-3">
+                                <div className="rounded-xl border p-4">
+                                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Current Year Mark</p>
+                                    <p className="mt-2 text-3xl font-black">{selectedStudentYearMark.toFixed(1)}%</p>
+                                </div>
+                                <div className="rounded-xl border p-4">
+                                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Assessment Records</p>
+                                    <p className="mt-2 text-3xl font-black">{studentAssessmentRows.length}</p>
+                                </div>
+                                <div className="rounded-xl border p-4">
+                                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Gradebook Categories</p>
+                                    <p className="mt-2 text-3xl font-black">{subjectGradebookGroups.length}</p>
+                                </div>
+                            </div>
+
+                            <div className="rounded-xl border p-4">
+                                <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Setup Score Categories</p>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {subjectGradebookGroups.length > 0 ? (
+                                        subjectGradebookGroups.map((group) => {
+                                            const entry = selectedStudentForGrades
+                                                ? scoreMap[`${selectedStudentForGrades.id}:${group.id}`]
+                                                : undefined;
+                                            return (
+                                                <Badge key={group.id} variant="outline">
+                                                    {group.name} | {group.weightPercentage}% | {entry ? `${entry.score} / ${normalizeMaxPoints(group.maxPoints)}` : `- / ${normalizeMaxPoints(group.maxPoints)}`}
+                                                </Badge>
+                                            );
+                                        })
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground">No gradebook setup exists for this subject yet.</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="rounded-xl border overflow-hidden">
+                                <Table>
+                                    <TableHeader className="bg-muted/40">
+                                        <TableRow>
+                                            <TableHead className="font-black">Item</TableHead>
+                                            <TableHead className="font-black">Due Date</TableHead>
+                                            <TableHead className="font-black">Status</TableHead>
+                                            <TableHead className="font-black">Setup Score</TableHead>
+                                            <TableHead className="font-black">Grade</TableHead>
+                                            <TableHead className="font-black">Final Mark Impact</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {studentAssessmentRows.map((row) => (
+                                            <TableRow key={row.key}>
+                                                <TableCell>
+                                                    <div className="space-y-1">
+                                                        <p className="font-bold">{row.title}</p>
+                                                        <Badge variant="secondary" className="capitalize">{row.kind}</Badge>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-muted-foreground">{formatDateLabel(row.dueDate)}</TableCell>
+                                                <TableCell>
+                                                    <Badge className={getStatusClassName(row.status)}>{row.status}</Badge>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="space-y-1">
+                                                        <p className="font-semibold">{row.groupName}</p>
+                                                        <p className="text-xs text-muted-foreground">{row.groupWeightPercentage}% category weight</p>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {row.percentage !== null ? (
+                                                        <div className="space-y-1">
+                                                            <p className="font-bold">{row.percentage.toFixed(1)}%</p>
+                                                            <p className="text-xs text-muted-foreground">{row.rawScore?.toFixed(1).replace(/\.0$/, "")} / {row.rawMax.toFixed(1).replace(/\.0$/, "")}</p>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">Pending</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {row.percentage !== null && row.countsTowardsFinal ? (
+                                                        <p className="font-bold">{((row.percentage / 100) * row.groupWeightPercentage).toFixed(1)}%</p>
+                                                    ) : (
+                                                        <p className="text-muted-foreground">{row.countsTowardsFinal ? "Tracked" : "Excluded"}</p>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {studentAssessmentRows.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                                                    No published assignments or quizzes found for this subject class.
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : null}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
 

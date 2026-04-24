@@ -58,7 +58,11 @@ export default function StudentDirectory() {
         const matchesSearch = (student.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
             (student.administrationNumber || "").toLowerCase().includes(searchTerm.toLowerCase());
         const matchesGrade = filterGrade === "all" || student.gradeId === filterGrade;
-        const matchesClass = filterClass === "all" || student.registerClassId === filterClass;
+        const matchesClass = filterClass === "all"
+            ? true
+            : filterClass === "unassigned"
+                ? !student.registerClassId
+                : student.registerClassId === filterClass;
         return matchesSearch && matchesGrade && matchesClass;
     });
 
@@ -72,7 +76,7 @@ export default function StudentDirectory() {
             admissionYear: student.admissionYear,
             gender: student.gender,
             gradeId: student.gradeId,
-            registerClassId: student.registerClassId,
+            registerClassId: student.registerClassId || "unassigned",
             status: student.status,
             pin: student.pin,
         });
@@ -96,13 +100,16 @@ export default function StudentDirectory() {
 
     const handleSave = async () => {
         if (!selectedStudent || !studentForm) return;
-        if (!studentForm.firstName || !studentForm.lastName || !studentForm.gradeId || !studentForm.registerClassId) {
+        if (!studentForm.firstName || !studentForm.lastName || !studentForm.gradeId) {
             toast.error("Please complete the student form before saving");
             return;
         }
         setIsSaving(true);
         try {
-            await updateStudent(selectedStudent.id, { ...studentForm });
+            await updateStudent(selectedStudent.id, {
+                ...studentForm,
+                registerClassId: studentForm.registerClassId === "unassigned" ? null : studentForm.registerClassId,
+            });
             await assignSubjectsToStudent(selectedStudent.id, selectedSubjectIds);
             toast.success("Student details updated");
         } catch (error: any) {
@@ -153,6 +160,7 @@ export default function StudentDirectory() {
                     <SelectTrigger className="h-11 w-[180px] border-2"><SelectValue placeholder="Register Class" /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Classes</SelectItem>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
                         {registerClasses.map(registerClass => <SelectItem key={registerClass.id} value={registerClass.id}>{registerClass.name}</SelectItem>)}
                     </SelectContent>
                 </Select>
@@ -179,7 +187,7 @@ export default function StudentDirectory() {
                                 <TableRow key={student.id} className="group transition-colors hover:bg-muted/30">
                                     <TableCell><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 font-black text-primary shadow-sm transition-transform group-hover:scale-105">{student.firstName?.charAt(0)}{student.lastName?.charAt(0)}</div><div><div className="font-black">{student.name}</div><div className="text-[10px] font-bold text-muted-foreground">{student.gender} • {student.admissionYear}</div></div></div></TableCell>
                                     <TableCell className="font-mono text-xs font-bold">{student.administrationNumber}</TableCell>
-                                    <TableCell><div className="space-y-1"><Badge variant="outline" className="text-[10px] font-black">{grade?.name}</Badge><div className="text-[10px] font-bold text-muted-foreground">{regClass?.name}</div></div></TableCell>
+                                    <TableCell><div className="space-y-1"><Badge variant="outline" className="text-[10px] font-black">{grade?.name}</Badge><div className="text-[10px] font-bold text-muted-foreground">{regClass?.name || "Unassigned"}</div></div></TableCell>
                                     <TableCell><Badge className="border-purple-200 bg-purple-500/10 text-[10px] font-black text-purple-600">{subjectCount} Subjects</Badge></TableCell>
                                     <TableCell><Badge variant="outline" className={cn("border-2 px-2 py-0 text-[10px] font-black capitalize", student.status === "active" ? "border-green-200 bg-green-50 text-green-600" : student.status === "transferred" ? "border-orange-200 bg-orange-50 text-orange-600" : "border-red-200 bg-red-50 text-red-600")}>{student.status}</Badge></TableCell>
                                     <TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="ghost" size="icon" className="hover:bg-primary/10 hover:text-primary" onClick={() => openProfile(student)}><Eye className="h-4 w-4" /></Button><Button variant="ghost" size="icon" className="text-red-500 hover:bg-red-50" onClick={() => handleDelete(student.id, student.name)}><Trash2 className="h-4 w-4" /></Button></div></TableCell>
@@ -214,7 +222,7 @@ export default function StudentDirectory() {
 
                                 <div className="space-y-8 p-8">
                                     <div className="grid gap-4 md:grid-cols-3">
-                                        <div className="rounded-xl border-2 bg-muted/20 p-4"><div className="mb-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Academic Status</div><div className="text-xl font-black">{grade?.name}</div><div className="text-xs font-bold text-muted-foreground">{regClass?.name} Homeroom</div></div>
+                                        <div className="rounded-xl border-2 bg-muted/20 p-4"><div className="mb-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Academic Status</div><div className="text-xl font-black">{grade?.name}</div><div className="text-xs font-bold text-muted-foreground">{regClass?.name || "Unassigned"} Homeroom</div></div>
                                         <div className="rounded-xl border-2 bg-muted/20 p-4"><div className="mb-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Contact Details</div><div className="truncate text-sm font-bold">{selectedStudent.email || "No email documented"}</div><div className="mt-1 text-[10px] text-muted-foreground">Admission Year: {selectedStudent.admissionYear}</div></div>
                                         <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-4"><div className="mb-1 text-[10px] font-black uppercase tracking-widest text-primary">Security PIN</div><div className="text-2xl font-black tracking-[0.3em] text-primary">{selectedStudent.pin}</div><div className="mt-1 text-[10px] font-bold text-primary/60">Learner Login Code</div></div>
                                     </div>
@@ -231,8 +239,8 @@ export default function StudentDirectory() {
                                                     <div className="grid gap-2"><Label>Admission Year</Label><Input value={studentForm.admissionYear} onChange={(e) => setStudentForm({ ...studentForm, admissionYear: e.target.value })} /></div>
                                                     <div className="grid gap-2"><Label>Gender</Label><Select value={studentForm.gender} onValueChange={(value) => setStudentForm({ ...studentForm, gender: value })}><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem></SelectContent></Select></div>
                                                     <div className="grid gap-2"><Label>Status</Label><Select value={studentForm.status} onValueChange={(value: Student["status"]) => setStudentForm({ ...studentForm, status: value })}><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem><SelectItem value="transferred">Transferred</SelectItem></SelectContent></Select></div>
-                                                    <div className="grid gap-2"><Label>Grade</Label><Select value={studentForm.gradeId} onValueChange={(value) => setStudentForm({ ...studentForm, gradeId: value, registerClassId: "" })}><SelectTrigger><SelectValue placeholder="Select grade" /></SelectTrigger><SelectContent>{grades.map(gradeItem => <SelectItem key={gradeItem.id} value={gradeItem.id}>{gradeItem.name}</SelectItem>)}</SelectContent></Select></div>
-                                                    <div className="grid gap-2"><Label>Register Class</Label><Select value={studentForm.registerClassId} onValueChange={(value) => setStudentForm({ ...studentForm, registerClassId: value })}><SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger><SelectContent>{availableRegisterClasses.map(registerClass => <SelectItem key={registerClass.id} value={registerClass.id}>{registerClass.name}</SelectItem>)}</SelectContent></Select></div>
+                                                    <div className="grid gap-2"><Label>Grade</Label><Select value={studentForm.gradeId} onValueChange={(value) => setStudentForm({ ...studentForm, gradeId: value, registerClassId: "unassigned" })}><SelectTrigger><SelectValue placeholder="Select grade" /></SelectTrigger><SelectContent>{grades.map(gradeItem => <SelectItem key={gradeItem.id} value={gradeItem.id}>{gradeItem.name}</SelectItem>)}</SelectContent></Select></div>
+                                                    <div className="grid gap-2"><Label>Register Class</Label><Select value={studentForm.registerClassId || "unassigned"} onValueChange={(value) => setStudentForm({ ...studentForm, registerClassId: value })}><SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger><SelectContent><SelectItem value="unassigned">Unassigned</SelectItem>{availableRegisterClasses.map(registerClass => <SelectItem key={registerClass.id} value={registerClass.id}>{registerClass.name}</SelectItem>)}</SelectContent></Select></div>
                                                     <div className="grid gap-2 md:col-span-2"><Label>Security PIN</Label><Input value={studentForm.pin} onChange={(e) => setStudentForm({ ...studentForm, pin: e.target.value })} /></div>
                                                 </div>
                                             </div>

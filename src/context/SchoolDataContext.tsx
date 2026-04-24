@@ -182,7 +182,7 @@ export function SchoolDataProvider({ children }: { children: ReactNode }) {
                 admissionYear: student.admissionYear,
                 gender: student.gender,
                 gradeId: student.gradeId,
-                registerClassId: student.registerClassId,
+                registerClassId: student.registerClassId || null,
                 status: student.status || 'active'
             },
             headers: {

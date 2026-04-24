@@ -259,7 +259,7 @@ export interface RegisterClass {
     id: string;
     name: string; // "10A", "10B"
     gradeId: string;
-    classTeacherId: string; // Teacher ID
+    classTeacherId: string | null; // Teacher ID (optional)
     maxStudents: number;
     createdAt: string;
 }
@@ -293,7 +293,7 @@ export interface Student {
     admissionYear: string;
     gradeId: string;
     grade: string; // display value for backward compat
-    registerClassId: string;
+    registerClassId: string | null;
     studentClass: string; // backward compat
     status: "active" | "inactive" | "transferred";
     pin: string;

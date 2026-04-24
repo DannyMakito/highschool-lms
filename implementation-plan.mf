@@ -1,0 +1,120 @@
+# Highschool LMS Implementation Plan
+
+## Objective
+Deliver the following additions across teacher, student, and shared portal experiences:
+1. Teacher `My Classes` student operations (details + subject-grade access).
+2. Register-marking workflow for register-class teachers (attendance + timetable ownership).
+3. Gradebook-category linking during assignment/quiz creation.
+4. Portal-specific Help page with function-level help icons and user-manual content.
+
+## Current Sprint Scope
+- Implement now: item `1` and item `3`.
+- Plan only (defer build): item `2` and item `4`.
+
+## Item 1: Teacher My Classes Operations
+### Functional Requirements
+- Add operating actions on teacher `My Classes` roster rows:
+  - `Eye` action: open learner details (exclude login PIN).
+  - `Grades` action: open learner grades for the selected subject class.
+- Keep class and student list behavior unchanged for existing navigation.
+
+### UI/UX Plan
+- Update `src/pages/dashboard/teacher/ClassManagement.tsx`:
+  - Replace generic row action button with explicit icon actions.
+  - Add `Student Details` dialog with profile, registration, and assignment info only (no PIN).
+  - Add `Student Subject Grades` dialog for subject classes.
+  - Disable grade action for register/home classes (subject-grade view is subject-class scoped).
+
+### Data Plan
+- Reuse existing context data:
+  - `useRegistrationData` for class rosters.
+  - `useAssignments` and `useSubjects` for assignment/quiz results.
+- Fetch subject-gradebook setup and scores from:
+  - `assignment_groups`
+  - `student_gradebook_scores`
+
+### Acceptance Criteria
+- Teacher can click eye icon on any learner row and view non-sensitive details.
+- Teacher can click grades icon (subject class) and see linked assessment performance.
+- PIN is not rendered anywhere in teacher learner details modal.
+
+## Item 2: Register Marking Function (Planned)
+### Functional Requirements
+- Teachers assigned as class teacher to a register class can:
+  - Mark daily attendance (present/absent/late/etc).
+  - Manage register timetable responsibilities.
+  - Track class attendance history by date and learner.
+
+### Proposed Implementation
+- Add teacher route/page: `Register & Timetable`.
+- New data model (or confirm existing):
+  - `register_attendance_sessions` (register_class_id, date, teacher_id, status)
+  - `register_attendance_entries` (session_id, student_id, mark, note)
+  - `register_timetable_slots` (register_class_id, day, period, activity, owner)
+- Add principal oversight/report hooks later.
+
+### Dependencies / Risks
+- Requires schema + RLS updates for attendance tables.
+- Requires timezone-aware date handling for daily session boundaries.
+
+## Item 3: Gradebook Setup Score Linking for Assignments/Quizzes
+### Functional Requirements
+- When creating/editing assignment or quiz, teacher can choose a gradebook setup category
+  (e.g. `Quizzes & Assignments`, `Tests & Exams`, `Extra Curricular Activities`).
+- Selected category must persist as `groupId` so student assessment records show category placement correctly.
+
+### UI/UX Plan
+- Assignment editor (`AssignmentManagement.tsx`):
+  - Load subject `assignment_groups`.
+  - Add `Gradebook Category` selector in Assessment Settings.
+  - Persist selected category on create and edit.
+- Quiz editor (`CreateQuiz.tsx`):
+  - Load subject `assignment_groups`.
+  - Add category selector in quiz settings panel.
+  - Persist category for draft and publish flows.
+
+### Data Plan
+- Reuse existing schema/fields:
+  - `assignments.group_id`
+  - `quizzes.group_id`
+  - `assignment_groups` for per-subject category definitions
+
+### Acceptance Criteria
+- Teacher can select any configured gradebook category during assignment/quiz setup.
+- Created/updated assignment or quiz stores selected `group_id`.
+- Student grade views place those records under the selected category column.
+
+## Item 4: Help Page + Contextual Help Icons (Planned)
+### Functional Requirements
+- Add Help page entry in side nav for each portal (student/teacher/principal).
+- Help page contains portal-tailored user manual sections.
+- Add per-page/per-function help icons linked to relevant manual section snippets.
+
+### Proposed Implementation
+- Add route/page per role:
+  - `student/help`, `teacher/help`, `principal/help`
+- Store manual content as structured config:
+  - role -> page -> function -> help text
+- Reusable `HelpIcon` component with tooltip/popover + deep-link to Help page section.
+
+### Dependencies / Risks
+- Requires agreement on final manual content copy and section hierarchy.
+
+## Rollout Order
+1. Ship item 1 UI + data wiring.
+2. Ship item 3 category selection + persistence.
+3. QA pass: teacher flows + student grade visibility checks.
+4. Begin item 2 schema and feature build.
+5. Begin item 4 documentation and contextual help layer.
+
+## Validation Plan
+- Manual teacher QA:
+  - open `My Classes` -> class -> learner row actions.
+  - verify learner details exclude PIN.
+  - verify grades modal renders subject-linked data.
+- Manual assessment QA:
+  - create assignment + quiz with chosen gradebook category.
+  - verify category appears in student grade records under correct setup column.
+- Regression:
+  - existing assignment/quiz creation and editing remain functional.
+  - existing class list navigation remains functional.

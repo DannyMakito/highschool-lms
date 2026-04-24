@@ -59,14 +59,15 @@ export default function StudentRegistration() {
     };
 
     const handleRegister = async (overrideSubjects?: string[]) => {
-        if (!form.firstName || !form.lastName || !form.gender || !form.gradeId || !form.registerClassId) {
+        if (!form.firstName || !form.lastName || !form.gender || !form.gradeId) {
             toast.error("Please fill in all required fields");
             return;
         }
 
-        const regClass = registerClasses.find(rc => rc.id === form.registerClassId);
-        if (regClass) {
-            const currentCount = getRegisterClassStudents(form.registerClassId).length;
+        const regClassId = form.registerClassId || null;
+        const regClass = registerClasses.find(rc => rc.id === regClassId);
+        if (regClass && regClassId) {
+            const currentCount = getRegisterClassStudents(regClassId).length;
             if (currentCount >= regClass.maxStudents) {
                 toast.error("Register class is at full capacity");
                 return;
@@ -93,7 +94,7 @@ export default function StudentRegistration() {
                 admissionYear: form.admissionYear,
                 gradeId: form.gradeId,
                 grade: selectedGrade?.name || "",
-                registerClassId: form.registerClassId,
+                registerClassId: regClassId,
                 studentClass: regClass?.name || "",
                 status: "active",
             }, { subjectIds });
@@ -185,7 +186,7 @@ export default function StudentRegistration() {
                     </CardTitle>
                     <CardDescription className="font-bold">
                         {step === 1 ? "Enter name, gender and official identification data." :
-                            step === 2 ? "Assign the student to a grade level and homeroom group." :
+                         step === 2 ? "Assign the student to a grade level and optionally a register class." :
                                 step === 3 ? "Choose core and elective subjects for the academic year." :
                                 "Assign the student to specific subject class groups."}
                     </CardDescription>
@@ -262,18 +263,29 @@ export default function StudentRegistration() {
                             {form.gradeId && (
                                 <div className="space-y-4 pt-4 border-t-2 border-dashed">
                                     <Label className="text-sm font-black flex items-center gap-2">
-                                        Assign to Register Class (Homeroom)
+                                        Assign to Register Class (Optional)
                                         <Badge variant="outline" className="text-[10px]">Available in {selectedGrade?.name}</Badge>
                                     </Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        You can continue without a register class and assign it later.
+                                    </p>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className={cn("w-fit", !form.registerClassId && "border-primary text-primary")}
+                                        onClick={() => setForm({ ...form, registerClassId: "" })}
+                                    >
+                                        Leave Unassigned For Now
+                                    </Button>
                                     {gradeRegClasses.length > 0 ? (
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {gradeRegClasses.map(rc => {
                                                 const enrolled = getRegisterClassStudents(rc.id).length;
                                                 const teacher = teachers.find(t => t.id === rc.classTeacherId);
                                                 const isFull = enrolled >= rc.maxStudents;
-                                                return (
-                                                    <button key={rc.id} type="button" disabled={isFull}
-                                                        onClick={() => setForm({ ...form, registerClassId: rc.id })}
+                                                    return (
+                                                        <button key={rc.id} type="button" disabled={isFull}
+                                                            onClick={() => setForm({ ...form, registerClassId: rc.id })}
                                                         className={cn(
                                                             "p-5 rounded-2xl border-2 text-left transition-all relative overflow-hidden group",
                                                             form.registerClassId === rc.id ? "border-primary bg-primary/5 shadow-md shadow-primary/5" : "border-muted hover:border-muted-foreground/30",
@@ -457,8 +469,8 @@ export default function StudentRegistration() {
                                 }
                                 setStep(2);
                             } else if (step === 2) {
-                                if (!form.gradeId || !form.registerClassId) {
-                                    toast.error("Grade and Class assignment required"); return;
+                                if (!form.gradeId) {
+                                    toast.error("Grade assignment required"); return;
                                 }
                                 setForm(prev => ({
                                     ...prev,
