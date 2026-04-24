@@ -14,6 +14,7 @@ import { AssignmentsProvider } from "@/context/AssignmentsContext";
 import { useAssignments } from "@/hooks/useAssignments";
 import { NotificationsProvider } from "@/context/NotificationsContext";
 import { NotificationsPopup } from "@/components/notifications/NotificationsPopup";
+import { RouteHelpIcon } from "@/components/help/HelpIcon";
 import {
     SidebarInset,
     SidebarProvider,
@@ -64,6 +65,9 @@ function PrincipalPortalContent() {
                                 </BreadcrumbItem>
                             </BreadcrumbList>
                         </Breadcrumb>
+                    </div>
+                    <div className="ml-auto pr-4">
+                        <RouteHelpIcon />
                     </div>
                 </header>
                 <div className="flex flex-1 flex-col gap-4 p-4 pt-0 mt-4">

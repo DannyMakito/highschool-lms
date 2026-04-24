@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import RichTextEditor from "@/components/shared/TinyMCEEditor";
 import { useAssignments } from "@/hooks/useAssignments";
 import { useSubjects } from "@/hooks/useSubjects";
@@ -21,8 +21,9 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import type { AssessmentCategory, AssessmentPeriod, Assignment, Rubric } from "@/types";
+import type { AssessmentCategory, AssessmentPeriod, Assignment, AssignmentGroup, Rubric } from "@/types";
 import { removeStorageFile, uploadFileWithProgress } from "@/lib/storage";
+import supabase from "@/lib/supabase";
 
 type AssignmentFormState = {
     title: string;
@@ -38,6 +39,7 @@ type AssignmentFormState = {
     assessmentCategory: AssessmentCategory;
     assessmentPeriod: AssessmentPeriod;
     contributionWeight: number;
+    groupId: string;
     attachmentUrl: string;
     attachmentType: "pdf" | "file" | null;
     attachmentFilePath: string | null;
@@ -74,6 +76,7 @@ const createDefaultAssignmentState = (): AssignmentFormState => {
         assessmentCategory: "assignment",
         assessmentPeriod: "term",
         contributionWeight: 0,
+        groupId: "",
         attachmentUrl: "",
         attachmentType: null,
         attachmentFilePath: null,
@@ -122,10 +125,65 @@ export default function AssignmentManagement() {
     const [rubricEditor, setRubricEditor] = useState<RubricEditorState>(createEmptyRubric());
     const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
     const [attachmentUploadProgress, setAttachmentUploadProgress] = useState(0);
+    const [assignmentGroups, setAssignmentGroups] = useState<AssignmentGroup[]>([]);
     const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+    const subjectIds = useMemo(() => subjects.map((subject) => subject.id), [subjects]);
 
     const filteredAssignments = assignments.filter(a =>
         a.title.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    useEffect(() => {
+        if (subjectIds.length === 0) {
+            setAssignmentGroups([]);
+            return;
+        }
+
+        let cancelled = false;
+
+        const fetchAssignmentGroups = async () => {
+            const { data, error } = await supabase
+                .from("assignment_groups")
+                .select("*")
+                .in("subject_id", subjectIds)
+                .order("order", { ascending: true });
+
+            if (error) {
+                console.error("Failed to fetch assignment groups for assessments", error);
+                if (!cancelled) {
+                    setAssignmentGroups([]);
+                }
+                return;
+            }
+
+            if (cancelled) return;
+
+            setAssignmentGroups((data || []).map((group) => ({
+                id: group.id,
+                subjectId: group.subject_id,
+                name: group.name,
+                weightPercentage: Number(group.weight_percentage || 0),
+                maxPoints: Number(group.max_points || 0),
+                order: group.order ?? 0,
+            })));
+        };
+
+        void fetchAssignmentGroups();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [subjectIds.join(",")]);
+
+    const selectedSubjectGroups = useMemo(() => {
+        return assignmentGroups
+            .filter((group) => group.subjectId === assignmentForm.subjectId)
+            .sort((a, b) => (a.order || 0) - (b.order || 0));
+    }, [assignmentForm.subjectId, assignmentGroups]);
+
+    const groupNameById = useMemo(
+        () => new Map(assignmentGroups.map((group) => [group.id, group.name])),
+        [assignmentGroups]
     );
 
     const groupedWeightSummary = useMemo(() => {
@@ -164,6 +222,7 @@ export default function AssignmentManagement() {
             assessmentCategory: assignment.assessmentCategory || "assignment",
             assessmentPeriod: assignment.assessmentPeriod || "term",
             contributionWeight: assignment.contributionWeight || 0,
+            groupId: assignment.groupId || "",
             attachmentUrl: assignment.attachmentUrl || "",
             attachmentType: assignment.attachmentType || null,
             attachmentFilePath: assignment.attachmentFilePath || null,
@@ -329,6 +388,7 @@ export default function AssignmentManagement() {
                 : null;
             const payload: Partial<Assignment> = {
                 ...assignmentForm,
+                groupId: assignmentForm.groupId || null,
                 rubricId,
                 status: "published",
             };
@@ -540,7 +600,18 @@ export default function AssignmentManagement() {
                                         <Label className="text-xs font-bold text-muted-foreground">Subject & Grade</Label>
                                         <Select
                                             value={assignmentForm.subjectId}
-                                            onValueChange={(v) => setAssignmentForm(prev => ({ ...prev, subjectId: v }))}
+                                            onValueChange={(v) =>
+                                                setAssignmentForm((prev) => {
+                                                    const groupBelongsToSubject = assignmentGroups.some(
+                                                        (group) => group.subjectId === v && group.id === prev.groupId
+                                                    );
+                                                    return {
+                                                        ...prev,
+                                                        subjectId: v,
+                                                        groupId: groupBelongsToSubject ? prev.groupId : "",
+                                                    };
+                                                })
+                                            }
                                         >
                                             <SelectTrigger className="bg-background/50">
                                                 <SelectValue placeholder="Select a subject" />
@@ -551,6 +622,37 @@ export default function AssignmentManagement() {
                                                 ))}
                                             </SelectContent>
                                         </Select>
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label className="text-xs font-bold text-muted-foreground">Gradebook Category</Label>
+                                        <Select
+                                            value={assignmentForm.groupId || "unlinked"}
+                                            onValueChange={(value) =>
+                                                setAssignmentForm((prev) => ({
+                                                    ...prev,
+                                                    groupId: value === "unlinked" ? "" : value,
+                                                }))
+                                            }
+                                            disabled={!assignmentForm.subjectId}
+                                        >
+                                            <SelectTrigger className="bg-background/50">
+                                                <SelectValue placeholder="Select a gradebook setup score" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="unlinked">Unlinked (not in a setup score)</SelectItem>
+                                                {selectedSubjectGroups.map((group) => (
+                                                <SelectItem key={group.id} value={group.id}>
+                                                        {group.name} | {group.weightPercentage}% | Max {group.maxPoints || 0}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {assignmentForm.subjectId && selectedSubjectGroups.length === 0 ? (
+                                            <p className="text-[11px] text-muted-foreground">
+                                                No gradebook setup exists for this subject yet. Create categories in Grading Queue first.
+                                            </p>
+                                        ) : null}
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">
@@ -804,6 +906,9 @@ export default function AssignmentManagement() {
                                                 </div>
                                                 <div className="flex flex-wrap gap-2 text-xs">
                                                     <Badge variant="secondary">{assignment.assessmentPeriod || "term"} grade</Badge>
+                                                    <Badge variant="outline">
+                                                        {assignment.groupId ? (groupNameById.get(assignment.groupId) || "Unlinked") : "Unlinked"}
+                                                    </Badge>
                                                     <Badge variant="outline">{assignment.contributionWeight || 0}% contribution</Badge>
                                                     {assignment.attachmentUrl ? <Badge variant="outline">Has file</Badge> : null}
                                                 </div>

@@ -62,8 +62,9 @@ import {
     SheetDescription,
 } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import type { Quiz, Question, QuestionType, QuestionOption } from "@/types";
+import type { AssignmentGroup, Quiz, Question, QuestionType, QuestionOption } from "@/types";
 import { cn } from "@/lib/utils";
+import supabase from "@/lib/supabase";
 
 
 // Custom Switch component for now
@@ -105,6 +106,7 @@ export default function CreateQuiz() {
 
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [gradebookGroups, setGradebookGroups] = useState<AssignmentGroup[]>([]);
     const defaultQuiz: Quiz = {
         id: crypto.randomUUID(),
         subjectId: subjectId || "",
@@ -127,6 +129,8 @@ export default function CreateQuiz() {
             }
         ],
         status: "draft",
+        groupId: null,
+        countsTowardsFinal: true,
         settingsConfigured: false,
         createdAt: new Date().toISOString(),
         settings: {
@@ -161,6 +165,59 @@ export default function CreateQuiz() {
 
     const [activeQuestionId, setActiveQuestionId] = useState<string>(quiz.questions[0].id);
     const activeQuestion = quiz.questions.find(q => q.id === activeQuestionId) || quiz.questions[0];
+    const selectedGradebookGroup = React.useMemo(
+        () => gradebookGroups.find((group) => group.id === quiz.groupId),
+        [gradebookGroups, quiz.groupId]
+    );
+
+    React.useEffect(() => {
+        if (!subjectId) {
+            setGradebookGroups([]);
+            return;
+        }
+
+        let cancelled = false;
+
+        const fetchGradebookGroups = async () => {
+            const { data, error } = await supabase
+                .from("assignment_groups")
+                .select("*")
+                .eq("subject_id", subjectId)
+                .order("order", { ascending: true });
+
+            if (error) {
+                console.error("Failed to load gradebook setup for quiz creation", error);
+                if (!cancelled) {
+                    setGradebookGroups([]);
+                }
+                return;
+            }
+
+            if (cancelled) return;
+
+            setGradebookGroups((data || []).map((group) => ({
+                id: group.id,
+                subjectId: group.subject_id,
+                name: group.name,
+                weightPercentage: Number(group.weight_percentage || 0),
+                maxPoints: Number(group.max_points || 0),
+                order: group.order ?? 0,
+            })));
+        };
+
+        void fetchGradebookGroups();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [subjectId]);
+
+    React.useEffect(() => {
+        if (!quiz.groupId) return;
+        if (gradebookGroups.some((group) => group.id === quiz.groupId)) return;
+
+        setQuiz((prev) => ({ ...prev, groupId: null }));
+    }, [gradebookGroups, quiz.groupId]);
 
     // Handlers
     const addQuestion = () => {
@@ -256,6 +313,17 @@ export default function CreateQuiz() {
         if (!quiz.settingsConfigured) {
             toast.error("Settings Required", {
                 description: "Please review and save your quiz settings before publishing.",
+                action: {
+                    label: "Open Settings",
+                    onClick: () => setIsSettingsOpen(true)
+                }
+            });
+            return;
+        }
+
+        if (gradebookGroups.length > 0 && !quiz.groupId) {
+            toast.error("Gradebook Category Required", {
+                description: "Choose a gradebook setup score in quiz settings before publishing.",
                 action: {
                     label: "Open Settings",
                     onClick: () => setIsSettingsOpen(true)
@@ -397,6 +465,11 @@ export default function CreateQuiz() {
                                     <TooltipContent>Saved to cloud</TooltipContent>
                                 </Tooltip>
                             </div>
+                            {selectedGradebookGroup ? (
+                                <Badge variant="outline" className="hidden md:flex border-primary/20 text-primary bg-primary/5">
+                                    {selectedGradebookGroup.name}
+                                </Badge>
+                            ) : null}
                         </div>
 
                         <div className="flex items-center gap-3">
@@ -729,7 +802,7 @@ export default function CreateQuiz() {
                         <DialogHeader>
                             <div className="flex items-center gap-3 mb-2">
                                 <Badge className="bg-primary/10 text-primary border-none">{subject.name}</Badge>
-                                <span className="text-slate-400 font-medium">•</span>
+                                <span className="text-slate-400 font-medium">|</span>
                                 <span className="text-slate-400 font-medium">{quiz.questions.length} Questions</span>
                             </div>
                             <DialogTitle className="text-3xl font-black">{quiz.title}</DialogTitle>
@@ -875,6 +948,67 @@ export default function CreateQuiz() {
                                             </SelectContent>
                                         </Select>
                                     </div>
+                                </div>
+                            </section>
+
+                            <section className="space-y-6">
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Gradebook Linking</h3>
+                                    <Separator className="flex-1 bg-slate-100" />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="text-sm font-bold text-slate-700">Setup Score Category</Label>
+                                    <Select
+                                        value={quiz.groupId || "unlinked"}
+                                        onValueChange={(value) =>
+                                            setQuiz((prev) => ({
+                                                ...prev,
+                                                groupId: value === "unlinked" ? null : value
+                                            }))
+                                        }
+                                    >
+                                        <SelectTrigger className="h-11 rounded-xl bg-slate-50 border-none font-bold">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="rounded-xl border-slate-100 shadow-xl">
+                                            <SelectItem value="unlinked">Unlinked (not in a setup score)</SelectItem>
+                                            {gradebookGroups.map((group) => (
+                                            <SelectItem key={group.id} value={group.id}>
+                                                    {group.name} | {group.weightPercentage}% | Max {group.maxPoints || 0}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {gradebookGroups.length === 0 ? (
+                                        <p className="text-[11px] text-slate-400 font-medium">
+                                            No gradebook setup found for this subject. Create setup scores in Grading Queue first.
+                                        </p>
+                                    ) : selectedGradebookGroup ? (
+                                        <p className="text-[11px] text-slate-500 font-medium">
+                                            Linked to {selectedGradebookGroup.name} ({selectedGradebookGroup.weightPercentage}% of year mark)
+                                        </p>
+                                    ) : (
+                                        <p className="text-[11px] text-slate-400 font-medium">
+                                            This quiz will not appear under a specific gradebook setup category.
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-[13px] font-bold text-slate-800">Count Toward Final Mark</Label>
+                                        <p className="text-[11px] text-slate-500 font-medium">Disable this for practice quizzes that should not affect final marks.</p>
+                                    </div>
+                                    <Switch
+                                        checked={quiz.countsTowardsFinal ?? true}
+                                        onCheckedChange={(value) =>
+                                            setQuiz((prev) => ({
+                                                ...prev,
+                                                countsTowardsFinal: value
+                                            }))
+                                        }
+                                    />
                                 </div>
                             </section>
 

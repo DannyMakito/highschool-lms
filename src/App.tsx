@@ -28,6 +28,7 @@ import SpeedGraderV2 from "@/pages/dashboard/teacher/SpeedGraderV2";
 import StudentAssignments from "@/pages/dashboard/student/StudentAssignments";
 import StudentGrades from "@/pages/dashboard/student/StudentGrades";
 import AssignmentView from "@/pages/dashboard/student/AssignmentView";
+import StudentRegisterPage from "@/pages/dashboard/student/StudentRegisterPage";
 import TeacherManagement from "@/pages/dashboard/principal/TeacherManagement";
 import SchoolClassManagement from "@/pages/dashboard/teacher/ClassManagement";
 import Discussions from "@/pages/dashboard/shared/discussions/Discussions";
@@ -41,6 +42,8 @@ import SubjectClassManagement from "@/pages/dashboard/principal/SubjectClassMana
 import GradeManagement from "@/pages/dashboard/principal/GradeManagement";
 import StudentDirectory from "@/pages/dashboard/principal/StudentDirectory";
 import GradingQueue from "@/pages/dashboard/teacher/GradingQueue";
+import RegisterManagement from "@/pages/dashboard/teacher/RegisterManagement";
+import HelpPage from "@/pages/dashboard/shared/HelpPage";
 
 
 
@@ -104,6 +107,7 @@ export function App() {
             <Route path="grades" element={<StudentGrades />} />
             <Route path="assignments" element={<StudentAssignments />} />
             <Route path="assignments/:id" element={<AssignmentView />} />
+            <Route path="register" element={<StudentRegisterPage />} />
             <Route path="subjects/:id/discussions" element={<Discussions />} />
             <Route path="subjects/:id/discussions/create" element={<DiscussionForm />} />
             <Route path="subjects/:id/discussions/edit/:discussionId" element={<DiscussionForm />} />
@@ -113,6 +117,7 @@ export function App() {
             <Route path="discussions/edit/:discussionId" element={<DiscussionForm />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="help" element={<HelpPage />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
 
@@ -129,6 +134,7 @@ export function App() {
             <Route path="assignments/queue" element={<GradingQueue />} />
             <Route path="assignments/:id/grade" element={<SpeedGraderV2 />} />
             <Route path="classes" element={<SchoolClassManagement />} />
+            <Route path="register-admin" element={<RegisterManagement />} />
             <Route path="subjects/:id/discussions" element={<Discussions />} />
             <Route path="subjects/:id/discussions/create" element={<DiscussionForm />} />
             <Route path="subjects/:id/discussions/edit/:discussionId" element={<DiscussionForm />} />
@@ -138,6 +144,7 @@ export function App() {
             <Route path="subjects/:id/discussions/view/:discussionId" element={<DiscussionView />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="help" element={<HelpPage />} />
 
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
@@ -166,6 +173,7 @@ export function App() {
             <Route path="discussions/edit/:discussionId" element={<DiscussionForm />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="help" element={<HelpPage />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
 

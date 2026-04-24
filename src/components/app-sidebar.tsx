@@ -12,6 +12,8 @@ import {
   Bell,
   UserCircle2,
   BarChart3,
+  CircleHelp,
+  CalendarCheck2,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -82,6 +84,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               icon: FileText,
             },
             {
+              title: "Register Class",
+              url: "/student/register",
+              icon: CalendarCheck2,
+            },
+            {
               title: "Discussions",
               url: "/student/discussions",
               icon: MessageSquare,
@@ -95,6 +102,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: "Profile",
               url: "/student/profile",
               icon: UserCircle2,
+            },
+            {
+              title: "Help",
+              url: "/student/help",
+              icon: CircleHelp,
             }
           ],
         };
@@ -119,6 +131,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               icon: Users,
             },
             {
+              title: "Register & Timetable",
+              url: "/teacher/register-admin",
+              icon: CalendarCheck2,
+            },
+            {
               title: "Discussions",
               url: "/teacher/discussions",
               icon: MessageSquare,
@@ -132,6 +149,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: "Profile",
               url: "/teacher/profile",
               icon: UserCircle2,
+            },
+            {
+              title: "Help",
+              url: "/teacher/help",
+              icon: CircleHelp,
             },
             {
               title: "Assessments",
@@ -197,6 +219,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: "Profile",
               url: "/principal/profile",
               icon: UserCircle2,
+            },
+            {
+              title: "Help",
+              url: "/principal/help",
+              icon: CircleHelp,
             }
           ],
         };

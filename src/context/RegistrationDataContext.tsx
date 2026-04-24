@@ -323,7 +323,7 @@ export function RegistrationDataProvider({ children }: { children: ReactNode }) 
                 admissionYear: student.admissionYear,
                 gender: student.gender,
                 gradeId: student.gradeId,
-                registerClassId: student.registerClassId,
+                registerClassId: student.registerClassId || null,
                 status: student.status || 'active',
                 subjectIds: options?.subjectIds ?? [],
             },
@@ -414,7 +414,9 @@ export function RegistrationDataProvider({ children }: { children: ReactNode }) 
                 updated.name = `${updated.firstName} ${updated.lastName}`;
             }
             if (updates.gradeId) updated.grade = grades.find(g => g.id === updates.gradeId)?.name || '';
-            if (updates.registerClassId) updated.studentClass = registerClasses.find(rc => rc.id === updates.registerClassId)?.name || '';
+            if (updates.registerClassId !== undefined) {
+                updated.studentClass = registerClasses.find(rc => rc.id === updates.registerClassId)?.name || '';
+            }
             return updated;
         }));
     };
