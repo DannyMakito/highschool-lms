@@ -15,6 +15,7 @@ import { useAssignments } from "@/hooks/useAssignments";
 import { NotificationsProvider } from "@/context/NotificationsContext";
 import { NotificationsPopup } from "@/components/notifications/NotificationsPopup";
 import { RouteHelpIcon } from "@/components/help/HelpIcon";
+import { WeeklyFeedbackPrompt } from "@/components/feedback/WeeklyFeedbackPrompt";
 import {
     SidebarInset,
     SidebarProvider,
@@ -71,6 +72,7 @@ function TeacherPortalContent() {
                     </div>
                 </header>
                 <div className="flex flex-1 flex-col gap-4 p-4 pt-0 mt-4">
+                    <WeeklyFeedbackPrompt />
                     <Outlet />
                 </div>
             </SidebarInset>
