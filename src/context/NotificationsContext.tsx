@@ -287,9 +287,18 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setPopupVisible(true);
-    const timer = window.setTimeout(() => setPopupVisible(false), 10000);
-    return () => window.clearTimeout(timer);
+    const storageKey = `lastSeenNotification_${user.id}`;
+    const storedLastSeen = localStorage.getItem(storageKey);
+    const newestId = notifications[0].id;
+    
+    // Only show popup if there's a new notification we haven't alerted the user about
+    if (newestId !== storedLastSeen) {
+      setPopupVisible(true);
+      localStorage.setItem(storageKey, newestId);
+      
+      const timer = window.setTimeout(() => setPopupVisible(false), 10000);
+      return () => window.clearTimeout(timer);
+    }
   }, [notifications, user?.id]);
 
   const value: NotificationsContextType = {

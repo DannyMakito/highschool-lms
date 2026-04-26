@@ -42,6 +42,7 @@ const DiscussionForm: React.FC = () => {
         requirePostBeforeView: false,
         allowThreadedReplies: true,
         allowLiking: false,
+        teacherOnly: false,
         isGroup: false,
         availableFrom: new Date().toISOString().split('T')[0],
         availableUntil: '',
@@ -58,6 +59,7 @@ const DiscussionForm: React.FC = () => {
                     requirePostBeforeView: existing.requirePostBeforeView,
                     allowThreadedReplies: existing.allowThreadedReplies,
                     allowLiking: existing.allowLiking,
+                    teacherOnly: existing.teacherOnly || false,
                     isGroup: existing.isGroup,
                     availableFrom: existing.availableFrom.split('T')[0],
                     availableUntil: existing.availableUntil ? existing.availableUntil.split('T')[0] : '',
@@ -139,6 +141,8 @@ const DiscussionForm: React.FC = () => {
             authorId: user?.id || '1',
             authorName: user?.name || 'Instructor',
             authorRole: user?.role || 'teacher',
+            allowLiking: formData.allowLiking,
+            teacherOnly: formData.teacherOnly,
             isClosed: false,
             isGroup: role === 'learner' ? true : Boolean(finalGroupId),
         };
@@ -264,6 +268,17 @@ const DiscussionForm: React.FC = () => {
                                     />
                                     <Label htmlFor="liking" className="text-slate-600 font-normal">Allow liking</Label>
                                 </div>
+                                {role === 'learner' && (
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="teacher-only"
+                                            checked={formData.teacherOnly}
+                                            onCheckedChange={(checked) => setFormData({ ...formData, teacherOnly: !!checked })}
+                                        />
+                                        <Label htmlFor="teacher-only" className="text-slate-600 font-normal">Only discuss with teacher (hide from other learners)</Label>
+                                    </div>
+                                )}
+
                                 <div className="flex items-center space-x-2">
                                     <Checkbox
                                         id="pinned"

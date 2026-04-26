@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import StudentPdfWorkspace from "@/components/student/StudentPdfWorkspace";
+
 
 export default function LessonView() {
     const { id: subjectId, lessonId } = useParams();
@@ -89,7 +89,7 @@ export default function LessonView() {
         ? `https://player.vimeo.com/video/${videoUrl.split("/").filter(Boolean).pop()?.split("?")[0]}`
         : "";
     const lessonResourceUrl = currentLesson.resourceUrl?.trim();
-    const isLessonPdf = currentLesson.resourceType === "pdf" || currentLesson.resourceMimeType === "application/pdf" || Boolean(lessonResourceUrl && /\.pdf(\?|$)/i.test(lessonResourceUrl));
+
 
     // Navigation logic
     const getAllLessons = () => {
@@ -308,14 +308,6 @@ export default function LessonView() {
                                     </a>
                                 </div>
 
-                                {isLessonPdf ? (
-                                    <StudentPdfWorkspace
-                                        documentId={`lesson:${currentLesson.id}`}
-                                        pdfUrl={lessonResourceUrl}
-                                        fileName={currentLesson.resourceFileName || "lesson-resource.pdf"}
-                                        title="Lesson PDF Notes"
-                                    />
-                                ) : (
                                     <Card className="border-dashed border-muted/30 bg-background/70">
                                         <div className="p-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                             <div>
@@ -327,7 +319,6 @@ export default function LessonView() {
                                             </a>
                                         </div>
                                     </Card>
-                                )}
                             </div>
                         ) : null}
 

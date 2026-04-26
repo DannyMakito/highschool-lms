@@ -35,7 +35,6 @@ export default function ProfilePage() {
   const details = [
     { label: "Full Name", value: user?.name || "-", icon: UserRound },
     { label: "Email", value: user?.email || "-", icon: Mail },
-    { label: "Security PIN", value: user?.pin || "-", icon: KeyRound },
     { label: "Role", value: user?.role || "-", icon: ShieldCheck },
   ];
 

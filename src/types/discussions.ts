@@ -19,6 +19,7 @@ export interface Discussion {
     availableUntil?: string;
     allowThreadedReplies: boolean;
     allowLiking: boolean;
+    teacherOnly?: boolean;
     subscribedUserIds: string[];
     readByUsers: string[]; // Track who has read the TOPIC
     isDeleted?: boolean;

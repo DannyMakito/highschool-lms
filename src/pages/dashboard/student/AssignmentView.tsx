@@ -21,7 +21,7 @@ import {
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import supabase from "@/lib/supabase";
-import StudentPdfWorkspace from "@/components/student/StudentPdfWorkspace";
+
 import StudentSubmissionView from "@/components/student/StudentSubmissionView";
 
 export default function AssignmentView() {
@@ -54,7 +54,7 @@ export default function AssignmentView() {
     const isGraded = submission?.status === "graded" && submission.isReleased;
     const availableFrom = new Date(assignment.availableFrom || assignment.createdAt);
     const isOpen = availableFrom.getTime() <= Date.now();
-    const assignmentAttachmentIsPdf = assignment.attachmentType === "pdf" || assignment.attachmentMimeType === "application/pdf" || Boolean(assignment.attachmentUrl && /\.pdf(\?|$)/i.test(assignment.attachmentUrl));
+
     const submissionIsPdf = submission?.fileType === "pdf";
 
     const handleFileSelected = (file?: File | null) => {
@@ -202,14 +202,7 @@ export default function AssignmentView() {
                                         </a>
                                     </div>
 
-                                    {assignmentAttachmentIsPdf ? (
-                                        <StudentPdfWorkspace
-                                            documentId={`assignment-brief:${assignment.id}`}
-                                            pdfUrl={assignment.attachmentUrl}
-                                            fileName={assignment.attachmentFileName || "assignment-brief.pdf"}
-                                            title="Assignment PDF Notes"
-                                        />
-                                    ) : null}
+
                                 </CardContent>
                             </Card>
                         ) : null}

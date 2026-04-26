@@ -23,6 +23,8 @@ import {
     CheckCircle,
     Bell,
     ChevronLeft,
+    ChevronDown,
+    ChevronUp,
     Trash2
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -59,30 +61,11 @@ const ReplyItem = ({
     const childReplies = discussionReplies.filter(r => r.parentId === reply.id);
     const isEditing = replyToId === reply.id;
     const hasLiked = user && reply.likes.includes(user.id);
+    const [isExpanded, setIsExpanded] = useState(false);
 
     return (
-        <div className={cn("relative group", depth > 0 ? "ml-8 md:ml-12 mt-6" : "mt-8")}>
-            {/* Thread Line (Elbow Catch) */}
-            {depth > 0 && (
-                <div className="absolute top-[-36px] bottom-4 pointer-events-none" 
-                     style={{ 
-                         left: depth === 1 ? '-29px' : '-33px', // Aligned with parent drop (19px/15px) - indent (48px/etc? ml-12 is 3rem=48px)
-                         width: depth === 1 ? '30px' : '34px'
-                     }}>
-                    <div className="absolute left-0 top-0 bottom-[14px] w-[1.5px] bg-slate-200" />
-                    <div className="absolute left-0 bottom-[14px] h-[16px] w-full border-l-[1.5px] border-b-[1.5px] border-slate-200 rounded-bl-xl" />
-                </div>
-            )}
-
-            {/* Continuation Line (Vertical Drop for Children) */}
-            {childReplies.length > 0 && (
-                <div 
-                    className="absolute top-10 bottom-0 w-[1.5px] bg-slate-200 pointer-events-none" 
-                    style={{ left: depth === 0 ? '19px' : '15px' }} 
-                />
-            )}
-
-            <div className="flex gap-3 md:gap-4 items-start">
+        <div className={cn("relative group", depth === 0 ? "mt-8" : "mt-4")}>
+            <div className="flex gap-3 items-start relative z-10 bg-white">
                 <Avatar className={cn("shrink-0 shadow-sm transition-transform group-hover:scale-105", depth === 0 ? "w-10 h-10" : "w-8 h-8")}>
                     <AvatarImage src={reply.authorAvatar || ''} />
                     <AvatarFallback className="bg-slate-100 text-slate-500 font-bold text-xs">
@@ -91,21 +74,21 @@ const ReplyItem = ({
                 </Avatar>
 
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                        <span className="font-bold text-slate-900 text-sm hover:underline cursor-pointer tracking-tight">
+                    <div className="flex items-center gap-2 mb-0.5">
+                        <span className="font-bold text-slate-900 text-[13px] hover:underline cursor-pointer tracking-tight">
                             {reply.authorName || 'Student'}
                         </span>
-                        <span className="text-[11px] text-slate-400 font-medium">
+                        <span className="text-[11px] text-slate-500 font-medium">
                             {formatDistanceToNow(new Date(reply.createdAt), { addSuffix: true })}
                         </span>
                     </div>
 
                     <div
-                        className="text-[14px] leading-relaxed text-slate-700 mb-2 discussion-content"
+                        className="text-[14px] leading-relaxed text-slate-800 mb-1 discussion-content"
                         dangerouslySetInnerHTML={{ __html: reply.content }}
                     />
 
-                    <div className="flex items-center gap-1 -ml-2">
+                    <div className="flex items-center gap-1 -ml-2 mb-1">
                         <Button
                             variant="ghost"
                             size="sm"
@@ -113,7 +96,7 @@ const ReplyItem = ({
                             onClick={() => user && toggleLike(reply.id, user.id)}
                         >
                             <ThumbsUp className={cn("w-3.5 h-3.5", hasLiked && "fill-current")} />
-                            <span className="text-xs font-bold">{reply.likes.length || ''}</span>
+                            {reply.likes.length > 0 && <span className="text-xs font-bold">{reply.likes.length}</span>}
                         </Button>
                         <Button
                             variant="ghost"
@@ -131,7 +114,7 @@ const ReplyItem = ({
                                 setReplyContent('');
                             }}
                         >
-                            <span className="text-[11px] font-bold">Reply</span>
+                            <span className="text-[12px] font-semibold">Reply</span>
                         </Button>
                         <Button
                             variant="ghost"
@@ -143,7 +126,7 @@ const ReplyItem = ({
                     </div>
 
                     {isEditing && (
-                        <div className="mt-4 bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-inner">
+                        <div className="mt-2 bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-inner mb-4">
                             <TinyMCEEditor
                                 value={replyContent}
                                 onChange={setReplyContent}
@@ -154,7 +137,7 @@ const ReplyItem = ({
                                 <Button 
                                     variant="ghost" 
                                     size="sm" 
-                                    className="font-bold text-slate-500 hover:bg-white" 
+                                    className="font-bold text-slate-500 hover:bg-slate-200 rounded-full px-4" 
                                     onClick={() => setReplyToId(null)}
                                 >
                                     Cancel
@@ -169,27 +152,100 @@ const ReplyItem = ({
                             </div>
                         </div>
                     )}
-
-                    {/* Nested Replies Render */}
-                    <div className="space-y-2">
-                        {childReplies.map(child => (
-                            <ReplyItem 
-                                key={child.id} 
-                                reply={child} 
-                                depth={depth + 1}
-                                discussionReplies={discussionReplies}
-                                replyToId={replyToId}
-                                replyContent={replyContent}
-                                setReplyToId={setReplyToId}
-                                setReplyContent={setReplyContent}
-                                user={user}
-                                toggleLike={toggleLike}
-                                handlePostReply={handlePostReply}
-                            />
-                        ))}
-                    </div>
                 </div>
             </div>
+
+            {/* Nested Replies Container */}
+            {childReplies.length > 0 && (
+                <div className="relative mt-1 pl-12">
+                    {/* Continuous Vertical Line */}
+                    <div 
+                        className="absolute top-[-16px] bottom-6 w-[2px] bg-slate-800 pointer-events-none z-0"
+                        style={{ left: depth === 0 ? '19px' : '11px' }} 
+                    />
+                    
+                    <div className="space-y-1 relative z-10">
+                        {!isExpanded ? (
+                            <div className="relative pt-1 pb-2">
+                                {/* Elbow Curve connecting vertical line to the toggle button */}
+                                <div 
+                                    className="absolute pointer-events-none border-b-2 border-l-2 border-slate-800 rounded-bl-xl z-0"
+                                    style={{ 
+                                        top: '-16px', 
+                                        height: '34px',
+                                        left: depth === 0 ? '-29px' : '-33px',
+                                        width: depth === 0 ? '29px' : '33px'
+                                    }} 
+                                />
+                                <Button 
+                                    variant="ghost" 
+                                    className="h-8 px-2 flex items-center gap-2 hover:bg-slate-100/50 rounded-full font-bold text-blue-600 text-[13px] transition-all"
+                                    onClick={() => setIsExpanded(true)}
+                                >
+                                    <Avatar className="w-6 h-6 border-2 border-white shadow-sm">
+                                        <AvatarImage src={childReplies[0].authorAvatar || ''} />
+                                        <AvatarFallback className="bg-slate-200 text-slate-600 text-[10px]">
+                                            {(childReplies[0].authorName || 'U').charAt(0)}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <span className="text-slate-400 font-normal">&middot;</span>
+                                    {childReplies.length} {childReplies.length === 1 ? 'reply' : 'replies'}
+                                    <ChevronDown className="w-4 h-4 ml-0.5" />
+                                </Button>
+                            </div>
+                        ) : (
+                            <>
+                                {childReplies.map(child => (
+                                    <div key={child.id} className="relative">
+                                        {/* Elbow Curve connecting vertical line to child avatar */}
+                                        <div 
+                                            className="absolute pointer-events-none border-b-2 border-l-2 border-slate-800 rounded-bl-xl z-0"
+                                            style={{ 
+                                                top: '-20px', 
+                                                height: '36px',
+                                                left: depth === 0 ? '-29px' : '-33px',
+                                                width: depth === 0 ? '29px' : '33px'
+                                            }} 
+                                        />
+                                        <ReplyItem 
+                                            reply={child} 
+                                            depth={depth + 1}
+                                            discussionReplies={discussionReplies}
+                                            replyToId={replyToId}
+                                            replyContent={replyContent}
+                                            setReplyToId={setReplyToId}
+                                            setReplyContent={setReplyContent}
+                                            user={user}
+                                            toggleLike={toggleLike}
+                                            handlePostReply={handlePostReply}
+                                        />
+                                    </div>
+                                ))}
+                                {/* Hide Replies Button at the bottom */}
+                                <div className="relative pt-2 pb-4">
+                                    <div 
+                                        className="absolute pointer-events-none border-b-2 border-l-2 border-slate-800 rounded-bl-xl z-0"
+                                        style={{ 
+                                            top: '-20px', 
+                                            height: '36px',
+                                            left: depth === 0 ? '-29px' : '-33px',
+                                            width: depth === 0 ? '29px' : '33px'
+                                        }} 
+                                    />
+                                    <Button 
+                                        variant="ghost" 
+                                        className="h-8 px-4 flex items-center gap-1.5 hover:bg-slate-100/50 rounded-full font-bold text-slate-500 text-[13px] transition-all"
+                                        onClick={() => setIsExpanded(false)}
+                                    >
+                                        Hide replies
+                                        <ChevronUp className="w-4 h-4 ml-0.5" />
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

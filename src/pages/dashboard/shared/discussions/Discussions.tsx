@@ -192,10 +192,15 @@ const Discussions: React.FC = () => {
 
     const visibleDiscussions = React.useMemo(() => {
         return discussions.filter((discussion) => {
+            if (discussion.teacherOnly) {
+                if (role === 'learner' && discussion.authorId !== user?.id) {
+                    return false;
+                }
+            }
             if (!discussion.isGroup || !discussion.groupId) return true;
             return visibleGroupIds.includes(discussion.groupId);
         });
-    }, [discussions, visibleGroupIds]);
+    }, [discussions, visibleGroupIds, role, user?.id]);
 
     const handleDeleteDiscussion = async (discussionId: string) => {
         if (window.confirm('Are you sure you want to delete this discussion? This action cannot be undone.')) {

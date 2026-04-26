@@ -82,6 +82,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
                     availableUntil: d.available_until ?? d.availableUntil ?? undefined,
                     allowThreadedReplies: d.allow_threaded_replies ?? d.allowThreadedReplies ?? true,
                     allowLiking: d.allow_liking ?? d.allowLiking ?? false,
+                    teacherOnly: d.teacher_only ?? d.teacherOnly ?? false,
                     authorName: (d as any).profiles?.full_name || 'Anonymous Instructor',
                     authorRole: (d as any).profiles?.role || 'teacher',
                     authorAvatar: (d as any).profiles?.avatar_url || '',
@@ -115,7 +116,116 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
         fetchMessagingData();
 
-        return () => { cancelled = true; };
+        const subscription = supabase.channel('messaging_realtime')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'discussion_replies' }, async (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    const { data } = await supabase.from('discussion_replies')
+                        .select('*, profiles!author_id(full_name, role, avatar_url)')
+                        .eq('id', payload.new.id)
+                        .single();
+                    if (data) {
+                        const mappedR: DiscussionReply = {
+                            ...data,
+                            discussionId: data.discussion_id,
+                            parentId: data.parent_id ?? undefined,
+                            authorId: data.author_id,
+                            authorName: (data as any).profiles?.full_name || 'User',
+                            authorRole: (data as any).profiles?.role || 'learner',
+                            authorAvatar: (data as any).profiles?.avatar_url || '',
+                            likes: data.likes || [],
+                            readByUsers: data.read_by_users || [],
+                            createdAt: data.created_at
+                        };
+                        setReplies(prev => {
+                            if (prev.some(r => r.id === mappedR.id)) return prev;
+                            return [...prev, mappedR];
+                        });
+                    }
+                } else if (payload.eventType === 'UPDATE') {
+                    setReplies(prev => prev.map(r => r.id === payload.new.id ? { 
+                        ...r, 
+                        likes: payload.new.likes || [],
+                        readByUsers: payload.new.read_by_users || [],
+                        content: payload.new.content
+                    } : r));
+                } else if (payload.eventType === 'DELETE') {
+                    setReplies(prev => prev.filter(r => r.id !== payload.old.id));
+                }
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'discussions' }, async (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    const { data } = await supabase.from('discussions')
+                        .select('*, profiles!author_id(full_name, role, avatar_url)')
+                        .eq('id', payload.new.id)
+                        .single();
+                    if (data) {
+                         const mappedD: Discussion = {
+                            ...data,
+                            subjectId: data.subject_id,
+                            subjectClassId: data.subject_class_id,
+                            authorId: data.author_id,
+                            isPinned: data.is_pinned ?? false,
+                            isClosed: data.is_closed ?? false,
+                            requirePostBeforeView: data.require_post_before_view ?? false,
+                            isGroup: data.is_group ?? false,
+                            groupId: data.group_id ?? undefined,
+                            availableFrom: data.available_from ?? data.created_at,
+                            availableUntil: data.available_until ?? undefined,
+                            allowThreadedReplies: data.allow_threaded_replies ?? true,
+                            allowLiking: data.allow_liking ?? false,
+                            teacherOnly: data.teacher_only ?? false,
+                            authorName: (data as any).profiles?.full_name || 'Anonymous Instructor',
+                            authorRole: (data as any).profiles?.role || 'teacher',
+                            authorAvatar: (data as any).profiles?.avatar_url || '',
+                            readByUsers: data.read_by_users || [],
+                            subscribedUserIds: data.subscribed_user_ids || [],
+                            isDeleted: data.is_deleted,
+                            deletedByRole: data.deleted_by_role,
+                            createdAt: data.created_at,
+                            updatedAt: data.updated_at
+                        };
+                        setDiscussions(prev => {
+                            if (prev.some(d => d.id === mappedD.id)) return prev;
+                            return [mappedD, ...prev];
+                        });
+                    }
+                } else if (payload.eventType === 'UPDATE') {
+                    setDiscussions(prev => prev.map(d => {
+                        if (d.id === payload.new.id) {
+                            return {
+                                ...d,
+                                title: payload.new.title,
+                                content: payload.new.content,
+                                isPinned: payload.new.is_pinned ?? false,
+                                isClosed: payload.new.is_closed ?? false,
+                                requirePostBeforeView: payload.new.require_post_before_view ?? false,
+                                isGroup: payload.new.is_group ?? false,
+                                groupId: payload.new.group_id ?? undefined,
+                                subjectClassId: payload.new.subject_class_id ?? undefined,
+                                availableFrom: payload.new.available_from ?? payload.new.created_at,
+                                availableUntil: payload.new.available_until ?? undefined,
+                                allowThreadedReplies: payload.new.allow_threaded_replies ?? true,
+                                allowLiking: payload.new.allow_liking ?? false,
+                                teacherOnly: payload.new.teacher_only ?? false,
+                                readByUsers: payload.new.read_by_users || [],
+                                subscribedUserIds: payload.new.subscribed_user_ids || [],
+                                isDeleted: payload.new.is_deleted,
+                                deletedByRole: payload.new.deleted_by_role,
+                                updatedAt: payload.new.updated_at
+                            };
+                        }
+                        return d;
+                    }));
+                } else if (payload.eventType === 'DELETE') {
+                    setDiscussions(prev => prev.filter(d => d.id !== payload.old.id));
+                }
+            })
+            .subscribe();
+
+        return () => { 
+            cancelled = true; 
+            supabase.removeChannel(subscription);
+        };
     }, [user?.id, authLoading]);
 
     // Announcements actions
@@ -168,6 +278,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
                 available_until: discussion.availableUntil || null,
                 allow_threaded_replies: discussion.allowThreadedReplies ?? true,
                 allow_liking: discussion.allowLiking ?? false,
+                teacher_only: discussion.teacherOnly ?? false,
+
                 read_by_users: [discussion.authorId],
                 subscribed_user_ids: [discussion.authorId]
             })
@@ -190,6 +302,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
             availableUntil: newD.available_until ?? undefined,
             allowThreadedReplies: newD.allow_threaded_replies ?? true,
             allowLiking: newD.allow_liking ?? false,
+            teacherOnly: newD.teacher_only ?? false,
             authorName: discussion.authorName,
             authorRole: discussion.authorRole,
             authorAvatar: discussion.authorAvatar || '',
@@ -217,6 +330,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         if (updates.availableUntil !== undefined) dbUpdates.available_until = updates.availableUntil || null;
         if (updates.allowThreadedReplies !== undefined) dbUpdates.allow_threaded_replies = updates.allowThreadedReplies;
         if (updates.allowLiking !== undefined) dbUpdates.allow_liking = updates.allowLiking;
+        if (updates.teacherOnly !== undefined) dbUpdates.teacher_only = updates.teacherOnly;
 
         const { error } = await supabase.from('discussions').update(dbUpdates).eq('id', id);
         if (error) throw error;
