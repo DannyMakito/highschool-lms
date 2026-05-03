@@ -1,4 +1,4 @@
-import { type DragEvent, useEffect, useRef, useState } from "react";
+import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAssignments } from "@/hooks/useAssignments";
 import { useEngagementTracking } from "@/hooks/useEngagementTracking";
@@ -40,6 +40,11 @@ export default function AssignmentView() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const trackedViewForAssignment = useRef<string | null>(null);
+    const hydratedSubmissionDraftForKey = useRef<string | null>(null);
+    const submissionDraftKey = useMemo(() => {
+        if (!assignmentId || !user?.id) return null;
+        return `hlms:draft:submission:${user.id}:${assignmentId}`;
+    }, [assignmentId, user?.id]);
 
     useEffect(() => {
         if (!assignmentId) return;
@@ -48,6 +53,44 @@ export default function AssignmentView() {
         trackedViewForAssignment.current = assignmentId;
         void trackAssignmentViewed(assignmentId);
     }, [assignmentId, trackAssignmentViewed]);
+
+    useEffect(() => {
+        if (!submissionDraftKey || submission) {
+            hydratedSubmissionDraftForKey.current = null;
+            return;
+        }
+
+        if (hydratedSubmissionDraftForKey.current === submissionDraftKey || typeof window === "undefined") {
+            return;
+        }
+
+        hydratedSubmissionDraftForKey.current = submissionDraftKey;
+
+        try {
+            const rawDraft = localStorage.getItem(submissionDraftKey);
+            if (typeof rawDraft === "string") {
+                setContent(rawDraft);
+            }
+        } catch (error) {
+            console.error("Failed to restore submission draft", error);
+        }
+    }, [submission, submissionDraftKey]);
+
+    useEffect(() => {
+        if (!submissionDraftKey || submission || typeof window === "undefined") {
+            return;
+        }
+
+        if (hydratedSubmissionDraftForKey.current !== submissionDraftKey) {
+            return;
+        }
+
+        try {
+            localStorage.setItem(submissionDraftKey, content);
+        } catch (error) {
+            console.error("Failed to save submission draft", error);
+        }
+    }, [content, submission, submissionDraftKey]);
 
     if (!assignment) return <div>Assignment not found</div>;
 
@@ -141,6 +184,9 @@ export default function AssignmentView() {
             }
 
             toast.success("Assignment submitted successfully", { id: "assignment-submit" });
+            if (submissionDraftKey && typeof window !== "undefined") {
+                localStorage.removeItem(submissionDraftKey);
+            }
             setContent("");
             setSelectedFile(null);
         } catch (error: any) {

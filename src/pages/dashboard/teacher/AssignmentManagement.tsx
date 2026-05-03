@@ -126,11 +126,58 @@ export default function AssignmentManagement() {
     const [attachmentUploadProgress, setAttachmentUploadProgress] = useState(0);
     const [assignmentGroups, setAssignmentGroups] = useState<AssignmentGroup[]>([]);
     const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+    const hydratedAssignmentDraftForKey = useRef<string | null>(null);
     const subjectIds = useMemo(() => subjects.map((subject) => subject.id), [subjects]);
+    const assignmentDraftKey = useMemo(() => {
+        if (!user?.id) return null;
+        const draftMode = editingAssignmentId ? `edit:${editingAssignmentId}` : "create";
+        return `hlms:draft:assignment:${user.id}:${draftMode}`;
+    }, [editingAssignmentId, user?.id]);
 
     const filteredAssignments = assignments.filter(a =>
         a.title.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    useEffect(() => {
+        if (!isEditorOpen || !assignmentDraftKey) {
+            hydratedAssignmentDraftForKey.current = null;
+            return;
+        }
+
+        if (hydratedAssignmentDraftForKey.current === assignmentDraftKey || typeof window === "undefined") {
+            return;
+        }
+
+        hydratedAssignmentDraftForKey.current = assignmentDraftKey;
+
+        try {
+            const rawDraft = localStorage.getItem(assignmentDraftKey);
+            if (!rawDraft) return;
+
+            const parsedDraft = JSON.parse(rawDraft) as Partial<AssignmentFormState>;
+            if (!parsedDraft || typeof parsedDraft !== "object") return;
+
+            setAssignmentForm((prev) => ({ ...prev, ...parsedDraft }));
+        } catch (error) {
+            console.error("Failed to restore assignment draft", error);
+        }
+    }, [assignmentDraftKey, isEditorOpen]);
+
+    useEffect(() => {
+        if (!isEditorOpen || !assignmentDraftKey || typeof window === "undefined") {
+            return;
+        }
+
+        if (hydratedAssignmentDraftForKey.current !== assignmentDraftKey) {
+            return;
+        }
+
+        try {
+            localStorage.setItem(assignmentDraftKey, JSON.stringify(assignmentForm));
+        } catch (error) {
+            console.error("Failed to save assignment draft", error);
+        }
+    }, [assignmentDraftKey, assignmentForm, isEditorOpen]);
 
     useEffect(() => {
         if (subjectIds.length === 0) {
@@ -459,6 +506,9 @@ export default function AssignmentManagement() {
                     void trackAssignmentCreated(createdAssignment.id);
                 }
                 toast.success("Assessment created successfully");
+            }
+            if (assignmentDraftKey && typeof window !== "undefined") {
+                localStorage.removeItem(assignmentDraftKey);
             }
             setIsEditorOpen(false);
             setEditingAssignmentId(null);

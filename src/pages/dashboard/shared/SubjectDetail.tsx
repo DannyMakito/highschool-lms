@@ -1,5 +1,5 @@
 
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSubjects } from "@/hooks/useSubjects";
 import { useTeacherTracking } from "@/hooks/useTeacherTracking";
@@ -62,10 +62,57 @@ export default function SubjectDetail() {
     const [resourceUploadProgress, setResourceUploadProgress] = useState(0);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const resourceInputRef = useRef<HTMLInputElement | null>(null);
+    const hydratedLessonDraftForKey = useRef<string | null>(null);
+    const lessonDraftKey = useMemo(() => {
+        if (!user?.id || !id || !selectedTopicId) return null;
+        const draftMode = editingLessonId ? `edit:${editingLessonId}` : "create";
+        return `hlms:draft:lesson:${user.id}:${id}:${selectedTopicId}:${draftMode}`;
+    }, [editingLessonId, id, selectedTopicId, user?.id]);
 
     if (!subject) return <div>Subject not found</div>;
 
     const topics = getSubjectTopics(id!);
+
+    useEffect(() => {
+        if (!isLessonDialogOpen || !lessonDraftKey) {
+            hydratedLessonDraftForKey.current = null;
+            return;
+        }
+
+        if (hydratedLessonDraftForKey.current === lessonDraftKey || typeof window === "undefined") {
+            return;
+        }
+
+        hydratedLessonDraftForKey.current = lessonDraftKey;
+
+        try {
+            const rawDraft = localStorage.getItem(lessonDraftKey);
+            if (!rawDraft) return;
+
+            const parsedDraft = JSON.parse(rawDraft) as Partial<typeof newLesson>;
+            if (!parsedDraft || typeof parsedDraft !== "object") return;
+
+            setNewLesson((prev) => ({ ...prev, ...parsedDraft }));
+        } catch (error) {
+            console.error("Failed to restore lesson draft", error);
+        }
+    }, [isLessonDialogOpen, lessonDraftKey]);
+
+    useEffect(() => {
+        if (!isLessonDialogOpen || !lessonDraftKey || typeof window === "undefined") {
+            return;
+        }
+
+        if (hydratedLessonDraftForKey.current !== lessonDraftKey) {
+            return;
+        }
+
+        try {
+            localStorage.setItem(lessonDraftKey, JSON.stringify(newLesson));
+        } catch (error) {
+            console.error("Failed to save lesson draft", error);
+        }
+    }, [isLessonDialogOpen, lessonDraftKey, newLesson]);
 
     const resetLessonForm = () => {
         setNewLesson({
@@ -368,6 +415,10 @@ export default function SubjectDetail() {
                 }
             }
 
+            if (lessonDraftKey && typeof window !== "undefined") {
+                localStorage.removeItem(lessonDraftKey);
+            }
+
             resetLessonForm();
             setIsLessonDialogOpen(false);
             toast.success(editingLessonId ? "Lesson updated" : "Lesson created");
@@ -394,6 +445,10 @@ export default function SubjectDetail() {
 
             if (currentLesson?.resourceFilePath) {
                 await removeUploadedResourceFile(currentLesson.resourceFilePath);
+            }
+
+            if (lessonDraftKey && typeof window !== "undefined") {
+                localStorage.removeItem(lessonDraftKey);
             }
 
             resetLessonForm();

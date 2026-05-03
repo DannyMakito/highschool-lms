@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDiscussions } from '@/hooks/useDiscussions';
 import { useAuth } from '@/context/AuthContext';
@@ -22,6 +22,19 @@ import { Calendar as CalendarIcon, Save, X, BookOpen, Users } from 'lucide-react
 import { toast } from 'sonner';
 import { getRolePathPrefix } from '@/lib/role-path';
 
+const createDefaultFormData = () => ({
+    title: '',
+    content: '',
+    isPinned: false,
+    requirePostBeforeView: false,
+    allowThreadedReplies: true,
+    allowLiking: false,
+    teacherOnly: false,
+    isGroup: false,
+    availableFrom: new Date().toISOString().split('T')[0],
+    availableUntil: '',
+});
+
 const DiscussionForm: React.FC = () => {
     const { id: subjectId, discussionId } = useParams();
     const navigate = useNavigate();
@@ -34,40 +47,119 @@ const DiscussionForm: React.FC = () => {
 
     const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjectId || '');
     const [selectedGroupId, setSelectedGroupId] = useState<string>('all');
-
-    const [formData, setFormData] = useState({
-        title: '',
-        content: '',
-        isPinned: false,
-        requirePostBeforeView: false,
-        allowThreadedReplies: true,
-        allowLiking: false,
-        teacherOnly: false,
-        isGroup: false,
-        availableFrom: new Date().toISOString().split('T')[0],
-        availableUntil: '',
-    });
+    const [formData, setFormData] = useState(createDefaultFormData);
+    const initializedEditDiscussionId = useRef<string | null>(null);
+    const hydratedDiscussionDraftForKey = useRef<string | null>(null);
+    const discussionDraftKey = React.useMemo(() => {
+        if (!user?.id) return null;
+        const draftMode = discussionId ? `edit:${discussionId}` : "create";
+        const draftSubjectId = subjectId || selectedSubjectId || "global";
+        return `hlms:draft:discussion:${user.id}:${draftMode}:${draftSubjectId}`;
+    }, [discussionId, selectedSubjectId, subjectId, user?.id]);
 
     useEffect(() => {
-        if (discussionId) {
-            const existing = discussions.find(d => d.id === discussionId);
-            if (existing) {
-                setFormData({
-                    title: existing.title,
-                    content: existing.content,
-                    isPinned: existing.isPinned,
-                    requirePostBeforeView: existing.requirePostBeforeView,
-                    allowThreadedReplies: existing.allowThreadedReplies,
-                    allowLiking: existing.allowLiking,
-                    teacherOnly: existing.teacherOnly || false,
-                    isGroup: existing.isGroup,
-                    availableFrom: existing.availableFrom.split('T')[0],
-                    availableUntil: existing.availableUntil ? existing.availableUntil.split('T')[0] : '',
-                });
-                setSelectedGroupId(existing.groupId || 'all');
-            }
+        if (!discussionId) {
+            initializedEditDiscussionId.current = null;
+            return;
         }
-    }, [discussionId, discussions]);
+
+        if (initializedEditDiscussionId.current === discussionId) {
+            return;
+        }
+
+        const hasDraftForCurrentDiscussion = (() => {
+            if (!discussionDraftKey || typeof window === "undefined") return false;
+            return !!localStorage.getItem(discussionDraftKey);
+        })();
+
+        if (hasDraftForCurrentDiscussion) {
+            initializedEditDiscussionId.current = discussionId;
+            return;
+        }
+
+        const existing = discussions.find(d => d.id === discussionId);
+        if (!existing) return;
+
+        setFormData({
+            title: existing.title,
+            content: existing.content,
+            isPinned: existing.isPinned,
+            requirePostBeforeView: existing.requirePostBeforeView,
+            allowThreadedReplies: existing.allowThreadedReplies,
+            allowLiking: existing.allowLiking,
+            teacherOnly: existing.teacherOnly || false,
+            isGroup: existing.isGroup,
+            availableFrom: existing.availableFrom.split('T')[0],
+            availableUntil: existing.availableUntil ? existing.availableUntil.split('T')[0] : '',
+        });
+        setSelectedGroupId(existing.groupId || 'all');
+        initializedEditDiscussionId.current = discussionId;
+    }, [discussionDraftKey, discussionId, discussions]);
+
+    useEffect(() => {
+        if (!discussionDraftKey) {
+            hydratedDiscussionDraftForKey.current = null;
+            return;
+        }
+
+        if (hydratedDiscussionDraftForKey.current === discussionDraftKey || typeof window === "undefined") {
+            return;
+        }
+
+        hydratedDiscussionDraftForKey.current = discussionDraftKey;
+
+        try {
+            const rawDraft = localStorage.getItem(discussionDraftKey);
+            if (!rawDraft) return;
+
+            const parsedDraft = JSON.parse(rawDraft) as {
+                selectedSubjectId?: string;
+                selectedGroupId?: string;
+                formData?: ReturnType<typeof createDefaultFormData>;
+            };
+
+            if (!parsedDraft || typeof parsedDraft !== "object") {
+                return;
+            }
+
+            if (parsedDraft.selectedSubjectId) {
+                setSelectedSubjectId(parsedDraft.selectedSubjectId);
+            }
+
+            if (parsedDraft.selectedGroupId) {
+                setSelectedGroupId(parsedDraft.selectedGroupId);
+            }
+
+            if (parsedDraft.formData) {
+                setFormData((prev) => ({ ...prev, ...parsedDraft.formData }));
+            }
+        } catch (error) {
+            console.error("Failed to restore discussion draft", error);
+        }
+    }, [discussionDraftKey]);
+
+    useEffect(() => {
+        if (!discussionDraftKey || typeof window === "undefined") {
+            return;
+        }
+
+        if (hydratedDiscussionDraftForKey.current !== discussionDraftKey) {
+            return;
+        }
+
+        try {
+            localStorage.setItem(
+                discussionDraftKey,
+                JSON.stringify({
+                    selectedSubjectId,
+                    selectedGroupId,
+                    formData,
+                })
+            );
+        } catch (error) {
+            console.error("Failed to save discussion draft", error);
+        }
+    }, [discussionDraftKey, formData, selectedGroupId, selectedSubjectId]);
 
     const availableSubjects = React.useMemo(() => {
         if (role !== 'learner' || !user) return subjects;
@@ -154,6 +246,10 @@ const DiscussionForm: React.FC = () => {
             } else {
                 await addDiscussion(data);
                 toast.success('Discussion created');
+            }
+
+            if (discussionDraftKey && typeof window !== "undefined") {
+                localStorage.removeItem(discussionDraftKey);
             }
 
             navigate(`${rolePrefix}/subjects/${finalSubjectId}/discussions`);
