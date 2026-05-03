@@ -25,6 +25,7 @@ import {
     updateAnnotation as apiUpdateAnnotation,
     deleteAnnotation as apiDeleteAnnotation,
 } from '@/lib/speedgrader-api';
+import { getScaledRubricScore } from '@/lib/rubric-scoring';
 import type { AnnotationData } from '@/types/speedgrader';
 
 import SubmissionSidebar from '@/components/speedgrader/SubmissionSidebar';
@@ -206,7 +207,11 @@ export default function SpeedGraderV2() {
             await saveAllGrades(gradesToSave);
 
             // Update submission metadata
-            const totalGrade = state.criterionGrades.reduce((sum, g) => sum + g.score, 0);
+            const totalGrade = getScaledRubricScore({
+                criteria: rubric?.criteria || [],
+                grades: state.criterionGrades,
+                assignmentTotalMarks: assignment.totalMarks,
+            });
             await updateGrade(state.currentSubmissionId, {
                 status: 'submitted', // keep as submitted (draft)
                 overallFeedback: state.overallFeedback,
@@ -221,7 +226,7 @@ export default function SpeedGraderV2() {
         } finally {
             setSaving(false);
         }
-    }, [state, user, saveAllGrades, markSaved, setSaving]);
+    }, [assignment.totalMarks, markSaved, rubric?.criteria, saveAllGrades, setSaving, state, user]);
 
     // ── Submit & Release ──
     const handleSubmitRelease = useCallback(async () => {
@@ -238,7 +243,11 @@ export default function SpeedGraderV2() {
             }));
             await saveAllGrades(gradesToSave);
 
-            const totalGrade = state.criterionGrades.reduce((sum, g) => sum + g.score, 0);
+            const totalGrade = getScaledRubricScore({
+                criteria: rubric?.criteria || [],
+                grades: state.criterionGrades,
+                assignmentTotalMarks: assignment.totalMarks,
+            });
             await updateGrade(state.currentSubmissionId, {
                 status: 'graded',
                 isReleased: true,
@@ -259,7 +268,7 @@ export default function SpeedGraderV2() {
         } finally {
             setSaving(false);
         }
-    }, [state, user, currentSubmission?.assignmentId, assignmentId, saveAllGrades, trackFeedbackGiven, markSaved, setSaving]);
+    }, [assignment.totalMarks, assignmentId, currentSubmission?.assignmentId, markSaved, rubric?.criteria, saveAllGrades, setSaving, state, trackFeedbackGiven, user]);
 
     // ── Keyboard shortcuts ──
     useEffect(() => {

@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { getScaledRubricScore } from '@/lib/rubric-scoring';
 // Removed ScrollArea
 import {
     FileText,
@@ -48,10 +49,13 @@ export default function GradingSidebar({
     onSaveDraft,
     onSubmitRelease,
 }: GradingSidebarProps) {
-    const totalGrade = useMemo(
-        () => criterionGrades.reduce((sum, g) => sum + (Number.isNaN(g.score) ? 0 : g.score), 0),
-        [criterionGrades]
-    );
+    const totalGrade = useMemo(() => {
+        return getScaledRubricScore({
+            criteria: rubricCriteria,
+            grades: criterionGrades,
+            assignmentTotalMarks: totalMarks,
+        });
+    }, [criterionGrades, rubricCriteria, totalMarks]);
 
     const percentage = totalMarks > 0 ? Math.round((totalGrade / totalMarks) * 100) : 0;
 
