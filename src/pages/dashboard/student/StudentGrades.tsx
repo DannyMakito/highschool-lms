@@ -19,7 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useRegistrationData } from "@/hooks/useRegistrationData";
 import { useSubjects } from "@/hooks/useSubjects";
 import { useAssignments } from "@/hooks/useAssignments";
-import { buildGradebookScoreMap, calculateWeightedGradebookTotal, normalizeMaxPoints } from "@/lib/gradebook";
+import { buildGradebookScoreMap, normalizeMaxPoints } from "@/lib/gradebook";
 import supabase from "@/lib/supabase";
 import type {
     Assignment,
@@ -30,6 +30,18 @@ import type {
     StudentGradebookScore,
     Subject,
 } from "@/types";
+
+type AggregatedGroupStats = {
+    earned: number;
+    possible: number;
+    gradedCount: number;
+};
+
+type LiveGroupScore = {
+    score: number;
+    maxPoints: number;
+    source: "gradebook" | "derived" | "none";
+};
 
 type AssessmentRow = {
     key: string;
@@ -112,6 +124,8 @@ const pickLatestQuizSubmission = (current: QuizSubmission | undefined, next: Qui
     return new Date(next.completedAt).getTime() > new Date(current.completedAt).getTime() ? next : current;
 };
 
+const buildGroupStatsKey = (subjectId: string, groupId: string) => `${subjectId}:${groupId}`;
+
 export default function StudentGrades() {
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -145,6 +159,7 @@ export default function StudentGrades() {
         }
 
         let cancelled = false;
+        const assignedIdSet = new Set(assignedIds);
 
         const fetchGradebook = async () => {
             const [groupsRes, scoresRes] = await Promise.all([
@@ -184,8 +199,39 @@ export default function StudentGrades() {
 
         void fetchGradebook();
 
+        const groupChannel = supabase
+            .channel(`student-gradebook-groups:${user.id}`)
+            .on("postgres_changes", { event: "*", schema: "public", table: "assignment_groups" }, (payload) => {
+                const payloadSubjectId = (payload.new as { subject_id?: string })?.subject_id
+                    || (payload.old as { subject_id?: string })?.subject_id;
+                if (!payloadSubjectId || !assignedIdSet.has(payloadSubjectId)) return;
+                void fetchGradebook();
+            })
+            .subscribe();
+
+        const scoresChannel = supabase
+            .channel(`student-gradebook-scores:${user.id}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "student_gradebook_scores",
+                    filter: `student_id=eq.${user.id}`,
+                },
+                (payload) => {
+                    const payloadSubjectId = (payload.new as { subject_id?: string })?.subject_id
+                        || (payload.old as { subject_id?: string })?.subject_id;
+                    if (!payloadSubjectId || !assignedIdSet.has(payloadSubjectId)) return;
+                    void fetchGradebook();
+                }
+            )
+            .subscribe();
+
         return () => {
             cancelled = true;
+            supabase.removeChannel(groupChannel);
+            supabase.removeChannel(scoresChannel);
         };
     }, [assignedIds, user?.id]);
 
@@ -234,11 +280,137 @@ export default function StudentGrades() {
     const selectedSubject = subjects.find((subject) => subject.id === selectedSubjectId) || null;
     const scoreMap = useMemo(() => buildGradebookScoreMap(gradebookScores), [gradebookScores]);
 
+    const subjectAssessmentCountById = useMemo(() => {
+        const map = new Map<string, number>();
+
+        assignments
+            .filter((assignment) => assignment.status === "published")
+            .forEach((assignment) => {
+                map.set(assignment.subjectId, (map.get(assignment.subjectId) || 0) + 1);
+            });
+
+        quizzes
+            .filter((quiz) => quiz.status === "published")
+            .forEach((quiz) => {
+                map.set(quiz.subjectId, (map.get(quiz.subjectId) || 0) + 1);
+            });
+
+        return map;
+    }, [assignments, quizzes]);
+
     const subjectGradebookColumns = useMemo(() => {
         return assignmentGroups
             .filter((group) => group.subjectId === selectedSubjectId)
             .sort((a, b) => (a.order || 0) - (b.order || 0));
     }, [assignmentGroups, selectedSubjectId]);
+
+    const gradedStatsBySubjectGroup = useMemo(() => {
+        const statsMap = new Map<string, AggregatedGroupStats>();
+
+        const addStats = (subjectId: string, groupId: string, score: number, max: number) => {
+            if (max <= 0) return;
+            const key = buildGroupStatsKey(subjectId, groupId);
+            const current = statsMap.get(key) || { earned: 0, possible: 0, gradedCount: 0 };
+            statsMap.set(key, {
+                earned: current.earned + Math.max(0, score),
+                possible: current.possible + max,
+                gradedCount: current.gradedCount + 1,
+            });
+        };
+
+        assignments
+            .filter((assignment) => assignment.status === "published" && Boolean(assignment.groupId))
+            .forEach((assignment) => {
+                if (assignment.countsTowardsFinal === false) return;
+                const submission = latestAssignmentSubmissions.get(assignment.id);
+                const gradeVisible = Boolean(submission && submission.status === "graded" && submission.isReleased);
+                if (!gradeVisible || !assignment.groupId) return;
+
+                addStats(
+                    assignment.subjectId,
+                    assignment.groupId,
+                    Number(submission?.totalGrade || 0),
+                    Number(assignment.totalMarks || 0)
+                );
+            });
+
+        quizzes
+            .filter((quiz) => quiz.status === "published" && Boolean(quiz.groupId))
+            .forEach((quiz) => {
+                if (quiz.countsTowardsFinal === false) return;
+                const submission = latestQuizSubmissions.get(quiz.id);
+                const gradeVisible = Boolean(submission && submission.status === "completed");
+                if (!gradeVisible || !quiz.groupId) return;
+
+                addStats(
+                    quiz.subjectId,
+                    quiz.groupId,
+                    Number(submission?.score || 0),
+                    Number(submission?.totalPoints || quiz.pointsPossible || 0)
+                );
+            });
+
+        return statsMap;
+    }, [assignments, latestAssignmentSubmissions, latestQuizSubmissions, quizzes]);
+
+    const liveGroupScoreById = useMemo(() => {
+        const liveMap = new Map<string, LiveGroupScore>();
+
+        assignmentGroups.forEach((group) => {
+            const maxPoints = normalizeMaxPoints(group.maxPoints);
+            const gradebookEntry = user?.id ? scoreMap[`${user.id}:${group.id}`] : undefined;
+
+            if (gradebookEntry) {
+                liveMap.set(group.id, {
+                    score: Number(gradebookEntry.score || 0),
+                    maxPoints,
+                    source: "gradebook",
+                });
+                return;
+            }
+
+            const stats = gradedStatsBySubjectGroup.get(buildGroupStatsKey(group.subjectId, group.id));
+            if (stats && stats.possible > 0) {
+                const ratio = Math.min(1, Math.max(0, stats.earned / stats.possible));
+                liveMap.set(group.id, {
+                    score: ratio * maxPoints,
+                    maxPoints,
+                    source: "derived",
+                });
+                return;
+            }
+
+            liveMap.set(group.id, {
+                score: 0,
+                maxPoints,
+                source: "none",
+            });
+        });
+
+        return liveMap;
+    }, [assignmentGroups, gradedStatsBySubjectGroup, scoreMap, user?.id]);
+
+    const subjectYearMarkById = useMemo(() => {
+        const map = new Map<string, number>();
+
+        subjects.forEach((subject) => {
+            const subjectGroups = assignmentGroups
+                .filter((group) => group.subjectId === subject.id)
+                .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+            const total = subjectGroups.reduce((sum, group) => {
+                const liveGroup = liveGroupScoreById.get(group.id);
+                if (!liveGroup || liveGroup.maxPoints <= 0) return sum;
+                return sum + (liveGroup.score / liveGroup.maxPoints) * group.weightPercentage;
+            }, 0);
+
+            map.set(subject.id, total);
+        });
+
+        return map;
+    }, [assignmentGroups, liveGroupScoreById, subjects]);
+
+    const selectedSubjectYearMark = selectedSubjectId ? (subjectYearMarkById.get(selectedSubjectId) || 0) : 0;
 
     const assessmentRows = useMemo(() => {
         if (!selectedSubjectId) return [];
@@ -375,33 +547,30 @@ export default function StudentGrades() {
         }
 
         subjectGradebookColumns.forEach((group) => {
-            const gradebookEntry = scoreMap[`${user.id}:${group.id}`];
-            if (!gradebookEntry) return;
+            const liveGroup = liveGroupScoreById.get(group.id);
+            if (!liveGroup || liveGroup.maxPoints <= 0) return;
 
-            const maxPoints = normalizeMaxPoints(group.maxPoints);
-            if (maxPoints <= 0) return;
-
-            const groupContribution = (gradebookEntry.score / maxPoints) * group.weightPercentage;
+            const groupContribution = (liveGroup.score / liveGroup.maxPoints) * group.weightPercentage;
             if (!Number.isFinite(groupContribution) || groupContribution <= 0) return;
 
             const contributingRows = assessmentRows.filter((row) => (
                 row.groupId === group.id &&
                 row.countsTowardsFinal &&
-                row.percentage !== null &&
+                row.rawScore !== null &&
                 row.rawMax > 0
             ));
 
-            const totalContributingMax = contributingRows.reduce((sum, row) => sum + row.rawMax, 0);
-            if (totalContributingMax <= 0) return;
+            const totalContributingScore = contributingRows.reduce((sum, row) => sum + Math.max(0, row.rawScore || 0), 0);
+            if (totalContributingScore <= 0) return;
 
             contributingRows.forEach((row) => {
-                const share = row.rawMax / totalContributingMax;
+                const share = Math.max(0, row.rawScore || 0) / totalContributingScore;
                 impactMap.set(row.key, groupContribution * share);
             });
         });
 
         return impactMap;
-    }, [assessmentRows, scoreMap, selectedSubjectId, subjectGradebookColumns, user?.id]);
+    }, [assessmentRows, liveGroupScoreById, selectedSubjectId, subjectGradebookColumns]);
 
     return (
         <div className="w-full px-4 py-5 md:px-8 lg:px-12 space-y-6 md:space-y-8">
@@ -415,12 +584,8 @@ export default function StudentGrades() {
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {subjects.map((subject) => {
                     const SubjectIcon = getSubjectIcon(subject);
-                    const subjectGroups = assignmentGroups
-                        .filter((group) => group.subjectId === subject.id)
-                        .sort((a, b) => (a.order || 0) - (b.order || 0));
-                    const subjectAssignments = assignments.filter((assignment) => assignment.subjectId === subject.id && assignment.status === "published");
-                    const subjectQuizzes = quizzes.filter((quiz) => quiz.subjectId === subject.id && quiz.status === "published");
-                    const total = calculateWeightedGradebookTotal(subjectGroups, scoreMap, user?.id || "");
+                    const total = subjectYearMarkById.get(subject.id) || 0;
+                    const assessmentCount = subjectAssessmentCountById.get(subject.id) || 0;
                     const isSelected = subject.id === selectedSubjectId;
 
                     return (
@@ -450,7 +615,7 @@ export default function StudentGrades() {
 
                                 <div className="flex flex-wrap gap-2">
                                     <Badge variant="secondary">
-                                        {subjectAssignments.length + subjectQuizzes.length} assessments
+                                        {assessmentCount} assessments
                                     </Badge>
                                     <Badge variant="outline">{total.toFixed(1)}% year mark</Badge>
                                 </div>
@@ -472,7 +637,7 @@ export default function StudentGrades() {
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 <Badge className="bg-green-600 text-white">
-                                    Year Mark: {calculateWeightedGradebookTotal(subjectGradebookColumns, scoreMap, user?.id || "").toFixed(1)}%
+                                    Year Mark: {selectedSubjectYearMark.toFixed(1)}%
                                 </Badge>
                                 <Button type="button" variant="outline" onClick={() => navigate("/student/assignments")}>
                                     View Assessments
@@ -483,7 +648,8 @@ export default function StudentGrades() {
                             {subjectGradebookColumns.length > 0 ? (
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                                     {subjectGradebookColumns.map((group) => {
-                                        const entry = scoreMap[`${user?.id}:${group.id}`];
+                                        const liveGroup = liveGroupScoreById.get(group.id);
+                                        const hasLiveScore = Boolean(liveGroup && liveGroup.source !== "none");
                                         return (
                                             <div key={group.id} className="rounded-2xl border bg-background/70 p-4 space-y-3">
                                                 <div className="space-y-1">
@@ -494,14 +660,21 @@ export default function StudentGrades() {
                                                 </div>
                                                 <div className="flex items-end justify-between gap-3">
                                                     <div className="text-2xl font-black">
-                                                        {entry
-                                                            ? `${formatNumber(entry.score)} / ${formatNumber(normalizeMaxPoints(group.maxPoints))}`
+                                                        {hasLiveScore
+                                                            ? `${formatNumber(liveGroup?.score || 0)} / ${formatNumber(liveGroup?.maxPoints || normalizeMaxPoints(group.maxPoints))}`
                                                             : `- / ${formatNumber(normalizeMaxPoints(group.maxPoints))}`}
                                                     </div>
                                                     <Badge variant="secondary">
                                                         Max {formatNumber(normalizeMaxPoints(group.maxPoints))}
                                                     </Badge>
                                                 </div>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {liveGroup?.source === "gradebook"
+                                                        ? "From teacher gradebook score"
+                                                        : liveGroup?.source === "derived"
+                                                            ? "Live from graded assessments"
+                                                            : "Awaiting scored assessments"}
+                                                </p>
                                             </div>
                                         );
                                     })}
