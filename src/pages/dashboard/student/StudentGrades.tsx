@@ -570,8 +570,8 @@ export default function StudentGrades() {
                                                     <div>
                                                         <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Final Impact</p>
                                                         <p className="font-semibold">
-                                                            {row.earnedContribution !== null && row.countsTowardsFinal
-                                                                ? `${row.earnedContribution.toFixed(1)}%`
+                                                            {row.countsTowardsFinal && liveImpactByAssessmentKey.has(row.key)
+                                                                ? `${(liveImpactByAssessmentKey.get(row.key) || 0).toFixed(1)}%`
                                                                 : row.countsTowardsFinal
                                                                     ? "Tracked"
                                                                     : "Excluded"}
