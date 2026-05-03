@@ -123,7 +123,7 @@ export default function LessonView() {
     };
 
     return (
-        <div className="flex h-screen overflow-hidden bg-background">
+        <div className="flex min-h-screen lg:h-screen overflow-hidden bg-background">
             {/* Outline Sidebar */}
             {showOutline ? <div className="hidden lg:flex w-80 border-r flex-col min-h-0 bg-card/40 backdrop-blur-md">
                 <div className="p-6 border-b space-y-4">
@@ -187,7 +187,7 @@ export default function LessonView() {
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col min-h-0 bg-background/95">
                 <ScrollArea className="flex-1 h-full">
-                    <div className="w-full px-4 lg:px-16 space-y-10">
+                    <div className="w-full px-3 py-4 sm:px-4 lg:px-16 space-y-8 md:space-y-10">
                         {/* Header */}
                         <div className="flex flex-col gap-4 pb-2">
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -202,17 +202,17 @@ export default function LessonView() {
                                             Course outline
                                         </Button>
                                     </div>
-                                    <h1 className="text-4xl lg:text-5xl font-black tracking-tight text-slate-100">{currentLesson.title}</h1>
-                                    <p className="text-slate-400 font-medium">Part of {subject.name} • {currentIndex + 1} of {totalLessons} lessons</p>
+                                    <h1 className="text-2xl sm:text-3xl lg:text-5xl font-black tracking-tight text-slate-100">{currentLesson.title}</h1>
+                                    <p className="text-slate-400 font-medium">Part of {subject.name} - {currentIndex + 1} of {totalLessons} lessons</p>
                                 </div>
-                                <div className="flex items-center gap-3 shrink-0">
+                                <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto">
                                     {completed ? (
                                         <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 px-4 py-1.5 rounded-full flex items-center gap-2 font-bold transition-all">
                                             <CheckCircle2 className="h-4 w-4" /> Completed
                                         </Badge>
                                     ) : (
                                         <Button
-                                            className="font-bold h-11 px-8 rounded-full bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all"
+                                            className="w-full sm:w-auto font-bold h-11 px-6 sm:px-8 rounded-full bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all"
                                             onClick={() => toggleLessonCompletion(lessonId!)}
                                         >
                                             Mark as Completed
@@ -224,7 +224,7 @@ export default function LessonView() {
 
                         {/* Video Section */}
                         {videoUrl && (
-                            <Card className="border-none shadow-2xl overflow-hidden rounded-[2rem] bg-black aspect-video relative group ring-1 ring-white/10">
+                            <Card className="border-none shadow-2xl overflow-hidden rounded-[1.25rem] md:rounded-[2rem] bg-black aspect-video relative group ring-1 ring-white/10">
                                 {isYouTubeVideo ? (
                                     <iframe
                                         src={youtubeEmbedUrl}
@@ -262,7 +262,7 @@ export default function LessonView() {
                         )}
 
                         {/* Content Section */}
-                        <div className="space-y-8 bg-white-900/40 backdrop-blur-xl rounded-[2rem] p-8 lg:p-12 border border-white/5 shadow-2xl">
+                        <div className="space-y-6 md:space-y-8 bg-white-900/40 backdrop-blur-xl rounded-[1.25rem] md:rounded-[2rem] p-4 sm:p-6 lg:p-12 border border-white/5 shadow-2xl">
                             <div className="flex items-center gap-3 text-primary">
                                 <div className="p-2 rounded-xl bg-primary/10">
                                     <Layout className="h-6 w-6" />
@@ -270,8 +270,8 @@ export default function LessonView() {
                                 <h2 className="text-2xl font-black tracking-tight text-indigo-400">Lesson Notes</h2>
                             </div>
 
-                            <div className="prose prose-invert prose-lg max-w-none prose-headings:font-black prose-headings:tracking-tight prose-headings:text-slate-800 prose-p:text-black prose-strong:text-black prose-a:text-primary prose-ul:text-black prose-ol:text-black">
-                                <h1 className="text-3xl mb-6">{currentLesson.title}</h1>
+                            <div className="prose prose-invert prose-base md:prose-lg max-w-none prose-headings:font-black prose-headings:tracking-tight prose-headings:text-slate-800 prose-p:text-black prose-strong:text-black prose-a:text-primary prose-ul:text-black prose-ol:text-black">
+                                <h1 className="text-2xl md:text-3xl mb-4 md:mb-6">{currentLesson.title}</h1>
                                 {currentLesson.content ? (
                                     <div
                                         className="lesson-content-display"
@@ -289,7 +289,7 @@ export default function LessonView() {
                         </div>
 
                         {lessonResourceUrl ? (
-                            <div className="space-y-6 bg-white/80 backdrop-blur-xl rounded-[2rem] p-6 lg:p-8 border border-muted/20 shadow-xl">
+                            <div className="space-y-6 bg-white/80 backdrop-blur-xl rounded-[1.25rem] md:rounded-[2rem] p-4 sm:p-6 lg:p-8 border border-muted/20 shadow-xl">
                                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-3 text-primary">
@@ -323,27 +323,27 @@ export default function LessonView() {
                         ) : null}
 
                         {/* Footer Nav */}
-                        <div className="flex items-center justify-between py-10 border-t border-muted/20 pt-10">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-8 border-t border-muted/20 pt-8">
                             <Button
                                 variant="ghost"
-                                className="h-14 px-6 rounded-2xl group flex flex-col items-start gap-1 justify-center disabled:opacity-30"
+                                className="h-14 w-full sm:w-auto px-4 sm:px-6 rounded-2xl group flex flex-col items-start gap-1 justify-center disabled:opacity-30"
                                 onClick={() => prevLesson && navigate(`/student/subjects/${subjectId}/lessons/${prevLesson.id}`)}
                                 disabled={!prevLesson}
                             >
                                 <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground group-hover:text-primary transition-colors flex items-center gap-1">
                                     <ChevronLeft className="h-3 w-3" /> Previous Lesson
                                 </span>
-                                <span className="font-bold truncate max-w-[200px]">{prevLesson?.title || "Course Start"}</span>
+                                <span className="font-bold truncate max-w-full sm:max-w-[200px]">{prevLesson?.title || "Course Start"}</span>
                             </Button>
 
                             <Button
-                                className="h-14 px-8 rounded-2xl bg-primary hover:bg-primary/90 flex flex-col items-end gap-1 justify-center"
+                                className="h-14 w-full sm:w-auto px-5 sm:px-8 rounded-2xl bg-primary hover:bg-primary/90 flex flex-col items-end gap-1 justify-center"
                                 onClick={handleNext}
                             >
                                 <span className="text-[10px] font-black uppercase tracking-widest opacity-80 flex items-center gap-1">
                                     {nextLesson ? "Next Lesson" : "Finish Course"} <ChevronRight className="h-3 w-3" />
                                 </span>
-                                <span className="font-bold truncate max-w-[200px]">{nextLesson?.title || "Course Wrap-up"}</span>
+                                <span className="font-bold truncate max-w-full sm:max-w-[200px]">{nextLesson?.title || "Course Wrap-up"}</span>
                             </Button>
                         </div>
                     </div>

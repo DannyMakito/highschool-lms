@@ -153,13 +153,13 @@ export default function AssignmentView() {
     };
 
     return (
-        <div className="w-full px-4 md:px-8 lg:px-12 space-y-6 py-4">
+        <div className="w-full px-4 py-4 md:px-8 lg:px-12 space-y-5 md:space-y-6">
             <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2 mb-2">
                 <ChevronLeft className="h-4 w-4" />
                 Back to Assignments
             </Button>
 
-            <div className="grid gap-6 md:grid-cols-3">
+            <div className="grid gap-5 md:gap-6 md:grid-cols-3">
                 <Card className="md:col-span-2 border-none shadow-premium bg-card/50 backdrop-blur-sm">
                     <CardHeader>
                         <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -168,7 +168,7 @@ export default function AssignmentView() {
                             </Badge>
                             {assignment.attachmentUrl ? <Badge variant="secondary">Teacher File Attached</Badge> : null}
                         </div>
-                        <CardTitle className="text-3xl font-bold">{assignment.title}</CardTitle>
+                        <CardTitle className="text-2xl md:text-3xl font-bold">{assignment.title}</CardTitle>
                         <div
                             className="prose prose-slate max-w-none dark:prose-invert text-slate-600 leading-relaxed"
                             dangerouslySetInnerHTML={{ __html: assignment.description || "Read the instructions carefully and submit your work before the deadline." }}
@@ -223,7 +223,7 @@ export default function AssignmentView() {
                                         </h3>
                                         <Textarea
                                             placeholder="Type or paste your essay here..."
-                                            className="min-h-[400px] font-serif text-lg leading-relaxed p-6 rounded-2xl border-2 focus-visible:ring-primary/20"
+                                            className="min-h-[260px] md:min-h-[400px] font-serif text-base md:text-lg leading-relaxed p-4 md:p-6 rounded-2xl border-2 focus-visible:ring-primary/20"
                                             value={content}
                                             onChange={(e) => setContent(e.target.value)}
                                             disabled={isSubmitting || !isOpen}
@@ -246,7 +246,7 @@ export default function AssignmentView() {
                                             onChange={(e) => handleFileSelected(e.target.files?.[0] || null)}
                                         />
                                         <div
-                                            className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all ${isOpen ? 'group' : 'opacity-60 cursor-not-allowed'} ${selectedFile ? 'border-primary bg-primary/10' : 'border-primary/20 bg-primary/5 hover:border-primary/40'}`}
+                                            className={`border-2 border-dashed rounded-2xl p-6 md:p-12 text-center transition-all ${isOpen ? 'group' : 'opacity-60 cursor-not-allowed'} ${selectedFile ? 'border-primary bg-primary/10' : 'border-primary/20 bg-primary/5 hover:border-primary/40'}`}
                                             onDragOver={(event) => {
                                                 event.preventDefault();
                                                 event.stopPropagation();
@@ -291,7 +291,7 @@ export default function AssignmentView() {
                                 <div className="flex gap-3 pt-4">
                                     <Button
                                         type="button"
-                                        className="flex-1 h-12 font-black text-lg gap-2"
+                                        className="flex-1 h-12 font-black text-base md:text-lg gap-2"
                                         onClick={handleSubmit}
                                         disabled={isSubmitting || !isOpen || (assignment.submissionType === "text" && !content.trim())}
                                     >
@@ -338,7 +338,7 @@ export default function AssignmentView() {
                                                     <h4 className="text-sm font-black uppercase tracking-widest text-primary/70">Rubric Breakdown</h4>
                                                     <div className="space-y-2">
                                                         {rubric.criteria.map(c => (
-                                                            <div key={c.id} className="flex items-center justify-between text-sm py-2 border-b border-primary/10">
+                                                            <div key={c.id} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-sm py-2 border-b border-primary/10">
                                                                 <span className="font-bold">{c.title}</span>
                                                                 <span className="font-black">{(submission.rubricGrades?.[c.id]) || 0} / {c.maxPoints || (c as any).points || 0}</span>
                                                             </div>
@@ -371,7 +371,9 @@ export default function AssignmentView() {
                             <div className="flex justify-between items-center">
                                 <span>Submission</span>
                                 {submission ? (
-                                    <Badge className="bg-green-500">Graded</Badge>
+                                    submission.status === "graded" && submission.isReleased
+                                        ? <Badge className="bg-green-500">Graded</Badge>
+                                        : <Badge className="bg-blue-500">Submitted</Badge>
                                 ) : !isOpen ? (
                                     <Badge variant="outline">Locked</Badge>
                                 ) : (

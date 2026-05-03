@@ -116,7 +116,7 @@ const DiscussionForm: React.FC = () => {
         setSelectedGroupId('all');
     }, [discussionId, learnerGroupId, role, teacherClassOptions]);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         const finalSubjectId = subjectId || selectedSubjectId;
 
         if (!finalSubjectId) {
@@ -147,16 +147,20 @@ const DiscussionForm: React.FC = () => {
             isGroup: role === 'learner' ? true : Boolean(finalGroupId),
         };
 
-        if (discussionId) {
-            updateDiscussion(discussionId, data);
-            toast.success('Discussion updated');
-        } else {
-            addDiscussion(data);
-            toast.success('Discussion created');
+        try {
+            if (discussionId) {
+                await updateDiscussion(discussionId, data);
+                toast.success('Discussion updated');
+            } else {
+                await addDiscussion(data);
+                toast.success('Discussion created');
+            }
+
+            navigate(`${rolePrefix}/subjects/${finalSubjectId}/discussions`);
+        } catch (error) {
+            console.error('Failed to save discussion:', error);
+            toast.error('Failed to save discussion. Please try again.');
         }
-
-
-        navigate(`${rolePrefix}/subjects/${finalSubjectId}/discussions`);
     };
 
     return (

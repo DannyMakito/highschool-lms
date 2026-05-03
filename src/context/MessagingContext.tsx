@@ -26,6 +26,11 @@ interface MessagingContextType {
 
 const MessagingContext = createContext<MessagingContextType | undefined>(undefined);
 
+const isMissingColumnError = (error: { code?: string; message?: string } | null) => {
+    if (!error) return false;
+    return error.code === '42703' || /column .* does not exist/i.test(error.message || '');
+};
+
 export function MessagingProvider({ children }: { children: ReactNode }) {
     const { user, loading: authLoading } = useAuth();
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -261,32 +266,63 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
     // Discussion actions
     const addDiscussion = async (discussion: Omit<Discussion, 'id' | 'createdAt' | 'updatedAt' | 'readByUsers' | 'subscribedUserIds'>) => {
-        const { data: newD, error } = await supabase
+        const fullPayload = {
+            subject_id: discussion.subjectId,
+            subject_class_id: discussion.subjectClassId,
+            title: discussion.title,
+            content: discussion.content,
+            author_id: discussion.authorId,
+            is_pinned: discussion.isPinned ?? false,
+            is_closed: discussion.isClosed ?? false,
+            require_post_before_view: discussion.requirePostBeforeView ?? false,
+            is_group: discussion.isGroup ?? false,
+            group_id: discussion.groupId || null,
+            available_from: discussion.availableFrom || new Date().toISOString(),
+            available_until: discussion.availableUntil || null,
+            allow_threaded_replies: discussion.allowThreadedReplies ?? true,
+            allow_liking: discussion.allowLiking ?? false,
+            read_by_users: [discussion.authorId],
+            subscribed_user_ids: [discussion.authorId]
+        };
+
+        const { data: firstAttemptData, error: firstAttemptError } = await supabase
             .from('discussions')
             .insert({
-                subject_id: discussion.subjectId,
-                subject_class_id: discussion.subjectClassId,
-                title: discussion.title,
-                content: discussion.content,
-                author_id: discussion.authorId,
-                is_pinned: discussion.isPinned ?? false,
-                is_closed: discussion.isClosed ?? false,
-                require_post_before_view: discussion.requirePostBeforeView ?? false,
-                is_group: discussion.isGroup ?? false,
-                group_id: discussion.groupId || null,
-                available_from: discussion.availableFrom || new Date().toISOString(),
-                available_until: discussion.availableUntil || null,
-                allow_threaded_replies: discussion.allowThreadedReplies ?? true,
-                allow_liking: discussion.allowLiking ?? false,
-                teacher_only: discussion.teacherOnly ?? false,
-
-                read_by_users: [discussion.authorId],
-                subscribed_user_ids: [discussion.authorId]
+                ...fullPayload,
+                teacher_only: discussion.teacherOnly ?? false
             })
             .select()
             .single();
 
-        if (error) throw error;
+        let newD = firstAttemptData;
+        if (firstAttemptError) {
+            if (!isMissingColumnError(firstAttemptError)) {
+                throw firstAttemptError;
+            }
+
+            // Backward compatibility for deployments where discussion migrations are partially applied.
+            const fallbackPayload = {
+                subject_id: discussion.subjectId,
+                title: discussion.title,
+                content: discussion.content,
+                author_id: discussion.authorId,
+                read_by_users: [discussion.authorId],
+                subscribed_user_ids: [discussion.authorId]
+            };
+
+            const { data: fallbackData, error: fallbackError } = await supabase
+                .from('discussions')
+                .insert(fallbackPayload)
+                .select()
+                .single();
+
+            if (fallbackError) throw fallbackError;
+            newD = fallbackData;
+        }
+
+        if (!newD) {
+            throw new Error('Discussion could not be created.');
+        }
 
         const mappedD: Discussion = {
             ...newD,

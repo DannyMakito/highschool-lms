@@ -48,11 +48,11 @@ export default function StudentAssignments() {
     }, [allSubjects, assignedIds, assignments]);
 
     return (
-        <div className="w-full px-4 md:px-8 lg:px-12 space-y-8 py-6">
+        <div className="w-full px-4 py-5 md:px-8 lg:px-12 space-y-6 md:space-y-8">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="flex flex-col gap-2">
-                    <h1 className="text-4xl font-extrabold tracking-tight">Assignments</h1>
-                    <p className="text-xl text-muted-foreground mt-2">Open each subject to see active tasks. Your gradebook now lives on the dedicated Grades page.</p>
+                    <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight">Assignments</h1>
+                    <p className="text-sm sm:text-base md:text-xl text-muted-foreground mt-1 md:mt-2">Open each subject to see active tasks. Your gradebook now lives on the dedicated Grades page.</p>
                 </div>
                 <Button type="button" variant="outline" onClick={() => navigate("/student/grades")}>
                     Open Grades Page
@@ -70,7 +70,7 @@ export default function StudentAssignments() {
                             <Badge variant="secondary">{subjectAssignments.length} tasks</Badge>
                         </div>
 
-                        <div className="grid gap-6">
+                        <div className="grid gap-4 md:gap-6">
                             {subjectAssignments.map((assignment) => {
                                 const submission = studentSubmissions.find((item) => item.assignmentId === assignment.id);
                                 const availableFrom = new Date(assignment.availableFrom || assignment.createdAt);
@@ -81,7 +81,7 @@ export default function StudentAssignments() {
 
                                 return (
                                     <Card key={assignment.id} className="group transition-all duration-300 border-none bg-card/50 backdrop-blur-sm shadow-premium overflow-hidden">
-                                        <CardHeader className="flex flex-row items-start justify-between pb-2">
+                                        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between pb-2">
                                             <div className="space-y-1">
                                                 <div className="flex items-center gap-3 mb-2 flex-wrap">
                                                     <Badge variant="secondary" className="bg-primary/10 text-primary border-none">
@@ -99,7 +99,7 @@ export default function StudentAssignments() {
                                                         <Badge variant="outline">Open</Badge>
                                                     )}
                                                 </div>
-                                                <CardTitle className="text-2xl font-bold group-hover:text-primary transition-colors">
+                                                <CardTitle className="text-xl md:text-2xl font-bold group-hover:text-primary transition-colors">
                                                     {assignment.title}
                                                 </CardTitle>
                                                 <div className="flex flex-wrap items-center gap-4 pt-1 text-sm text-muted-foreground">
@@ -107,7 +107,7 @@ export default function StudentAssignments() {
                                                     <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Due {format(dueDate, "PPP")}</span>
                                                 </div>
                                             </div>
-                                            <div className="text-right">
+                                            <div className="text-left sm:text-right">
                                                 <div className="text-[10px] uppercase font-black tracking-widest text-muted-foreground mt-1">
                                                     Max Marks: {assignment.totalMarks}
                                                 </div>
@@ -123,7 +123,7 @@ export default function StudentAssignments() {
                                             </p>
 
                                             {isGraded && (
-                                                <div className="mt-4 p-4 rounded-xl bg-green-50/50 border border-green-100 flex items-center justify-between">
+                                                <div className="mt-4 p-4 rounded-xl bg-green-50/50 border border-green-100 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
                                                     <div className="flex items-center gap-3">
                                                         <CheckCircle2 className="h-5 w-5 text-green-600" />
                                                         <div>
@@ -139,7 +139,7 @@ export default function StudentAssignments() {
                                         </CardContent>
                                         <CardFooter className="bg-muted/30 pt-4">
                                             <Button
-                                                className="w-full font-bold gap-2"
+                                                className="w-full font-bold gap-2 text-sm sm:text-base"
                                                 variant={isOpen ? "default" : "outline"}
                                                 disabled={!isOpen}
                                                 onClick={() => navigate(`/student/assignments/${assignment.id}`)}

@@ -763,8 +763,8 @@ export default function SchoolClassManagement() {
                     if (!open) closeStudentGradesDialog();
                 }}
             >
-                <DialogContent className="max-w-5xl">
-                    <DialogHeader>
+                <DialogContent className="w-[min(96vw,1100px)] max-w-none max-h-[90vh] overflow-hidden p-0 flex flex-col gap-0">
+                    <DialogHeader className="border-b px-6 py-4">
                         <DialogTitle>Subject Grade Snapshot</DialogTitle>
                         <DialogDescription>
                             {selectedStudentForGrades?.name || "Learner"} | {viewedSubject?.name || "Subject"}
@@ -772,11 +772,11 @@ export default function SchoolClassManagement() {
                     </DialogHeader>
 
                     {isLoadingStudentGrades ? (
-                        <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
+                        <div className="m-6 rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
                             Loading learner grade data...
                         </div>
                     ) : (
-                        <div className="space-y-5">
+                        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-6">
                             <div className="grid gap-3 md:grid-cols-3">
                                 <div className="rounded-xl border p-4">
                                     <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Current Year Mark</p>
@@ -794,7 +794,7 @@ export default function SchoolClassManagement() {
 
                             <div className="rounded-xl border p-4">
                                 <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Setup Score Categories</p>
-                                <div className="mt-3 flex flex-wrap gap-2">
+                                <div className="mt-3 flex flex-wrap gap-2 overflow-x-auto pb-1">
                                     {subjectGradebookGroups.length > 0 ? (
                                         subjectGradebookGroups.map((group) => {
                                             const entry = selectedStudentForGrades
@@ -813,6 +813,7 @@ export default function SchoolClassManagement() {
                             </div>
 
                             <div className="rounded-xl border overflow-hidden">
+                                <div className="overflow-x-auto">
                                 <Table>
                                     <TableHeader className="bg-muted/40">
                                         <TableRow>
@@ -871,6 +872,7 @@ export default function SchoolClassManagement() {
                                         ) : null}
                                     </TableBody>
                                 </Table>
+                                </div>
                             </div>
                         </div>
                     )}

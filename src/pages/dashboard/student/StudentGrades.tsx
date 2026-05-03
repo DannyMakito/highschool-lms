@@ -378,10 +378,10 @@ export default function StudentGrades() {
         : undefined;
 
     return (
-        <div className="w-full px-4 py-6 md:px-8 lg:px-12 space-y-8">
+        <div className="w-full px-4 py-5 md:px-8 lg:px-12 space-y-6 md:space-y-8">
             <div className="flex flex-col gap-2">
-                <h1 className="text-4xl font-black text-slate-800  font-extrabold tracking-tight">My Grades</h1>
-                <p className="text-xl text-muted-foreground mt-2">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-800 font-extrabold tracking-tight">My Grades</h1>
+                <p className="text-sm sm:text-base md:text-xl text-muted-foreground mt-1 md:mt-2">
                     Open a subject to see its gradebook setup, assessment list, and how each result feeds into your term and year mark.
                 </p>
             </div>
@@ -408,14 +408,14 @@ export default function StudentGrades() {
                                     : "border-muted/20 bg-card/70 hover:border-primary/40"
                             }`}
                         >
-                            <div className="p-6 space-y-4">
+                            <div className="p-4 md:p-6 space-y-4">
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex items-center gap-4">
-                                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                                            <SubjectIcon className="h-7 w-7" />
+                                        <div className="flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                                            <SubjectIcon className="h-6 w-6 md:h-7 md:w-7" />
                                         </div>
                                         <div>
-                                            <h2 className="text-xl font-black">{subject.name}</h2>
+                                            <h2 className="text-lg md:text-xl font-black">{subject.name}</h2>
                                             <p className="text-sm text-muted-foreground">Grade {subject.gradeTier}</p>
                                         </div>
                                     </div>
@@ -500,122 +500,184 @@ export default function StudentGrades() {
                         </CardHeader>
                         <CardContent>
                             {assessmentRows.length > 0 ? (
-                                <ScrollArea className="w-full whitespace-nowrap rounded-xl border">
-                                    <table className="w-full min-w-[1280px] text-sm">
-                                        <thead className="bg-muted/30">
-                                            <tr>
-                                                <th className="px-4 py-3 text-left font-black min-w-[250px]">Item Name</th>
-                                                <th className="px-4 py-3 text-left font-black min-w-[120px]">Due Date</th>
-                                                <th className="px-4 py-3 text-left font-black min-w-[120px]">Status</th>
-                                                {subjectGradebookColumns.map((group) => (
-                                                    <th key={group.id} className="px-4 py-3 text-left font-black min-w-[190px]">
-                                                        <div className="space-y-1">
-                                                            <p>{group.name}</p>
-                                                            <p className="text-[10px] text-muted-foreground">
-                                                                {group.weightPercentage}% of year mark
-                                                            </p>
-                                                        </div>
-                                                    </th>
-                                                ))}
-                                                <th className="px-4 py-3 text-left font-black min-w-[140px]">Grade</th>
-                                                <th className="px-4 py-3 text-left font-black min-w-[170px]">Final Mark Impact</th>
-                                                <th className="px-4 py-3 text-left font-black min-w-[120px]">Results</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {assessmentRows.map((row) => (
-                                                <tr
-                                                    key={row.key}
-                                                    className={`border-t transition-colors ${
-                                                        row.key === selectedAssessmentKey ? "bg-primary/5" : "hover:bg-muted/20"
-                                                    }`}
-                                                >
-                                                    <td className="px-4 py-4">
-                                                        <button
-                                                            type="button"
-                                                            className="space-y-1 text-left"
-                                                            onClick={() => setSelectedAssessmentKey(row.key)}
-                                                        >
-                                                            <p className="font-bold">{row.title}</p>
-                                                            <div className="flex flex-wrap gap-2">
-                                                                <Badge variant="secondary" className="capitalize">
-                                                                    {row.kind}
-                                                                </Badge>
-                                                                <Badge variant="outline">
-                                                                    {row.periodLabel} mark
-                                                                </Badge>
-                                                            </div>
-                                                        </button>
-                                                    </td>
-                                                    <td className="px-4 py-4 text-muted-foreground">{formatDate(row.dueDate)}</td>
-                                                    <td className="px-4 py-4">
-                                                        <Badge className={getBadgeClassName(row.status)}>{row.status}</Badge>
-                                                    </td>
-                                                    {subjectGradebookColumns.map((group) => (
-                                                        <td key={group.id} className="px-4 py-4">
-                                                            {row.groupId === group.id ? (
+                                <div className="space-y-4">
+                                    <div className="space-y-3 md:hidden">
+                                        {assessmentRows.map((row) => (
+                                            <button
+                                                key={row.key}
+                                                type="button"
+                                                onClick={() => setSelectedAssessmentKey(row.key)}
+                                                className={`w-full text-left rounded-2xl border p-4 space-y-3 transition-colors ${
+                                                    row.key === selectedAssessmentKey ? "border-primary bg-primary/5" : "border-muted/40"
+                                                }`}
+                                            >
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <p className="font-bold">{row.title}</p>
+                                                    <Badge className={getBadgeClassName(row.status)}>{row.status}</Badge>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    <Badge variant="secondary" className="capitalize">{row.kind}</Badge>
+                                                    <Badge variant="outline">{row.periodLabel} mark</Badge>
+                                                    <Badge variant="outline">{row.groupName}</Badge>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                                    <div>
+                                                        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Due</p>
+                                                        <p className="font-semibold">{formatDate(row.dueDate)}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Grade</p>
+                                                        <p className="font-semibold">
+                                                            {row.percentage !== null
+                                                                ? `${row.percentage.toFixed(1)}%`
+                                                                : "Pending"}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Score</p>
+                                                        <p className="font-semibold">
+                                                            {row.rawScore !== null
+                                                                ? `${formatNumber(row.rawScore)} / ${formatNumber(row.rawMax)}`
+                                                                : "Awaiting grade"}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Final Impact</p>
+                                                        <p className="font-semibold">
+                                                            {row.earnedContribution !== null && row.countsTowardsFinal
+                                                                ? `${row.earnedContribution.toFixed(1)}%`
+                                                                : row.countsTowardsFinal
+                                                                    ? "Tracked"
+                                                                    : "Excluded"}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => navigate(row.route)}>
+                                                    View Result
+                                                </Button>
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div className="hidden md:block">
+                                        <ScrollArea className="w-full whitespace-nowrap rounded-xl border">
+                                            <table className="w-full min-w-[1280px] text-sm">
+                                                <thead className="bg-muted/30">
+                                                    <tr>
+                                                        <th className="px-4 py-3 text-left font-black min-w-[250px]">Item Name</th>
+                                                        <th className="px-4 py-3 text-left font-black min-w-[120px]">Due Date</th>
+                                                        <th className="px-4 py-3 text-left font-black min-w-[120px]">Status</th>
+                                                        {subjectGradebookColumns.map((group) => (
+                                                            <th key={group.id} className="px-4 py-3 text-left font-black min-w-[190px]">
                                                                 <div className="space-y-1">
-                                                                    <p className="font-semibold">
-                                                                        {row.rawScore !== null
-                                                                            ? `${formatNumber(row.rawScore)} / ${formatNumber(row.rawMax)}`
-                                                                            : "Awaiting grade"}
-                                                                    </p>
-                                                                    <p className="text-xs text-muted-foreground">
-                                                                        {row.countsTowardsFinal
-                                                                            ? row.contributionWeight > 0
-                                                                                ? `${formatNumber(row.contributionWeight)}% ${row.periodLabel.toLowerCase()} weighting`
-                                                                                : `${formatNumber(row.groupWeightPercentage)}% grade column weight`
-                                                                            : "Not counted in final mark"}
+                                                                    <p>{group.name}</p>
+                                                                    <p className="text-[10px] text-muted-foreground">
+                                                                        {group.weightPercentage}% of year mark
                                                                     </p>
                                                                 </div>
-                                                            ) : (
-                                                                <span className="text-muted-foreground">-</span>
-                                                            )}
-                                                        </td>
+                                                            </th>
+                                                        ))}
+                                                        <th className="px-4 py-3 text-left font-black min-w-[140px]">Grade</th>
+                                                        <th className="px-4 py-3 text-left font-black min-w-[170px]">Final Mark Impact</th>
+                                                        <th className="px-4 py-3 text-left font-black min-w-[120px]">Results</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {assessmentRows.map((row) => (
+                                                        <tr
+                                                            key={row.key}
+                                                            className={`border-t transition-colors ${
+                                                                row.key === selectedAssessmentKey ? "bg-primary/5" : "hover:bg-muted/20"
+                                                            }`}
+                                                        >
+                                                            <td className="px-4 py-4">
+                                                                <button
+                                                                    type="button"
+                                                                    className="space-y-1 text-left"
+                                                                    onClick={() => setSelectedAssessmentKey(row.key)}
+                                                                >
+                                                                    <p className="font-bold">{row.title}</p>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        <Badge variant="secondary" className="capitalize">
+                                                                            {row.kind}
+                                                                        </Badge>
+                                                                        <Badge variant="outline">
+                                                                            {row.periodLabel} mark
+                                                                        </Badge>
+                                                                    </div>
+                                                                </button>
+                                                            </td>
+                                                            <td className="px-4 py-4 text-muted-foreground">{formatDate(row.dueDate)}</td>
+                                                            <td className="px-4 py-4">
+                                                                <Badge className={getBadgeClassName(row.status)}>{row.status}</Badge>
+                                                            </td>
+                                                            {subjectGradebookColumns.map((group) => (
+                                                                <td key={group.id} className="px-4 py-4">
+                                                                    {row.groupId === group.id ? (
+                                                                        <div className="space-y-1">
+                                                                            <p className="font-semibold">
+                                                                                {row.rawScore !== null
+                                                                                    ? `${formatNumber(row.rawScore)} / ${formatNumber(row.rawMax)}`
+                                                                                    : "Awaiting grade"}
+                                                                            </p>
+                                                                            <p className="text-xs text-muted-foreground">
+                                                                                {row.countsTowardsFinal
+                                                                                    ? row.contributionWeight > 0
+                                                                                        ? `${formatNumber(row.contributionWeight)}% ${row.periodLabel.toLowerCase()} weighting`
+                                                                                        : `${formatNumber(row.groupWeightPercentage)}% grade column weight`
+                                                                                    : "Not counted in final mark"}
+                                                                            </p>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-muted-foreground">-</span>
+                                                                    )}
+                                                                </td>
+                                                            ))}
+                                                            <td className="px-4 py-4">
+                                                                {row.percentage !== null ? (
+                                                                    <div className="space-y-1">
+                                                                        <p className="font-bold">{row.percentage.toFixed(1)}%</p>
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            {formatNumber(row.rawScore || 0)} / {formatNumber(row.rawMax)}
+                                                                        </p>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground">Pending</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                {row.earnedContribution !== null && row.countsTowardsFinal ? (
+                                                                    <div className="space-y-1">
+                                                                        <p className="font-bold">{row.earnedContribution.toFixed(1)}%</p>
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            Earned toward {row.periodLabel.toLowerCase()} mark
+                                                                        </p>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="space-y-1">
+                                                                        <p className="font-bold text-muted-foreground">
+                                                                            {row.countsTowardsFinal ? "Tracked" : "Excluded"}
+                                                                        </p>
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            {row.countsTowardsFinal
+                                                                                ? `${formatNumber(row.groupWeightPercentage)}% category weight`
+                                                                                : "Not included in final mark"}
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                <Button type="button" variant="outline" size="sm" onClick={() => navigate(row.route)}>
+                                                                    View
+                                                                </Button>
+                                                            </td>
+                                                        </tr>
                                                     ))}
-                                                    <td className="px-4 py-4">
-                                                        {row.percentage !== null ? (
-                                                            <div className="space-y-1">
-                                                                <p className="font-bold">{row.percentage.toFixed(1)}%</p>
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    {formatNumber(row.rawScore || 0)} / {formatNumber(row.rawMax)}
-                                                                </p>
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-muted-foreground">Pending</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-4">
-                                                        {row.earnedContribution !== null && row.countsTowardsFinal ? (
-                                                            <div className="space-y-1">
-                                                                <p className="font-bold">{row.earnedContribution.toFixed(1)}%</p>
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    Earned toward {row.periodLabel.toLowerCase()} mark
-                                                                </p>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="space-y-1">
-                                                                <p className="font-bold text-muted-foreground">
-                                                                    {row.countsTowardsFinal ? "Tracked" : "Excluded"}
-                                                                </p>
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    {row.countsTowardsFinal
-                                                                        ? `${formatNumber(row.groupWeightPercentage)}% category weight`
-                                                                        : "Not included in final mark"}
-                                                                </p>
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-4">
-                                                        <Button type="button" variant="outline" size="sm" onClick={() => navigate(row.route)}>
-                                                            View
-                                                        </Button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </ScrollArea>
+                                                </tbody>
+                                            </table>
+                                        </ScrollArea>
+                                    </div>
+                                </div>
                             ) : (
                                 <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
                                     No quizzes or assignments have been published for this subject yet.
@@ -644,7 +706,7 @@ export default function StudentGrades() {
                                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                                     <div className="rounded-2xl border p-4">
                                         <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Grade</p>
-                                        <p className="mt-2 text-3xl font-black">
+                                        <p className="mt-2 text-2xl md:text-3xl font-black">
                                             {selectedAssessment.percentage !== null ? `${selectedAssessment.percentage.toFixed(1)}%` : "Pending"}
                                         </p>
                                         <p className="text-sm text-muted-foreground mt-1">
@@ -655,7 +717,7 @@ export default function StudentGrades() {
                                     </div>
                                     <div className="rounded-2xl border p-4">
                                         <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Mark Contribution</p>
-                                        <p className="mt-2 text-3xl font-black">
+                                        <p className="mt-2 text-2xl md:text-3xl font-black">
                                             {selectedAssessment.earnedContribution !== null && selectedAssessment.countsTowardsFinal
                                                 ? `${selectedAssessment.earnedContribution.toFixed(1)}%`
                                                 : "N/A"}
@@ -670,14 +732,14 @@ export default function StudentGrades() {
                                     </div>
                                     <div className="rounded-2xl border p-4">
                                         <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Due Date</p>
-                                        <p className="mt-2 text-3xl font-black">{formatDate(selectedAssessment.dueDate)}</p>
+                                        <p className="mt-2 text-xl md:text-3xl font-black">{formatDate(selectedAssessment.dueDate)}</p>
                                         <p className="text-sm text-muted-foreground mt-1">{selectedAssessment.status}</p>
                                     </div>
                                     <div className="rounded-2xl border p-4">
                                         <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Grade Column</p>
-                                        <p className="mt-2 text-3xl font-black">{selectedAssessment.groupName}</p>
+                                        <p className="mt-2 text-xl md:text-3xl font-black">{selectedAssessment.groupName}</p>
                                         <p className="text-sm text-muted-foreground mt-1">
-                                            {selectedAssessment.periodLabel} mark tracking • {formatNumber(selectedAssessment.groupWeightPercentage)}% weight
+                                            {selectedAssessment.periodLabel} mark tracking - {formatNumber(selectedAssessment.groupWeightPercentage)}% weight
                                         </p>
                                     </div>
                                 </div>

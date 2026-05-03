@@ -41,14 +41,14 @@ export default function StudentQuizzes() {
     };
 
     return (
-        <div className="w-full px-4 md:px-8 lg:px-12 space-y-8 py-6">
+        <div className="w-full px-4 py-5 md:px-8 lg:px-12 space-y-6 md:space-y-8">
             <div className="flex flex-col gap-2">
-                <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900">Available Quizzes</h1>
-                <p className="text-slate-500 font-medium">Test your knowledge and track your progress.</p>
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-slate-900">Available Quizzes</h1>
+                <p className="text-sm sm:text-base text-slate-500 font-medium">Test your knowledge and track your progress.</p>
             </div>
 
             {publishedQuizzes.length === 0 ? (
-                <div className="bg-slate-50 rounded-[2rem] p-12 text-center border-2 border-dashed border-slate-200">
+                <div className="bg-slate-50 rounded-[1.5rem] md:rounded-[2rem] p-7 md:p-12 text-center border-2 border-dashed border-slate-200">
                     <div className="h-20 w-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
                         <HelpCircle className="h-10 w-10 text-slate-300" />
                     </div>
@@ -60,11 +60,11 @@ export default function StudentQuizzes() {
                     {publishedQuizzes.map((quiz) => (
                         <Card
                             key={quiz.id}
-                            className="group hover:shadow-xl transition-all duration-300 border-slate-100 overflow-hidden cursor-pointer rounded-[1.5rem]"
+                            className="group hover:shadow-xl transition-all duration-300 border-slate-100 overflow-hidden cursor-pointer rounded-[1.25rem] md:rounded-[1.5rem]"
                             onClick={() => navigate(`/student/quizzes/${quiz.id}`)}
                         >
                             <CardContent className="p-0">
-                                <div className="p-6 space-y-4">
+                                <div className="p-4 md:p-6 space-y-4">
                                     <div className="flex items-start justify-between">
                                         <Badge variant="secondary" className="bg-indigo-50 text-indigo-600 border-none font-bold px-3 py-1">
                                             {getSubjectName(quiz.subjectId)}
@@ -75,7 +75,7 @@ export default function StudentQuizzes() {
                                     </div>
 
                                     <div>
-                                        <h3 className="text-xl font-black text-slate-900 leading-tight mb-2 group-hover:text-indigo-600 transition-colors">
+                                        <h3 className="text-lg md:text-xl font-black text-slate-900 leading-tight mb-2 group-hover:text-indigo-600 transition-colors">
                                             {quiz.title}
                                         </h3>
                                         <p className="text-sm text-slate-500 line-clamp-2 font-medium">
@@ -88,7 +88,7 @@ export default function StudentQuizzes() {
                                         <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-amber-400" /> {quiz.settings?.timeLimit || 0} Mins</span>
                                     </div>
                                 </div>
-                                <div className="border-t border-slate-50 p-4 bg-slate-50/30 flex items-center justify-between text-xs font-bold text-slate-500">
+                                <div className="border-t border-slate-50 p-4 bg-slate-50/30 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-xs font-bold text-slate-500">
                                     <div className="flex items-center gap-2">
                                         <Calendar className="h-4 w-4" />
                                         <span>Ends {quiz.settings?.availability?.endDate ? new Date(quiz.settings.availability.endDate).toLocaleDateString() : 'N/A'}</span>

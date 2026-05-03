@@ -97,7 +97,6 @@ export default function AssignmentManagement() {
         deleteAssignment,
         notifyNonSubmitters,
         addRubric,
-        updateRubric,
     } = useAssignments();
     const { subjects: allSubjects } = useSubjects();
     const navigate = useNavigate();
@@ -180,6 +179,10 @@ export default function AssignmentManagement() {
             .filter((group) => group.subjectId === assignmentForm.subjectId)
             .sort((a, b) => (a.order || 0) - (b.order || 0));
     }, [assignmentForm.subjectId, assignmentGroups]);
+    const selectedGradebookGroup = useMemo(
+        () => selectedSubjectGroups.find((group) => group.id === assignmentForm.groupId) || null,
+        [assignmentForm.groupId, selectedSubjectGroups]
+    );
 
     const groupNameById = useMemo(
         () => new Map(assignmentGroups.map((group) => [group.id, group.name])),
@@ -200,7 +203,10 @@ export default function AssignmentManagement() {
 
     const openCreateEditor = () => {
         setEditingAssignmentId(null);
-        setAssignmentForm(createDefaultAssignmentState());
+        setAssignmentForm({
+            ...createDefaultAssignmentState(),
+            rubricId: rubrics[0]?.id || "",
+        });
         setIsCustomRubricMode(false);
         setRubricEditor(createEmptyRubric());
         setIsEditorOpen(true);
@@ -231,7 +237,7 @@ export default function AssignmentManagement() {
         });
         const attachedRubric = rubrics.find(r => r.id === assignment.rubricId);
         if (attachedRubric) {
-            setIsCustomRubricMode(true);
+            setIsCustomRubricMode(false);
             setRubricEditor({
                 id: attachedRubric.id,
                 title: attachedRubric.title,
@@ -248,6 +254,14 @@ export default function AssignmentManagement() {
         }
         setIsEditorOpen(true);
     };
+
+    useEffect(() => {
+        if (!isEditorOpen || isCustomRubricMode || assignmentForm.rubricId || rubrics.length === 0) {
+            return;
+        }
+
+        setAssignmentForm((prev) => ({ ...prev, rubricId: rubrics[0].id }));
+    }, [assignmentForm.rubricId, isCustomRubricMode, isEditorOpen, rubrics]);
 
     const removeAssignmentAttachment = async (filePath?: string | null) => {
         if (!filePath) return;
@@ -346,35 +360,72 @@ export default function AssignmentManagement() {
         }));
     };
 
+    const toggleRubricMode = () => {
+        if (isCustomRubricMode) {
+            setIsCustomRubricMode(false);
+            return;
+        }
+
+        const selectedLibraryRubric = rubrics.find((rubric) => rubric.id === assignmentForm.rubricId);
+        if (selectedLibraryRubric) {
+            setRubricEditor({
+                title: `${selectedLibraryRubric.title} (Custom Copy)`,
+                criteria: selectedLibraryRubric.criteria.map((criterion) => ({
+                    id: crypto.randomUUID(),
+                    title: criterion.title,
+                    description: criterion.description,
+                    maxPoints: criterion.maxPoints,
+                })),
+            });
+        } else {
+            setRubricEditor((prev) => ({
+                ...createEmptyRubric(),
+                title: assignmentForm.title ? `${assignmentForm.title} Rubric` : prev.title,
+            }));
+        }
+        setIsCustomRubricMode(true);
+    };
+
     const saveRubricIfNeeded = async () => {
         if (!isCustomRubricMode) {
-            return assignmentForm.rubricId || "default-essay-rubric";
+            if (!assignmentForm.rubricId) {
+                throw new Error("Select a rubric from the library or create a custom rubric before publishing.");
+            }
+            return assignmentForm.rubricId;
         }
-        if (!rubricEditor.title || rubricEditor.criteria.some(c => !c.title || c.maxPoints <= 0)) {
+        if (!rubricEditor.title.trim() || rubricEditor.criteria.some(c => !c.title.trim() || c.maxPoints <= 0)) {
             throw new Error("Please complete the rubric before saving.");
         }
         const rubricPayload: Partial<Rubric> = {
-            title: rubricEditor.title,
+            title: rubricEditor.title.trim(),
             criteria: rubricEditor.criteria.map((criterion, index) => ({
-                id: criterion.id,
-                title: criterion.title,
+                title: criterion.title.trim(),
                 description: criterion.description,
                 maxPoints: criterion.maxPoints,
                 order: index + 1,
             }))
         };
-        if (rubricEditor.id) {
-            const updated = await updateRubric(rubricEditor.id, rubricPayload);
-            return updated.id;
-        }
         const created = await addRubric(rubricPayload);
-        setRubricEditor(prev => ({ ...prev, id: created.id }));
+        setRubricEditor({
+            id: created.id,
+            title: created.title,
+            criteria: created.criteria.map((criterion) => ({
+                id: criterion.id,
+                title: criterion.title,
+                description: criterion.description,
+                maxPoints: criterion.maxPoints,
+            })),
+        });
         return created.id;
     };
 
     const handleSave = async () => {
         if (!assignmentForm.title || !assignmentForm.subjectId) {
             toast.error("Please fill in the assessment title and subject.");
+            return;
+        }
+        if (new Date(assignmentForm.dueDate).getTime() < new Date(assignmentForm.availableFrom).getTime()) {
+            toast.error("The due date cannot be earlier than the open date.");
             return;
         }
         if (isUploadingAttachment) {
@@ -388,6 +439,7 @@ export default function AssignmentManagement() {
                 : null;
             const payload: Partial<Assignment> = {
                 ...assignmentForm,
+                contributionWeight: selectedGradebookGroup ? selectedGradebookGroup.weightPercentage : assignmentForm.contributionWeight,
                 groupId: assignmentForm.groupId || null,
                 rubricId,
                 status: "published",
@@ -414,6 +466,13 @@ export default function AssignmentManagement() {
             setRubricEditor(createEmptyRubric());
             setIsCustomRubricMode(false);
         } catch (error: any) {
+            const rlsRubricError =
+                error?.code === "42501" ||
+                /row-level security policy/i.test(error?.message || "");
+            if (rlsRubricError) {
+                toast.error("Rubric permission denied. Use a library rubric or ask an admin to grant rubric editing access.");
+                return;
+            }
             toast.error(error?.message || "Could not save the assessment.");
         }
     };
@@ -487,7 +546,6 @@ export default function AssignmentManagement() {
                                                         <SelectValue placeholder="Existing rubric" />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="default-essay-rubric">Default Essay Rubric</SelectItem>
                                                         {rubrics.map(r => (
                                                             <SelectItem key={r.id} value={r.id}>{r.title}</SelectItem>
                                                         ))}
@@ -500,12 +558,17 @@ export default function AssignmentManagement() {
                                                     variant={isCustomRubricMode ? "secondary" : "outline"}
                                                     size="sm"
                                                     className="w-full font-bold text-xs h-10"
-                                                    onClick={() => setIsCustomRubricMode(prev => !prev)}
+                                                    onClick={toggleRubricMode}
                                                 >
-                                                    {isCustomRubricMode ? "Use Library Rubric" : "Create / Edit Custom Rubric"}
+                                                    {isCustomRubricMode ? "Use Library Rubric" : "Create Custom Rubric"}
                                                 </Button>
                                             </div>
                                         </div>
+                                        {!isCustomRubricMode && rubrics.length === 0 ? (
+                                            <p className="text-[11px] text-muted-foreground">
+                                                No rubric templates are available yet. Switch to custom rubric mode to draft one.
+                                            </p>
+                                        ) : null}
 
                                         {isCustomRubricMode && (
                                             <div className="mt-6 space-y-4 border p-6 rounded-xl bg-background/50 animate-in fade-in zoom-in-95">
@@ -629,10 +692,15 @@ export default function AssignmentManagement() {
                                         <Select
                                             value={assignmentForm.groupId || "unlinked"}
                                             onValueChange={(value) =>
-                                                setAssignmentForm((prev) => ({
-                                                    ...prev,
-                                                    groupId: value === "unlinked" ? "" : value,
-                                                }))
+                                                setAssignmentForm((prev) => {
+                                                    const nextGroupId = value === "unlinked" ? "" : value;
+                                                    const linkedGroup = selectedSubjectGroups.find((group) => group.id === nextGroupId);
+                                                    return {
+                                                        ...prev,
+                                                        groupId: nextGroupId,
+                                                        contributionWeight: linkedGroup ? linkedGroup.weightPercentage : prev.contributionWeight,
+                                                    };
+                                                })
                                             }
                                             disabled={!assignmentForm.subjectId}
                                         >
@@ -702,9 +770,15 @@ export default function AssignmentManagement() {
                                                 className="bg-background/50"
                                                 min={0}
                                                 max={100}
-                                                value={assignmentForm.contributionWeight}
+                                                value={selectedGradebookGroup ? selectedGradebookGroup.weightPercentage : assignmentForm.contributionWeight}
+                                                disabled={Boolean(selectedGradebookGroup)}
                                                 onChange={(e) => setAssignmentForm(prev => ({ ...prev, contributionWeight: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) }))}
                                             />
+                                            {selectedGradebookGroup ? (
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    Auto-linked to {selectedGradebookGroup.name} ({selectedGradebookGroup.weightPercentage}%).
+                                                </p>
+                                            ) : null}
                                         </div>
                                     </div>
 

@@ -46,7 +46,7 @@ export default function StudentQuizDetail() {
     }
 
     return (
-        <div className="w-full px-4 md:px-8 lg:px-12 space-y-8 py-6">
+        <div className="w-full px-4 py-5 md:px-8 lg:px-12 space-y-6 md:space-y-8">
             <header className="space-y-6">
                 <Button
                     variant="ghost"
@@ -61,25 +61,25 @@ export default function StudentQuizDetail() {
                         <Badge className="bg-indigo-50 text-indigo-600 border-none font-bold">
                             {subject?.name || "General"}
                         </Badge>
-                        <span className="text-slate-300">•</span>
+                        <span className="text-slate-300">-</span>
                         <div className="flex items-center gap-1.5 text-xs font-black text-slate-400 uppercase tracking-widest">
                             <Calendar className="h-4 w-4" /> Ended {quiz.settings?.availability?.endDate ? new Date(quiz.settings.availability.endDate).toLocaleDateString() : 'N/A'}
                         </div>
                     </div>
-                    <h1 className="text-3xl md:text-5xl font-black text-slate-900 leading-tight tracking-tight">
+                    <h1 className="text-2xl sm:text-3xl md:text-5xl font-black text-slate-900 leading-tight tracking-tight">
                         {quiz.title}
                     </h1>
-                    <p className="text-lg text-slate-600 font-medium leading-relaxed max-w-2xl">
+                    <p className="text-base md:text-lg text-slate-600 font-medium leading-relaxed max-w-2xl">
                         {quiz.description || "Once you've completed the learning material, please complete the assessment by clicking \"Start Assessment\""}
                     </p>
                 </div>
             </header>
 
             <Card className="border-slate-100 rounded-[2rem] overflow-hidden shadow-sm">
-                <CardContent className="p-8 md:p-10">
+                <CardContent className="p-5 sm:p-6 md:p-10">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-y-10 gap-x-16">
                         <div className="space-y-8">
-                            <div className="flex items-center justify-between group">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between group">
                                 <div className="flex items-center gap-3">
                                     <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-amber-50 group-hover:text-amber-600 transition-colors">
                                         <Clock className="h-5 w-5" />
@@ -89,7 +89,7 @@ export default function StudentQuizDetail() {
                                 <span className="font-black text-slate-900 text-lg">{quiz.settings?.timeLimit || 0} minutes</span>
                             </div>
 
-                            <div className="flex items-center justify-between group">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between group">
                                 <div className="flex items-center gap-3">
                                     <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-emerald-50 group-hover:text-emerald-600 transition-colors">
                                         <GraduationCap className="h-5 w-5" />
@@ -101,19 +101,19 @@ export default function StudentQuizDetail() {
                         </div>
 
                         <div className="space-y-8 md:border-l md:border-slate-50 md:pl-16">
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                 <span className="font-bold text-slate-500">Attempts Taken:</span>
                                 <span className="font-black text-slate-900 text-lg">{attemptsTaken}</span>
                             </div>
 
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                 <span className="font-bold text-slate-500">Attempts Remaining:</span>
                                 <span className="font-black text-slate-900 text-lg">
                                     {(quiz.settings?.allowedAttempts === 0 || !quiz.settings) ? "Unlimited" : attemptsRemaining}
                                 </span>
                             </div>
 
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                 <span className="font-bold text-slate-500">Status:</span>
                                 <Badge className={attemptsTaken > 0 ? "bg-emerald-50 text-emerald-600 border-none font-bold" : "bg-slate-100 text-slate-400 border-none font-bold"}>
                                     {attemptsTaken > 0 ? "Done" : "Not Attempted"}

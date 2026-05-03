@@ -33,6 +33,15 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
     const [submissions, setSubmissions] = useState<AssignmentSubmission[]>([]);
     const [loading, setLoading] = useState(true);
 
+    const mapRubricCriteria = (criteria: any[] = []) =>
+        criteria.map((criterion: any, index: number) => ({
+            id: criterion.id,
+            title: criterion.title,
+            description: criterion.description,
+            maxPoints: Number(criterion.max_points ?? criterion.maxPoints ?? criterion.points ?? 0),
+            order: criterion.order ?? index + 1,
+        }));
+
     const fetchAssignmentsData = async () => {
         let cancelled = false;
         setLoading(true);
@@ -123,12 +132,7 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
             setRubrics((rubricsData || []).map(r => ({
                 id: r.id,
                 title: r.title,
-                criteria: (r.criteria || []).map((c: any) => ({
-                    id: c.id,
-                    title: c.title,
-                    description: c.description,
-                    maxPoints: c.max_points || c.maxPoints || c.points || 0
-                }))
+                criteria: mapRubricCriteria(r.criteria || [])
             })));
 
             // For teachers, filter submissions to only those for their assignments
@@ -230,29 +234,6 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
     };
 
     const addAssignment = async (assignment: Partial<Assignment>) => {
-        let rubricId = assignment.rubricId;
-        
-        // If no rubric selected or it's the default placeholder, create a default rubric
-        if (!rubricId || rubricId === "default-essay-rubric") {
-            try {
-                console.log('[AssignmentsContext] Creating default rubric for assignment:', assignment.title);
-                const newRubric = await addRubric({
-                    title: `${assignment.title} - Rubric`,
-                    criteria: [
-                        { title: 'Content Quality', description: 'Does the submission address the assignment requirements with depth and accuracy?', maxPoints: 4 },
-                        { title: 'Organization', description: 'Is the work well-structured, clear, and easy to follow?', maxPoints: 4 },
-                        { title: 'Grammar & Clarity', description: 'Is the writing clear, grammatically correct, and professional?', maxPoints: 4 },
-                        { title: 'Critical Thinking', description: 'Does the work demonstrate analysis, reasoning, and original thought?', maxPoints: 4 }
-                    ]
-                });
-                rubricId = newRubric.id;
-                console.log('[AssignmentsContext] Default rubric created:', rubricId);
-            } catch (rubricErr) {
-                console.warn('[AssignmentsContext] Failed to create default rubric:', rubricErr);
-                rubricId = null; // Proceed without rubric if creation fails
-            }
-        }
-        
         const { data, error } = await supabase
             .from('assignments')
             .insert([{
@@ -264,7 +245,7 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
                 is_group: assignment.isGroup,
                 available_from: assignment.availableFrom || null,
                 due_date: assignment.dueDate,
-                rubric_id: rubricId || null,
+                rubric_id: assignment.rubricId || null,
                 assessment_category: assignment.assessmentCategory || 'assignment',
                 assessment_period: assignment.assessmentPeriod || 'term',
                 contribution_weight: assignment.contributionWeight ?? 0,
@@ -381,6 +362,7 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
 
         if (rubricError) throw rubricError;
 
+        let savedCriteria: any[] = [];
         if (rubric.criteria && rubric.criteria.length > 0) {
             const criteriaToInsert = rubric.criteria.map((c, index) => ({
                 rubric_id: newRubric.id,
@@ -390,11 +372,20 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
                 order: c.order ?? index + 1
             }));
 
-            const { error: criteriaError } = await supabase.from('rubric_criteria').insert(criteriaToInsert);
+            const { data: createdCriteria, error: criteriaError } = await supabase
+                .from('rubric_criteria')
+                .insert(criteriaToInsert)
+                .select();
             if (criteriaError) throw criteriaError;
+            savedCriteria = createdCriteria || [];
         }
 
-        const finalRubric = { ...newRubric, createdAt: newRubric.created_at, criteria: rubric.criteria || [] };
+        const finalRubric = {
+            id: newRubric.id,
+            title: newRubric.title,
+            createdAt: newRubric.created_at,
+            criteria: mapRubricCriteria(savedCriteria),
+        };
         setRubrics(prev => [...prev, finalRubric]);
         return finalRubric;
     };
@@ -409,6 +400,7 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
 
         if (rubricError) throw rubricError;
 
+        let savedCriteria: any[] = [];
         if (rubric.criteria) {
             const { error: deleteError } = await supabase
                 .from('rubric_criteria')
@@ -426,18 +418,21 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
                     order: criterion.order ?? index + 1
                 }));
 
-                const { error: insertError } = await supabase
+                const { data: insertedCriteria, error: insertError } = await supabase
                     .from('rubric_criteria')
-                    .insert(criteriaToInsert);
+                    .insert(criteriaToInsert)
+                    .select();
 
                 if (insertError) throw insertError;
+                savedCriteria = insertedCriteria || [];
             }
         }
 
         const finalRubric = {
-            ...updatedRubric,
+            id: updatedRubric.id,
+            title: updatedRubric.title,
             createdAt: updatedRubric.created_at,
-            criteria: rubric.criteria || []
+            criteria: rubric.criteria ? mapRubricCriteria(savedCriteria) : (rubrics.find((item) => item.id === id)?.criteria || [])
         };
 
         setRubrics(prev => prev.map(existing => existing.id === id ? finalRubric : existing));
