@@ -763,7 +763,7 @@ export default function SchoolClassManagement() {
                     if (!open) closeStudentGradesDialog();
                 }}
             >
-                <DialogContent className="w-[min(96vw,1100px)] max-w-none max-h-[90vh] overflow-hidden p-0 flex flex-col gap-0">
+                <DialogContent className="w-[calc(100vw-1rem)] sm:w-[min(98vw,1400px)] max-w-none h-[92vh] max-h-[92vh] overflow-hidden p-0 flex flex-col gap-0">
                     <DialogHeader className="border-b px-6 py-4">
                         <DialogTitle>Subject Grade Snapshot</DialogTitle>
                         <DialogDescription>

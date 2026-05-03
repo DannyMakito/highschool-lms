@@ -44,11 +44,9 @@ type AssessmentRow = {
     groupWeightPercentage: number;
     periodLabel: string;
     countsTowardsFinal: boolean;
-    contributionWeight: number;
     rawScore: number | null;
     rawMax: number;
     percentage: number | null;
-    earnedContribution: number | null;
     route: string;
     submission: AssignmentSubmission | QuizSubmission | null;
     assignment: Assignment | null;
@@ -256,8 +254,6 @@ export default function StudentGrades() {
                 const rawScore = gradeVisible ? Number(submission?.totalGrade || 0) : null;
                 const rawMax = Number(assignment.totalMarks || 0);
                 const percentage = computePercentage(rawScore, rawMax);
-                const contributionWeight = Number(assignment.contributionWeight || 0);
-                const earnedContribution = percentage === null ? null : (percentage / 100) * contributionWeight;
                 const availableAt = assignment.availableFrom ? new Date(assignment.availableFrom).getTime() : null;
                 const dueAt = new Date(assignment.dueDate).getTime();
                 const now = Date.now();
@@ -286,11 +282,9 @@ export default function StudentGrades() {
                     groupWeightPercentage: assignment.groupId ? Number(groupWeightById.get(assignment.groupId) || 0) : 0,
                     periodLabel: getPeriodLabel(assignment.assessmentPeriod),
                     countsTowardsFinal: assignment.countsTowardsFinal ?? true,
-                    contributionWeight,
                     rawScore,
                     rawMax,
                     percentage,
-                    earnedContribution,
                     route: `/student/assignments/${assignment.id}`,
                     submission,
                     assignment,
@@ -335,11 +329,9 @@ export default function StudentGrades() {
                     groupWeightPercentage: quiz.groupId ? Number(groupWeightById.get(quiz.groupId) || 0) : 0,
                     periodLabel: "Term",
                     countsTowardsFinal: quiz.countsTowardsFinal ?? true,
-                    contributionWeight: 0,
                     rawScore,
                     rawMax,
                     percentage,
-                    earnedContribution: null,
                     route: `/student/quizzes/${quiz.id}`,
                     submission,
                     assignment: null,
@@ -376,6 +368,40 @@ export default function StudentGrades() {
     const selectedRubric = selectedAssessment?.assignment?.rubricId
         ? getRubric(selectedAssessment.assignment.rubricId)
         : undefined;
+    const liveImpactByAssessmentKey = useMemo(() => {
+        const impactMap = new Map<string, number>();
+        if (!selectedSubjectId || !user?.id || subjectGradebookColumns.length === 0) {
+            return impactMap;
+        }
+
+        subjectGradebookColumns.forEach((group) => {
+            const gradebookEntry = scoreMap[`${user.id}:${group.id}`];
+            if (!gradebookEntry) return;
+
+            const maxPoints = normalizeMaxPoints(group.maxPoints);
+            if (maxPoints <= 0) return;
+
+            const groupContribution = (gradebookEntry.score / maxPoints) * group.weightPercentage;
+            if (!Number.isFinite(groupContribution) || groupContribution <= 0) return;
+
+            const contributingRows = assessmentRows.filter((row) => (
+                row.groupId === group.id &&
+                row.countsTowardsFinal &&
+                row.percentage !== null &&
+                row.rawMax > 0
+            ));
+
+            const totalContributingMax = contributingRows.reduce((sum, row) => sum + row.rawMax, 0);
+            if (totalContributingMax <= 0) return;
+
+            contributingRows.forEach((row) => {
+                const share = row.rawMax / totalContributingMax;
+                impactMap.set(row.key, groupContribution * share);
+            });
+        });
+
+        return impactMap;
+    }, [assessmentRows, scoreMap, selectedSubjectId, subjectGradebookColumns, user?.id]);
 
     return (
         <div className="w-full px-4 py-5 md:px-8 lg:px-12 space-y-6 md:space-y-8">
@@ -622,9 +648,7 @@ export default function StudentGrades() {
                                                                             </p>
                                                                             <p className="text-xs text-muted-foreground">
                                                                                 {row.countsTowardsFinal
-                                                                                    ? row.contributionWeight > 0
-                                                                                        ? `${formatNumber(row.contributionWeight)}% ${row.periodLabel.toLowerCase()} weighting`
-                                                                                        : `${formatNumber(row.groupWeightPercentage)}% grade column weight`
+                                                                                    ? `${formatNumber(row.groupWeightPercentage)}% grade column weight`
                                                                                     : "Not counted in final mark"}
                                                                             </p>
                                                                         </div>
@@ -646,11 +670,11 @@ export default function StudentGrades() {
                                                                 )}
                                                             </td>
                                                             <td className="px-4 py-4">
-                                                                {row.earnedContribution !== null && row.countsTowardsFinal ? (
+                                                                {row.countsTowardsFinal && liveImpactByAssessmentKey.has(row.key) ? (
                                                                     <div className="space-y-1">
-                                                                        <p className="font-bold">{row.earnedContribution.toFixed(1)}%</p>
+                                                                        <p className="font-bold">{(liveImpactByAssessmentKey.get(row.key) || 0).toFixed(1)}%</p>
                                                                         <p className="text-xs text-muted-foreground">
-                                                                            Earned toward {row.periodLabel.toLowerCase()} mark
+                                                                            Earned toward year mark
                                                                         </p>
                                                                     </div>
                                                                 ) : (
@@ -718,15 +742,13 @@ export default function StudentGrades() {
                                     <div className="rounded-2xl border p-4">
                                         <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Mark Contribution</p>
                                         <p className="mt-2 text-2xl md:text-3xl font-black">
-                                            {selectedAssessment.earnedContribution !== null && selectedAssessment.countsTowardsFinal
-                                                ? `${selectedAssessment.earnedContribution.toFixed(1)}%`
+                                            {selectedAssessment.countsTowardsFinal && liveImpactByAssessmentKey.has(selectedAssessment.key)
+                                                ? `${(liveImpactByAssessmentKey.get(selectedAssessment.key) || 0).toFixed(1)}%`
                                                 : "N/A"}
                                         </p>
                                         <p className="text-sm text-muted-foreground mt-1">
                                             {selectedAssessment.countsTowardsFinal
-                                                ? selectedAssessment.contributionWeight > 0
-                                                    ? `${formatNumber(selectedAssessment.contributionWeight)}% ${selectedAssessment.periodLabel.toLowerCase()} weighting`
-                                                    : `${formatNumber(selectedAssessment.groupWeightPercentage)}% grade column weight`
+                                                ? `${formatNumber(selectedAssessment.groupWeightPercentage)}% grade column weight`
                                                 : "This assessment is excluded from final mark calculations"}
                                         </p>
                                     </div>
