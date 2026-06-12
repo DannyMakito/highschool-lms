@@ -2,12 +2,14 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 type UserBody = {
-  role: 'teacher' | 'student';
+  role: 'teacher' | 'student' | 'parent';
   name: string;
   email: string;
   pin: string;
   // Teacher only
   subjects?: string[];
+  // Parent only
+  studentIds?: string[];
   // Student only
   administrationNumber?: string;
   admissionYear?: string;
@@ -228,6 +230,28 @@ Deno.serve(async (req) => {
           await admin.auth.admin.deleteUser(userId);
           await admin.from("profiles").delete().eq("id", userId);
           return new Response(JSON.stringify({ error: "Student subjects assignment failed", details: ssErr.message }), {
+            status: 400,
+            headers: { ...corsHeaders, "content-type": "application/json" },
+          });
+        }
+      }
+    } else if (body.role === 'parent') {
+      const studentIds = body.studentIds || [];
+      if (studentIds.length > 0) {
+        const { error: parentLinkErr } = await admin.from("parent_students").insert(
+          studentIds.map((studentId, index) => ({
+            parent_id: userId,
+            student_id: studentId,
+            relationship_label: 'parent',
+            is_primary: index === 0,
+          })),
+        );
+
+        if (parentLinkErr) {
+          console.error("Parent Links Insert Error:", parentLinkErr);
+          await admin.auth.admin.deleteUser(userId);
+          await admin.from("profiles").delete().eq("id", userId);
+          return new Response(JSON.stringify({ error: "Parent child linking failed", details: parentLinkErr.message }), {
             status: 400,
             headers: { ...corsHeaders, "content-type": "application/json" },
           });

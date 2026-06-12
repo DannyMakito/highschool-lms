@@ -36,6 +36,7 @@ import DiscussionForm from "@/pages/dashboard/shared/discussions/DiscussionForm"
 import DiscussionView from "@/pages/dashboard/shared/discussions/DiscussionView";
 import NotificationsPage from "@/pages/dashboard/shared/NotificationsPage";
 import ProfilePage from "@/pages/dashboard/shared/ProfilePage";
+import ParentAccessManagement from "@/pages/dashboard/shared/ParentAccessManagement";
 import StudentRegistration from "@/pages/dashboard/principal/StudentRegistration";
 import RegisterClassManagement from "@/pages/dashboard/principal/RegisterClassManagement";
 import SubjectClassManagement from "@/pages/dashboard/principal/SubjectClassManagement";
@@ -135,6 +136,7 @@ export function App() {
             <Route path="assignments/:id/grade" element={<SpeedGraderV2 />} />
             <Route path="classes" element={<SchoolClassManagement />} />
             <Route path="register-admin" element={<RegisterManagement />} />
+            <Route path="parent-access" element={<ParentAccessManagement />} />
             <Route path="subjects/:id/discussions" element={<Discussions />} />
             <Route path="subjects/:id/discussions/create" element={<DiscussionForm />} />
             <Route path="subjects/:id/discussions/edit/:discussionId" element={<DiscussionForm />} />
@@ -164,6 +166,7 @@ export function App() {
             <Route path="subject-classes" element={<SubjectClassManagement />} />
             <Route path="grades" element={<GradeManagement />} />
             <Route path="directory" element={<StudentDirectory />} />
+            <Route path="parent-access" element={<ParentAccessManagement />} />
             <Route path="subjects/:id/discussions" element={<Discussions />} />
             <Route path="subjects/:id/discussions/create" element={<DiscussionForm />} />
             <Route path="subjects/:id/discussions/edit/:discussionId" element={<DiscussionForm />} />

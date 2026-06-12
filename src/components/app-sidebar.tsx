@@ -14,6 +14,7 @@ import {
   BarChart3,
   CircleHelp,
   CalendarCheck2,
+  KeyRound,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -136,6 +137,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               icon: CalendarCheck2,
             },
             {
+              title: "Parent Access",
+              url: "/teacher/parent-access",
+              icon: KeyRound,
+            },
+            {
               title: "Discussions",
               url: "/teacher/discussions",
               icon: MessageSquare,
@@ -200,6 +206,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               items: [
                 { title: "Student Registration", url: "/principal/students" },
                 { title: "Student Directory", url: "/principal/directory" },
+                { title: "Parent Access", url: "/principal/parent-access" },
                 { title: "Register Classes", url: "/principal/register-classes" },
                 { title: "Subject Classes", url: "/principal/subject-classes" },
                 { title: "Grade Management", url: "/principal/grades" },
