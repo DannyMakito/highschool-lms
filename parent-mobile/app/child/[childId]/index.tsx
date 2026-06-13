@@ -18,13 +18,17 @@ export default function ChildOverviewScreen() {
 
       <SectionCard title="Overview">
         <View style={styles.stack}>
-          <Text style={styles.body}>This screen is connected to live Supabase data.</Text>
+          <Text style={styles.body}>This screen now reflects live parent-safe dashboard data.</Text>
+          {data.child ? <Text style={styles.metric}>Admin number: {data.child.administrationNumber || "-"}</Text> : null}
+          {data.child ? <Text style={styles.metric}>Status: {data.child.status || "-"}</Text> : null}
+          {data.child ? <Text style={styles.metric}>Subjects: {data.child.subjectCount || 0}</Text> : null}
           {loading ? <ActivityIndicator color="#1d4ed8" /> : null}
           {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
           <Text style={styles.metric}>Assignments: {data.assignments.length}</Text>
           <Text style={styles.metric}>Grades: {data.grades.length}</Text>
           <Text style={styles.metric}>Attendance: {data.attendance.length}</Text>
           <Text style={styles.metric}>Announcements: {data.announcements.length}</Text>
+          <Text style={styles.metric}>Conversations: {data.conversations.length}</Text>
           <Link href={`/child/${params.childId}/grades`} style={styles.link}>
             View grades
           </Link>
@@ -38,6 +42,38 @@ export default function ChildOverviewScreen() {
             View announcements
           </Link>
         </View>
+      </SectionCard>
+
+      <SectionCard title="Subjects" subtitle="Subjects currently linked to this learner.">
+        {data.subjects.length === 0 ? (
+          <Text style={styles.body}>No linked subjects were found for this learner yet.</Text>
+        ) : (
+          <View style={styles.stack}>
+            {data.subjects.map((subject) => (
+              <View key={subject.id} style={styles.subjectRow}>
+                <Text style={styles.metric}>{subject.name}</Text>
+                <Text style={styles.subjectMeta}>{subject.category || subject.gradeTier || "Subject"}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </SectionCard>
+
+      <SectionCard title="Recent conversations" subtitle="Quick parent-teacher threads and discussion updates.">
+        {data.conversations.length === 0 ? (
+          <Text style={styles.body}>No recent conversations yet.</Text>
+        ) : (
+          <View style={styles.stack}>
+            {data.conversations.slice(0, 4).map((thread) => (
+              <View key={thread.id} style={styles.threadCard}>
+                <Text style={styles.threadSubject}>{thread.subjectName || "Subject"}</Text>
+                <Text style={styles.threadTitle}>{thread.title}</Text>
+                <Text style={styles.body}>{thread.preview}</Text>
+                <Text style={styles.subjectMeta}>{thread.replyCount} replies • {thread.authorName || thread.authorRole || "Teacher"}</Text>
+              </View>
+            ))}
+          </View>
+        )}
       </SectionCard>
     </ScrollView>
   );
@@ -72,6 +108,37 @@ const styles = StyleSheet.create({
   metric: {
     color: "#0f172a",
     fontWeight: "600",
+  },
+  subjectRow: {
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#e2e8f0",
+  },
+  subjectMeta: {
+    color: "#64748b",
+    marginTop: 2,
+    fontSize: 12,
+  },
+  threadCard: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  threadSubject: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  threadTitle: {
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 6,
   },
   link: {
     color: "#1d4ed8",

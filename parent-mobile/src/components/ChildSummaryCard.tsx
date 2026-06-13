@@ -21,6 +21,7 @@ export function ChildSummaryCard({ child }: ChildSummaryCardProps) {
               {child.gradeLabel || "Grade pending"} {child.classLabel ? `• ${child.classLabel}` : ""}
             </Text>
             <Text style={styles.meta}>{child.administrationNumber || "No admin number yet"}</Text>
+            <Text style={styles.linkText}>Open learner dashboard</Text>
           </View>
         </View>
       </Pressable>
@@ -65,5 +66,13 @@ const styles = StyleSheet.create({
   meta: {
     color: brandColors.border,
     fontSize: 12,
+  },
+  linkText: {
+    color: brandColors.primarySoft,
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
   },
 });

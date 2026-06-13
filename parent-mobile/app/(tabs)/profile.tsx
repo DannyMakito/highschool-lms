@@ -1,14 +1,16 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Link } from "expo-router";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "../../src/context/AuthContext";
+import { ChildSummaryCard } from "../../src/components/ChildSummaryCard";
 import { SectionCard } from "../../src/components/SectionCard";
 
 export default function ProfileScreen() {
-  const { parent, logout } = useAuth();
+  const { parent, children, activeChild, logout } = useAuth();
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Profile</Text>
-      <Text style={styles.subtitle}>Parent account details and future settings live here.</Text>
+      <Text style={styles.subtitle}>Your account, linked learners, and shortcuts live here.</Text>
 
       <SectionCard title="Account">
         <View style={styles.row}>
@@ -25,15 +27,39 @@ export default function ProfileScreen() {
         </View>
       </SectionCard>
 
-      <SectionCard title="Next steps">
-        <Text style={styles.body}>
-          We can add PIN reset, profile editing, and notification preferences after the first child dashboard is working.
-        </Text>
+      <SectionCard title="Active learner" subtitle={activeChild ? "The currently selected learner on this device." : "No learner selected yet."}>
+        {activeChild ? <ChildSummaryCard child={activeChild} /> : <Text style={styles.body}>Link a learner to see their dashboard here.</Text>}
       </SectionCard>
 
-      <Text style={styles.logout} onPress={() => void logout()}>
-        Sign out
-      </Text>
+      <SectionCard title="Linked learners" subtitle="Tap a learner to open their dashboard.">
+        {children.length === 0 ? (
+          <Text style={styles.empty}>No learners are linked to this parent account yet.</Text>
+        ) : (
+          <View style={styles.stack}>
+            {children.map((child) => (
+              <ChildSummaryCard key={child.id} child={child} />
+            ))}
+          </View>
+        )}
+      </SectionCard>
+
+      <SectionCard title="Quick actions" subtitle="Common actions should feel like buttons, not plain text.">
+        <View style={styles.actions}>
+          <Link href="/messages" asChild>
+            <Pressable style={styles.actionButton}>
+              <Text style={styles.actionButtonText}>Open chat</Text>
+            </Pressable>
+          </Link>
+          <Link href="/notifications" asChild>
+            <Pressable style={styles.actionButtonSecondary}>
+              <Text style={styles.actionButtonSecondaryText}>View alerts</Text>
+            </Pressable>
+          </Link>
+          <Pressable style={styles.logoutButton} onPress={() => void logout()}>
+            <Text style={styles.logoutButtonText}>Sign out</Text>
+          </Pressable>
+        </View>
+      </SectionCard>
     </ScrollView>
   );
 }
@@ -77,10 +103,44 @@ const styles = StyleSheet.create({
     color: "#334155",
     lineHeight: 20,
   },
-  logout: {
+  empty: {
+    color: "#64748b",
+  },
+  stack: {
+    gap: 12,
+  },
+  actions: {
+    gap: 10,
+  },
+  actionButton: {
+    backgroundColor: "#1d4ed8",
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  actionButtonText: {
+    color: "#ffffff",
+    fontWeight: "800",
+  },
+  actionButtonSecondary: {
+    backgroundColor: "#dbeafe",
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  actionButtonSecondaryText: {
+    color: "#1d4ed8",
+    fontWeight: "800",
+  },
+  logoutButton: {
+    backgroundColor: "#fee2e2",
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  logoutButtonText: {
     color: "#b91c1c",
-    fontWeight: "700",
-    marginTop: 8,
-    textAlign: "center",
+    fontWeight: "800",
   },
 });

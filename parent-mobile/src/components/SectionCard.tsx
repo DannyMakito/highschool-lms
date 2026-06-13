@@ -21,15 +21,20 @@ export function SectionCard({ title, subtitle, children }: SectionCardProps) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: brandColors.card,
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: 24,
+    padding: 18,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#e2e8f0",
+    shadowColor: "#0f172a",
+    shadowOpacity: 0.04,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 2,
   },
   title: {
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "800",
     marginBottom: 4,
     color: brandColors.text,
   },
@@ -37,5 +42,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: brandColors.placeholder,
     marginBottom: 12,
+    lineHeight: 18,
   },
 });

@@ -1,5 +1,5 @@
 import { Link } from "expo-router";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AfrinexelBrand } from "../../src/components/AfrinexelBrand";
 import { ChildSummaryCard } from "../../src/components/ChildSummaryCard";
 import { SectionCard } from "../../src/components/SectionCard";
@@ -28,10 +28,12 @@ export default function HomeScreen() {
           <Text style={styles.error}>{errorMessage}</Text>
         ) : (
           <View style={styles.metrics}>
+            <Text style={styles.metric}>Subjects: {data.subjects.length}</Text>
             <Text style={styles.metric}>Assignments: {data.assignments.length}</Text>
             <Text style={styles.metric}>Grades: {data.grades.length}</Text>
             <Text style={styles.metric}>Attendance records: {data.attendance.length}</Text>
             <Text style={styles.metric}>Announcements: {data.announcements.length}</Text>
+            <Text style={styles.metric}>Conversations: {data.conversations.length}</Text>
           </View>
         )}
       </SectionCard>
@@ -48,13 +50,27 @@ export default function HomeScreen() {
         )}
       </SectionCard>
 
-      <SectionCard title="Next phase" subtitle="This scaffold keeps the portal read-only for now.">
+      <SectionCard title="Quick actions" subtitle="Common parent actions should look and feel like buttons.">
         <Text style={styles.body}>
-          We’ll connect grades, attendance, assignments, and announcements after the core auth and child-link flow is confirmed.
+          Jump straight to the child dashboard, notices, or the chat inbox without hunting through tabs.
         </Text>
-        <Link href="/children" style={styles.link}>
-          Browse children
-        </Link>
+        <View style={styles.actions}>
+          <Link href="/profile" asChild>
+            <Pressable style={styles.actionButton}>
+              <Text style={styles.actionButtonText}>Open profile</Text>
+            </Pressable>
+          </Link>
+          <Link href="/messages" asChild>
+            <Pressable style={styles.actionButtonSecondary}>
+              <Text style={styles.actionButtonSecondaryText}>Open chat</Text>
+            </Pressable>
+          </Link>
+          <Link href="/notifications" asChild>
+            <Pressable style={styles.actionButtonSecondary}>
+              <Text style={styles.actionButtonSecondaryText}>Open alerts</Text>
+            </Pressable>
+          </Link>
+        </View>
       </SectionCard>
     </ScrollView>
   );
@@ -92,6 +108,29 @@ const styles = StyleSheet.create({
   metric: {
     color: brandColors.text,
     fontWeight: "600",
+  },
+  actions: {
+    gap: 10,
+  },
+  actionButton: {
+    backgroundColor: brandColors.primary,
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  actionButtonText: {
+    color: "#ffffff",
+    fontWeight: "800",
+  },
+  actionButtonSecondary: {
+    backgroundColor: brandColors.primarySoft,
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  actionButtonSecondaryText: {
+    color: brandColors.primary,
+    fontWeight: "800",
   },
   body: {
     color: "#334155",
