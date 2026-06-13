@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { brandColors } from "../theme/brand";
 
 type SectionCardProps = {
   title?: string;
@@ -19,7 +20,7 @@ export function SectionCard({ title, subtitle, children }: SectionCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#ffffff",
+    backgroundColor: brandColors.card,
     borderRadius: 20,
     padding: 16,
     marginBottom: 16,
@@ -30,11 +31,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     marginBottom: 4,
-    color: "#0f172a",
+    color: brandColors.text,
   },
   subtitle: {
     fontSize: 13,
-    color: "#64748b",
+    color: brandColors.placeholder,
     marginBottom: 12,
   },
 });

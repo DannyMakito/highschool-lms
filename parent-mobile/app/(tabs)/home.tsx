@@ -1,9 +1,11 @@
 import { Link } from "expo-router";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useAuth } from "../../src/context/AuthContext";
+import { AfrinexelBrand } from "../../src/components/AfrinexelBrand";
 import { ChildSummaryCard } from "../../src/components/ChildSummaryCard";
 import { SectionCard } from "../../src/components/SectionCard";
+import { useAuth } from "../../src/context/AuthContext";
 import { useChildDashboard } from "../../src/features/children/useChildDashboard";
+import { brandColors } from "../../src/theme/brand";
 
 export default function HomeScreen() {
   const { parent, children, activeChild } = useAuth();
@@ -11,7 +13,7 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.eyebrow}>Parent Portal</Text>
+      <AfrinexelBrand compact />
       <Text style={styles.title}>Welcome{parent ? `, ${parent.fullName.split(" ")[0]}` : ""}</Text>
       <Text style={styles.subtitle}>Quick view of each linked child.</Text>
 
@@ -21,7 +23,7 @@ export default function HomeScreen() {
 
       <SectionCard title="Live summary" subtitle="Pulled from Supabase for the selected child.">
         {loading ? (
-          <ActivityIndicator color="#1d4ed8" />
+          <ActivityIndicator color={brandColors.primary} />
         ) : errorMessage ? (
           <Text style={styles.error}>{errorMessage}</Text>
         ) : (
@@ -61,33 +63,25 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: brandColors.field,
   },
   content: {
     padding: 16,
     paddingBottom: 32,
   },
-  eyebrow: {
-    color: "#1d4ed8",
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 1.4,
-    marginBottom: 4,
-  },
   title: {
     fontSize: 30,
     fontWeight: "800",
-    color: "#0f172a",
+    color: brandColors.text,
   },
   subtitle: {
-    color: "#475569",
+    color: brandColors.muted,
     fontSize: 14,
     marginBottom: 16,
     marginTop: 6,
   },
   empty: {
-    color: "#64748b",
+    color: brandColors.placeholder,
   },
   stack: {
     gap: 12,
@@ -96,7 +90,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   metric: {
-    color: "#0f172a",
+    color: brandColors.text,
     fontWeight: "600",
   },
   body: {
@@ -105,10 +99,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   link: {
-    color: "#1d4ed8",
+    color: brandColors.primary,
     fontWeight: "700",
   },
   error: {
-    color: "#b91c1c",
+    color: brandColors.danger,
   },
 });

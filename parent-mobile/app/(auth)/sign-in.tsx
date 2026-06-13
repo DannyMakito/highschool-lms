@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link, router } from "expo-router";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { AfrinexelBrand } from "../../src/components/AfrinexelBrand";
 import { useAuth } from "../../src/context/AuthContext";
+import { authTextInputProps, brandColors } from "../../src/theme/brand";
 
 export default function SignInScreen() {
   const { login } = useAuth();
@@ -28,11 +30,12 @@ export default function SignInScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.card}>
-        <Text style={styles.eyebrow}>Parent Portal</Text>
+        <AfrinexelBrand />
         <Text style={styles.title}>Sign in to your dashboard</Text>
         <Text style={styles.subtitle}>Use the email or phone account you created.</Text>
 
         <TextInput
+          {...authTextInputProps}
           placeholder="Email address"
           autoCapitalize="none"
           keyboardType="email-address"
@@ -42,6 +45,7 @@ export default function SignInScreen() {
         />
 
         <TextInput
+          {...authTextInputProps}
           placeholder="Password or PIN"
           secureTextEntry
           value={pin}
@@ -71,44 +75,38 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: brandColors.background,
     padding: 20,
     justifyContent: "center",
   },
   card: {
-    backgroundColor: "#ffffff",
+    backgroundColor: brandColors.card,
     borderRadius: 24,
     padding: 20,
     gap: 14,
   },
-  eyebrow: {
-    color: "#1d4ed8",
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 1.4,
-  },
   title: {
     fontSize: 28,
     fontWeight: "800",
-    color: "#0f172a",
+    color: brandColors.text,
   },
   subtitle: {
-    color: "#475569",
+    color: brandColors.muted,
     fontSize: 14,
     lineHeight: 20,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#cbd5e1",
+    borderColor: brandColors.border,
     borderRadius: 16,
+    color: brandColors.text,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    backgroundColor: "#f8fafc",
+    backgroundColor: brandColors.field,
   },
   button: {
-    backgroundColor: "#1d4ed8",
+    backgroundColor: brandColors.primary,
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
@@ -116,23 +114,23 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   buttonText: {
-    color: "#fff",
+    color: brandColors.white,
     fontWeight: "700",
     fontSize: 16,
   },
   link: {
-    color: "#1d4ed8",
+    color: brandColors.primary,
     fontWeight: "700",
     textAlign: "center",
     marginTop: 4,
   },
   secondaryLink: {
-    color: "#475569",
+    color: brandColors.muted,
     fontWeight: "600",
     textAlign: "center",
   },
   error: {
-    color: "#b91c1c",
+    color: brandColors.danger,
     fontSize: 13,
   },
 });

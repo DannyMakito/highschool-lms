@@ -11,8 +11,10 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { AfrinexelBrand } from "../../src/components/AfrinexelBrand";
 import type { ParentAccessStudent } from "../../src/lib/parentAccess";
 import { registerParentWithAccessKey, verifyParentAccessKey } from "../../src/lib/parentAccess";
+import { authTextInputProps, brandColors } from "../../src/theme/brand";
 
 export default function CreateAccountScreen() {
   const params = useLocalSearchParams<{ accessKey?: string }>();
@@ -67,13 +69,14 @@ export default function CreateAccountScreen() {
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
-          <Text style={styles.eyebrow}>Create Parent Profile</Text>
+          <AfrinexelBrand caption="Create Parent Profile" />
           <Text style={styles.title}>Almost there</Text>
           {student ? <Text style={styles.subtitle}>You are connecting to {student.fullName}.</Text> : null}
 
-          <TextInput placeholder="Name" value={firstName} onChangeText={setFirstName} style={styles.input} />
-          <TextInput placeholder="Surname" value={surname} onChangeText={setSurname} style={styles.input} />
+          <TextInput {...authTextInputProps} placeholder="Name" value={firstName} onChangeText={setFirstName} style={styles.input} />
+          <TextInput {...authTextInputProps} placeholder="Surname" value={surname} onChangeText={setSurname} style={styles.input} />
           <TextInput
+            {...authTextInputProps}
             placeholder="Cellphone number"
             keyboardType="phone-pad"
             value={cellphone}
@@ -81,6 +84,7 @@ export default function CreateAccountScreen() {
             style={styles.input}
           />
           <TextInput
+            {...authTextInputProps}
             placeholder="Email address (optional)"
             autoCapitalize="none"
             keyboardType="email-address"
@@ -89,6 +93,7 @@ export default function CreateAccountScreen() {
             style={styles.input}
           />
           <TextInput
+            {...authTextInputProps}
             placeholder="Password or PIN"
             secureTextEntry
             value={password}
@@ -112,7 +117,7 @@ export default function CreateAccountScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: brandColors.background,
   },
   content: {
     flexGrow: 1,
@@ -120,39 +125,33 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   card: {
-    backgroundColor: "#ffffff",
+    backgroundColor: brandColors.card,
     borderRadius: 24,
     padding: 20,
     gap: 13,
   },
-  eyebrow: {
-    color: "#1d4ed8",
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
   title: {
-    color: "#0f172a",
+    color: brandColors.text,
     fontSize: 30,
     fontWeight: "800",
   },
   subtitle: {
-    color: "#475569",
+    color: brandColors.muted,
     fontSize: 15,
     lineHeight: 21,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#cbd5e1",
+    borderColor: brandColors.border,
     borderRadius: 16,
+    color: brandColors.text,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    backgroundColor: "#f8fafc",
+    backgroundColor: brandColors.field,
   },
   button: {
-    backgroundColor: "#1d4ed8",
+    backgroundColor: brandColors.primary,
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
@@ -160,12 +159,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   buttonText: {
-    color: "#ffffff",
+    color: brandColors.white,
     fontSize: 16,
     fontWeight: "800",
   },
   error: {
-    color: "#b91c1c",
+    color: brandColors.danger,
     fontSize: 14,
     lineHeight: 20,
   },

@@ -1,5 +1,6 @@
 import { Link } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { brandColors } from "../theme/brand";
 import type { ChildSummary } from "../types";
 
 type ChildSummaryCardProps = {
@@ -29,7 +30,7 @@ export function ChildSummaryCard({ child }: ChildSummaryCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#0f172a",
+    backgroundColor: brandColors.background,
     borderRadius: 24,
     padding: 16,
     marginBottom: 12,
@@ -43,12 +44,12 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: "#1d4ed8",
+    backgroundColor: brandColors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
-    color: "#fff",
+    color: brandColors.white,
     fontWeight: "800",
     fontSize: 20,
   },
@@ -56,13 +57,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   name: {
-    color: "#fff",
+    color: brandColors.white,
     fontSize: 18,
     fontWeight: "700",
     marginBottom: 4,
   },
   meta: {
-    color: "#cbd5e1",
+    color: brandColors.border,
     fontSize: 12,
   },
 });
