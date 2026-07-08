@@ -3,6 +3,9 @@ import { Slot, useRouter, useSegments } from "expo-router";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { View, ActivityIndicator } from "react-native";
 
+import { GluestackUIProvider } from '@/components/ui/gluestack-ui-provider';
+import '@/global.css';
+
 function RootLayoutNav() {
     const { isAuthenticated, loading } = useAuth();
     const segments = useSegments();
@@ -33,7 +36,11 @@ function RootLayoutNav() {
         );
     }
 
-    return <Slot />;
+    return (
+        <GluestackUIProvider mode="dark">
+            <Slot />
+        </GluestackUIProvider>
+    );
 }
 
 export default function RootLayout() {

@@ -74,7 +74,8 @@ export default function LoginScreen() {
                                 </TouchableOpacity>
                             </View>
                             <TextInput
-                                className="w-full rounded-lg border border-slate-200 bg-[#f0f4fb] px-4 py-3.5 text-[24px] tracking-[8px] text-black text-center font-black"
+                                className="w-full rounded-lg border border-slate-200 bg-[#f0f4fb] px-4 py-3.5 text-[24px] tracking-[8px] text-black font-black"
+                                style={{ textAlign: 'center' }}
                                 placeholder="••••••"
                                 placeholderTextColor="#94a3b8"
                                 value={password}
