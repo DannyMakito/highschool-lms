@@ -23,6 +23,7 @@ import TakeQuiz from "@/pages/dashboard/student/TakeQuiz";
 import LoginPage from "@/pages/LoginPage";
 import Announcements from "@/pages/dashboard/principal/Announcements";
 import StudentAnnouncements from "@/pages/dashboard/student/StudentAnnouncements";
+import StudentTutorPage from "@/pages/dashboard/student/StudentTutorPage";
 import AssignmentManagement from "@/pages/dashboard/teacher/AssignmentManagement";
 import SpeedGraderV2 from "@/pages/dashboard/teacher/SpeedGraderV2";
 import StudentAssignments from "@/pages/dashboard/student/StudentAssignments";
@@ -53,10 +54,12 @@ import { Toaster } from "@/components/ui/sonner";
 import { TutorWidget } from "./components/tutor";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useSystemTracking } from "@/hooks/useSystemTracking";
+import { useIsTabletOrMobile } from "@/hooks/use-mobile";
 
 // Component to conditionally show TutorWidget
 function ConditionalTutorWidget() {
   const location = useLocation();
+  const isCompactLayout = useIsTabletOrMobile();
   
   // Hide tutor widget only during student quiz-taking activities
   const isStudentTakingQuiz = location.pathname.includes('/student/quizzes/') && location.pathname.includes('/take');
@@ -71,6 +74,7 @@ function ConditionalTutorWidget() {
   const shouldHideTutor = isStudentTakingQuiz || isStudentQuizList || isStudentQuizDetail;
   
   if (shouldHideTutor) return null;
+  if (isCompactLayout && location.pathname.startsWith('/student')) return null;
   
   return <TutorWidget />;
 }
@@ -106,6 +110,7 @@ export function App() {
             <Route path="announcements" element={<StudentAnnouncements />} />
             <Route path="grades" element={<StudentGrades />} />
             <Route path="assignments" element={<StudentAssignments />} />
+            <Route path="tutor" element={<StudentTutorPage />} />
             <Route path="assignments/:id" element={<AssignmentView />} />
             <Route path="register" element={<StudentRegisterPage />} />
             <Route path="subjects/:id/discussions" element={<Discussions />} />

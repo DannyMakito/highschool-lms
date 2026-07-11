@@ -7,14 +7,7 @@ interface TutorContextValue {
   toggleChat: () => void;
 }
 
-const defaultTutorContextValue: TutorContextValue = {
-  isOpen: false,
-  openChat: () => undefined,
-  closeChat: () => undefined,
-  toggleChat: () => undefined,
-};
-
-const TutorContext = createContext<TutorContextValue>(defaultTutorContextValue);
+const TutorContext = createContext<TutorContextValue | null>(null);
 
 export function TutorProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -31,5 +24,9 @@ export function TutorProvider({ children }: { children: ReactNode }) {
 }
 
 export function useTutor() {
-  return useContext(TutorContext);
+  const context = useContext(TutorContext);
+  if (!context) {
+    throw new Error("useTutor must be used within a TutorProvider");
+  }
+  return context;
 }
