@@ -1,4 +1,4 @@
-export type { UserRole } from "@/context/AuthContext";
+export type { UserRole } from "../context/AuthContext";
 // Force refresh
 
 export interface Subject {
