@@ -7,8 +7,20 @@ import { useRegistrationData } from "../../src/hooks/useRegistrationData";
 import { useAssignments } from "../../src/hooks/useAssignments";
 import { useAnnouncements } from "../../src/hooks/useAnnouncements";
 import { Progress, ProgressFilledTrack } from '@/components/ui/progress';
-import { BookOpen, FileText, CheckCircle, Play, Clock, ArrowRight, Megaphone, Layout } from "lucide-react-native";
-import { Calendar } from '@/components/ui/calendar';
+import { BookOpen, FileText, CheckCircle, Play, Clock, ArrowRight, Megaphone, Layout, ChevronLeft, ChevronRight } from "lucide-react-native";
+import { 
+    Calendar,
+    CalendarHeader,
+    CalendarHeaderPrevButton,
+    CalendarHeaderTitle,
+    CalendarHeaderNextButton,
+    CalendarWeekDaysHeader,
+    CalendarBody,
+    CalendarGrid,
+    CalendarWeek,
+    CalendarDay,
+    CalendarDayText
+} from '@/components/ui/calendar';
 import { CircularProgress } from '@/components/ui/circular-progress';
 
 // Helper for Tailwind-like joining if needed, but we'll try to stick to inline styles for complex colors 
@@ -119,7 +131,11 @@ export default function DashboardScreen() {
             ...assignments.map(a => ({ id: a.id, title: a.title, type: 'Assignment', date: a.dueDate, color: colors.pink400, bg: '#fce7f3' })),
             ...quizzes.filter(q => q.status === 'published').map(q => ({ id: q.id, title: q.title, type: 'Quiz', date: q.createdAt, color: colors.green400, bg: '#dcfce7' }))
         ];
-        return items.slice(0, 4);
+        return items.filter(item => {
+            if (!item.date) return false;
+            const d = new Date(item.date);
+            return !isNaN(d.getTime());
+        }).slice(0, 4);
     }, [assignments, quizzes]);
 
     return (
@@ -280,7 +296,21 @@ export default function DashboardScreen() {
                 </View>
                 
                 <View style={{ backgroundColor: '#ffffff', borderRadius: 20, padding: 8, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2, marginBottom: 24 }}>
-                    <Calendar />
+                    <Calendar value={date} onValueChange={setDate}>
+                        <CalendarHeader style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingHorizontal: 8, paddingTop: 8 }}>
+                            <CalendarHeaderPrevButton>
+                                <ChevronLeft size={20} color={colors.textDark} />
+                            </CalendarHeaderPrevButton>
+                            <CalendarHeaderTitle style={{ fontSize: 16, fontWeight: '700', color: colors.textDark }} />
+                            <CalendarHeaderNextButton>
+                                <ChevronRight size={20} color={colors.textDark} />
+                            </CalendarHeaderNextButton>
+                        </CalendarHeader>
+                        <CalendarWeekDaysHeader style={{ borderBottomWidth: 1, borderBottomColor: colors.slate100, paddingBottom: 8, marginBottom: 8 }} />
+                        <CalendarBody>
+                            <CalendarGrid />
+                        </CalendarBody>
+                    </Calendar>
                 </View>
 
                 <Text style={{ fontSize: 20, fontWeight: '800', color: colors.textDark, marginBottom: 16 }}>Upcoming</Text>
