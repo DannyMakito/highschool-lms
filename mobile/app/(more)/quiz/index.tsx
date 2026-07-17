@@ -1,14 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
-import { ClipboardList, Clock, ListChecks } from "lucide-react-native";
-import { useAuth } from "../../src/context/AuthContext";
-import { useSubjectsContext } from "../../src/context/SubjectsContext";
-import { supabase } from "../../src/lib/supabase";
-import { PlaceholderScreen, EmptyCheck } from "../../components/ui/placeholder-screen";
+import { useRouter } from "expo-router";
+import { ClipboardList, Clock, ListChecks, BookOpen, Calendar } from "lucide-react-native";
+import { useAuth } from "../../../src/context/AuthContext";
+import { useSubjectsContext } from "../../../src/context/SubjectsContext";
+import { supabase } from "../../../src/lib/supabase";
+import { PlaceholderScreen, EmptyCheck } from "../../../components/ui/placeholder-screen";
 
 export default function QuizScreen() {
   const { user } = useAuth();
-  const { quizzes, loading: quizzesLoading } = useSubjectsContext();
+  const { quizzes, subjects, loading: quizzesLoading } = useSubjectsContext();
+  const router = useRouter();
   const [enrolledIds, setEnrolledIds] = useState<string[]>([]);
   const [enrollLoading, setEnrollLoading] = useState(true);
 
@@ -59,15 +61,28 @@ export default function QuizScreen() {
         visibleQuizzes.map((quiz) => {
           const questionCount = Array.isArray(quiz.questions) ? quiz.questions.length : 0;
           const timeLimit = quiz.settings?.timeLimit;
+          const subject = subjects?.find(s => s.id === quiz.subjectId);
+          const endDate = quiz.settings?.availability?.endDate ? new Date(quiz.settings.availability.endDate).toLocaleDateString() : 'N/A';
           return (
             <TouchableOpacity
               key={quiz.id}
               activeOpacity={0.7}
+              onPress={() => router.push(`/quiz/${quiz.id}`)}
               style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 16, marginBottom: 12, backgroundColor: "#fff" }}
             >
-              <Text style={{ fontSize: 15, fontWeight: "700", color: "#0f172a", marginBottom: 6 }}>{quiz.title}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#eff6ff', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, gap: 4 }}>
+                  <BookOpen color="#3b82f6" size={12} />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#3b82f6' }}>{subject?.name || 'General'}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Calendar color="#94a3b8" size={12} />
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#94a3b8' }}>Ends: {endDate}</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: "800", color: "#0f172a", marginBottom: 6 }}>{quiz.title}</Text>
               {quiz.description ? (
-                <Text style={{ fontSize: 13, color: "#64748b", marginBottom: 10 }} numberOfLines={2}>
+                <Text style={{ fontSize: 13, color: "#64748b", marginBottom: 10, lineHeight: 18 }} numberOfLines={2}>
                   {quiz.description}
                 </Text>
               ) : null}

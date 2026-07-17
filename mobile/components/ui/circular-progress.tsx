@@ -5,8 +5,10 @@ import Svg, { Circle } from 'react-native-svg';
 export interface CircularProgressProps {
     value: number;
     colorClass?: string;
+    color?: string;
     size?: number;
     strokeWidth?: number;
+    children?: React.ReactNode;
 }
 
 const colorMap: Record<string, string> = {
@@ -18,10 +20,12 @@ const colorMap: Record<string, string> = {
 export const CircularProgress = ({
     value,
     colorClass = 'text-orange-400',
+    color: customColor,
     size = 48,
     strokeWidth = 6,
+    children,
 }: CircularProgressProps) => {
-    const color = colorMap[colorClass] || '#6366f1';
+    const color = customColor || colorMap[colorClass] || '#6366f1';
     const radius = (size - strokeWidth) / 2;
     const circumference = radius * 2 * Math.PI;
     const strokeDashoffset = circumference - (value / 100) * circumference;
@@ -51,10 +55,12 @@ export const CircularProgress = ({
                     origin={`${size / 2}, ${size / 2}`}
                 />
             </Svg>
-            <View style={{ position: 'absolute' }}>
-                <Text style={{ color: '#1e293b', fontSize: size * 0.28, fontWeight: '700' }}>
-                    {Math.round(value)}%
-                </Text>
+            <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
+                {children ? children : (
+                    <Text style={{ color: '#1e293b', fontSize: size * 0.28, fontWeight: '700' }}>
+                        {Math.round(value)}%
+                    </Text>
+                )}
             </View>
         </View>
     );

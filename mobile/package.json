@@ -20,6 +20,7 @@
     "expo-constants": "~18.0.13",
     "expo-linking": "~8.0.12",
     "expo-router": "~6.0.24",
+    "expo-screen-capture": "~8.0.9",
     "expo-status-bar": "~3.0.9",
     "lucide-react-native": "^1.23.0",
     "nativewind": "^5.0.0-preview.2",
