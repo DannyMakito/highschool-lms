@@ -12,12 +12,30 @@ type AuthContextValue = {
   children: ChildSummary[];
   activeChildId: string | null;
   activeChild: ChildSummary | null;
-  login: (email: string, pin: string) => Promise<{ success: boolean; message?: string }>;
+  login: (identifier: string, pin: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
   setActiveChildId: (childId: string | null) => void;
+  updateParentProfile: (updates: { fullName?: string; email?: string; avatarUrl?: string | null }) => Promise<{ success: boolean; message?: string }>;
+  updateParentPassword: (password: string) => Promise<{ success: boolean; message?: string }>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+type ParentLoginLookupRow = {
+  auth_method?: "email" | "phone" | null;
+  auth_identifier?: string | null;
+};
+
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 7000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
+  return Promise.race<T>([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+    }),
+  ]);
+}
 
 async function loadParentBundle(session: Session | null) {
   if (!session?.user) {
@@ -93,6 +111,45 @@ async function loadParentBundle(session: Session | null) {
   };
 }
 
+async function resolveParentLoginCredentials(identifier: string, pin: string) {
+  const trimmedIdentifier = identifier.trim();
+
+  if (!trimmedIdentifier || !pin.trim()) {
+    return { success: false as const, message: "Enter your email or phone number and password/PIN." };
+  }
+
+  if (trimmedIdentifier.includes("@")) {
+    return {
+      success: true as const,
+      credentials: { email: trimmedIdentifier.toLowerCase(), password: pin },
+    };
+  }
+
+  const { data, error } = await supabase.rpc("resolve_parent_login_identifier", {
+    p_identifier: trimmedIdentifier,
+  });
+
+  if (error) {
+    return { success: false as const, message: error.message };
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as ParentLoginLookupRow | null;
+  const authIdentifier = row?.auth_identifier?.trim();
+  const authMethod = row?.auth_method;
+
+  if (!authIdentifier || !authMethod) {
+    return { success: false as const, message: "We could not find a linked parent account for that phone number." };
+  }
+
+  return {
+    success: true as const,
+    credentials:
+      authMethod === "phone"
+        ? { phone: authIdentifier, password: pin }
+        : { email: authIdentifier.toLowerCase(), password: pin },
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
@@ -101,37 +158,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [activeChildId, setActiveChildId] = useState<string | null>(null);
 
   const refreshSession = async (nextSession: Session | null) => {
-    setSession(nextSession);
+    try {
+      setSession(nextSession);
 
-    if (!nextSession?.user) {
+      if (!nextSession?.user) {
+        setParent(null);
+        setChildrenList([]);
+        setActiveChildId(null);
+        return;
+      }
+
+      const bundle = await withTimeout(loadParentBundle(nextSession), AUTH_BOOTSTRAP_TIMEOUT_MS, "Session verification");
+      if (!bundle.parent) {
+        await supabase.auth.signOut();
+        setSession(null);
+        setParent(null);
+        setChildrenList([]);
+        setActiveChildId(null);
+        return;
+      }
+
+      setParent(bundle.parent);
+      setChildrenList(bundle.children);
+      setActiveChildId((current) => current || bundle.children[0]?.id || null);
+    } catch (error) {
+      console.warn("[Auth] session bootstrap failed", error);
+      await supabase.auth.signOut().catch(() => undefined);
+      setSession(null);
       setParent(null);
       setChildrenList([]);
       setActiveChildId(null);
-      return;
     }
-
-    const bundle = await loadParentBundle(nextSession);
-    setParent(bundle.parent);
-    setChildrenList(bundle.children);
-    setActiveChildId((current) => current || bundle.children[0]?.id || null);
   };
 
   useEffect(() => {
     let mounted = true;
 
     const initialize = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
-      await refreshSession(data.session ?? null);
-      if (mounted) setLoading(false);
+      try {
+        const { data } = await withTimeout(supabase.auth.getSession(), AUTH_BOOTSTRAP_TIMEOUT_MS, "Session lookup");
+        if (!mounted) return;
+        await refreshSession(data.session ?? null);
+      } catch (error) {
+        console.warn("[Auth] initial session lookup failed", error);
+        if (mounted) {
+          await supabase.auth.signOut().catch(() => undefined);
+          setSession(null);
+          setParent(null);
+          setChildrenList([]);
+          setActiveChildId(null);
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
     };
 
     void initialize();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
       if (!mounted) return;
-      await refreshSession(nextSession);
-      setLoading(false);
+      try {
+        await refreshSession(nextSession);
+      } finally {
+        if (mounted) setLoading(false);
+      }
     });
 
     return () => {
@@ -140,11 +230,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = async (email: string, pin: string) => {
+  const login = async (identifier: string, pin: string) => {
     try {
+      const resolved = await resolveParentLoginCredentials(identifier, pin);
+      if (!resolved.success) {
+        return { success: false, message: resolved.message };
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password: pin,
+        ...resolved.credentials,
       });
 
       if (error) {
@@ -182,6 +276,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [activeChildId, childrenList]
   );
 
+  const updateParentProfile = async (updates: { fullName?: string; email?: string; avatarUrl?: string | null }) => {
+    if (!session?.user) {
+      return { success: false, message: "No authenticated user." };
+    }
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({
+        full_name: updates.fullName,
+        email: updates.email,
+        avatar_url: updates.avatarUrl,
+      })
+      .eq("id", session.user.id)
+      .select("id, full_name, email, avatar_url")
+      .single();
+
+    if (error) {
+      return { success: false, message: error.message };
+    }
+
+    if (data) {
+      setParent({
+        id: data.id,
+        fullName: data.full_name || updates.fullName || "Parent",
+        email: data.email || updates.email || parent?.email || "",
+        role: "parent",
+        avatarUrl: data.avatar_url,
+      });
+    }
+
+    return { success: true };
+  };
+
+  const updateParentPassword = async (password: string) => {
+    if (!session?.user) {
+      return { success: false, message: "No authenticated user." };
+    }
+
+    const nextPassword = password.trim();
+    if (nextPassword.length < 6) {
+      return { success: false, message: "Password must be at least 6 characters long." };
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: nextPassword,
+    });
+
+    if (error) {
+      return { success: false, message: error.message };
+    }
+
+    return { success: true };
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -194,6 +342,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         setActiveChildId,
+        updateParentProfile,
+        updateParentPassword,
       }}
     >
       {children}

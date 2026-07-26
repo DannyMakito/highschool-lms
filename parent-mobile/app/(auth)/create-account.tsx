@@ -24,6 +24,7 @@ export default function CreateAccountScreen() {
   const [cellphone, setCellphone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -92,16 +93,22 @@ export default function CreateAccountScreen() {
             onChangeText={setEmail}
             style={styles.input}
           />
-          <TextInput
-            {...authTextInputProps}
-            placeholder="Password or PIN"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-            returnKeyType="done"
-            onSubmitEditing={createAccount}
-            style={styles.input}
-          />
+
+          <View style={styles.passwordRow}>
+            <TextInput
+              {...authTextInputProps}
+              placeholder="Password or PIN"
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+              returnKeyType="done"
+              onSubmitEditing={createAccount}
+              style={[styles.input, styles.passwordInput]}
+            />
+            <Pressable onPress={() => setShowPassword((prev) => !prev)} style={styles.passwordToggle}>
+              <Text style={styles.passwordToggleText}>{showPassword ? "Hide" : "Show"}</Text>
+            </Pressable>
+          </View>
 
           {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
 
@@ -113,6 +120,79 @@ export default function CreateAccountScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: brandColors.background,
+  },
+  content: {
+    flexGrow: 1,
+    justifyContent: "center",
+    padding: 20,
+  },
+  card: {
+    backgroundColor: brandColors.card,
+    borderRadius: 24,
+    padding: 20,
+    gap: 13,
+  },
+  title: {
+    color: brandColors.text,
+    fontSize: 30,
+    fontWeight: "800",
+  },
+  subtitle: {
+    color: brandColors.muted,
+    fontSize: 15,
+    lineHeight: 21,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: brandColors.border,
+    borderRadius: 16,
+    color: brandColors.text,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    backgroundColor: brandColors.field,
+    flex: 1,
+  },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  passwordInput: {
+    flex: 1,
+  },
+  passwordToggle: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  passwordToggleText: {
+    color: brandColors.primary,
+    fontWeight: "800",
+  },
+  button: {
+    backgroundColor: brandColors.primary,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    marginTop: 4,
+  },
+  buttonText: {
+    color: brandColors.white,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  error: {
+    color: brandColors.danger,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+});
 
 const styles = StyleSheet.create({
   screen: {

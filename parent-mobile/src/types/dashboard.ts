@@ -45,6 +45,21 @@ export interface ChildConversationItem {
   replyCount: number;
 }
 
+export interface ChildTeacherRecipientItem {
+  id: string;
+  subjectClassId: string;
+  subjectId: string | null;
+  subjectName: string | null;
+  teacherId: string | null;
+  teacherName: string | null;
+  teacherRole: string | null;
+  discussionId: string | null;
+  discussionTitle: string | null;
+  preview: string | null;
+  replyCount: number;
+  updatedAt: string | null;
+}
+
 export interface ChildProfileItem {
   id: string;
   fullName: string;
@@ -58,6 +73,7 @@ export interface ChildProfileItem {
 export interface ChildDashboardData {
   child: ChildProfileItem | null;
   subjects: { id: string; name: string; gradeTier?: string | null; category?: string | null }[];
+  subjectTeachers: ChildTeacherRecipientItem[];
   assignments: ChildAssignmentItem[];
   grades: ChildGradeItem[];
   attendance: ChildAttendanceItem[];

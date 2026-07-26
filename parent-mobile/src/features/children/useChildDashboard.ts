@@ -5,6 +5,7 @@ import type { ChildDashboardData } from "../../types/dashboard";
 const emptyDashboard: ChildDashboardData = {
   child: null,
   subjects: [],
+  subjectTeachers: [],
   assignments: [],
   grades: [],
   attendance: [],
@@ -15,13 +16,14 @@ const emptyDashboard: ChildDashboardData = {
 function previewText(value: string, length: number) {
   const normalized = value.replace(/\s+/g, " ").trim();
   if (!normalized) return "";
-  return normalized.length > length ? `${normalized.slice(0, length - 1)}…` : normalized;
+  return normalized.length > length ? `${normalized.slice(0, length - 1)}...` : normalized;
 }
 
 export function useChildDashboard(childId?: string | null) {
   const [data, setData] = useState<ChildDashboardData>(emptyDashboard);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,9 +66,12 @@ export function useChildDashboard(childId?: string | null) {
 
         const subjectIds = (subjectLinksRes.data || []).map((item) => item.subject_id);
 
-        const [subjectsRes, assignmentsRes, gradesRes, attendanceRes, announcementsRes, conversationsRes] = await Promise.all([
+        const [subjectsRes, subjectClassesRes, assignmentsRes, gradesRes, attendanceRes, announcementsRes] = await Promise.all([
           subjectIds.length > 0
             ? supabase.from("subjects").select("id, name, grade_tier, category").in("id", subjectIds).order("name", { ascending: true })
+            : Promise.resolve({ data: [] as any[], error: null as any }),
+          subjectIds.length > 0
+            ? supabase.from("subject_classes").select("id, subject_id, name, teacher_id").in("subject_id", subjectIds).order("name", { ascending: true })
             : Promise.resolve({ data: [] as any[], error: null as any }),
           subjectIds.length > 0
             ? supabase
@@ -99,17 +104,49 @@ export function useChildDashboard(childId?: string | null) {
             .select("id, title, content, created_at, target_grades, profiles!author_id(full_name)")
             .order("created_at", { ascending: false })
             .limit(8),
-          subjectIds.length > 0
+        ]);
+
+        if (subjectsRes.error) throw subjectsRes.error;
+        if (subjectClassesRes.error) throw subjectClassesRes.error;
+        if (assignmentsRes.error) throw assignmentsRes.error;
+        if (gradesRes.error) throw gradesRes.error;
+        if (attendanceRes.error) throw attendanceRes.error;
+        if (announcementsRes.error) throw announcementsRes.error;
+
+        const subjectClasses = (subjectClassesRes.data || []) as Array<{ id: string; subject_id: string | null; name: string | null; teacher_id: string | null }>;
+        const subjectClassIds = subjectClasses.map((item) => item.id);
+        const teacherIds = [...new Set(subjectClasses.map((item) => item.teacher_id).filter((value): value is string => Boolean(value)))];
+
+        const [teacherProfilesRes, conversationsRes] = await Promise.all([
+          teacherIds.length > 0
+            ? supabase.from("profiles").select("id, full_name, role").in("id", teacherIds)
+            : Promise.resolve({ data: [] as any[], error: null as any }),
+          subjectClassIds.length > 0
             ? supabase
                 .from("discussions")
-                .select("id, title, content, subject_id, created_at, updated_at, profiles!author_id(full_name, role)")
-                .in("subject_id", subjectIds)
+                .select("id, title, content, subject_id, subject_class_id, created_at, updated_at, author_id, profiles!author_id(full_name, role)")
+                .in("subject_class_id", subjectClassIds)
                 .order("updated_at", { ascending: false })
-                .limit(10)
+                .limit(25)
             : Promise.resolve({ data: [] as any[], error: null as any }),
         ]);
 
-        const conversationIds = (conversationsRes.data || []).map((item) => item.id);
+        if (teacherProfilesRes.error) throw teacherProfilesRes.error;
+        if (conversationsRes.error) throw conversationsRes.error;
+
+        const conversationRows = (conversationsRes.data || []) as Array<{
+          id: string;
+          title: string;
+          content: string;
+          subject_id: string | null;
+          subject_class_id: string | null;
+          created_at: string;
+          updated_at: string | null;
+          author_id: string;
+          profiles?: { full_name?: string | null; role?: string | null } | { full_name?: string | null; role?: string | null }[] | null;
+        }>;
+
+        const conversationIds = conversationRows.map((item) => item.id);
         const repliesRes = conversationIds.length > 0
           ? await supabase
               .from("discussion_replies")
@@ -117,6 +154,8 @@ export function useChildDashboard(childId?: string | null) {
               .in("discussion_id", conversationIds)
               .order("created_at", { ascending: true })
           : { data: [] as any[], error: null as any };
+
+        if (repliesRes.error) throw repliesRes.error;
 
         if (cancelled) return;
 
@@ -173,8 +212,40 @@ export function useChildDashboard(childId?: string | null) {
         }));
 
         const subjectNameById = new Map(subjects.map((item) => [item.id, item.name]));
+        const teacherById = new Map((teacherProfilesRes.data || []).map((item) => [item.id, item]));
+        const conversationBySubjectClassId = new Map<string, (typeof conversationRows)[number]>();
 
-        const conversations = (conversationsRes.data || []).map((item) => {
+        for (const item of conversationRows) {
+          if (item.subject_class_id && !conversationBySubjectClassId.has(item.subject_class_id)) {
+            conversationBySubjectClassId.set(item.subject_class_id, item);
+          }
+        }
+
+        const subjectTeachers = subjectClasses
+          .map((subjectClass) => {
+            const teacher = subjectClass.teacher_id ? teacherById.get(subjectClass.teacher_id) : null;
+            const subjectName = subjectClass.subject_id ? subjectNameById.get(subjectClass.subject_id) || null : null;
+            const discussion = conversationBySubjectClassId.get(subjectClass.id) || null;
+            const latestReply = discussion ? repliesByDiscussionId.get(discussion.id)?.at(-1) : null;
+
+            return {
+              id: subjectClass.id,
+              subjectClassId: subjectClass.id,
+              subjectId: subjectClass.subject_id,
+              subjectName,
+              teacherId: subjectClass.teacher_id,
+              teacherName: teacher?.full_name || null,
+              teacherRole: teacher?.role || null,
+              discussionId: discussion?.id || null,
+              discussionTitle: discussion?.title || null,
+              preview: discussion ? previewText(latestReply?.content || discussion.content || "Conversation thread", 110) : null,
+              replyCount: discussion ? (repliesByDiscussionId.get(discussion.id)?.length || 0) : 0,
+              updatedAt: discussion?.updated_at || discussion?.created_at || null,
+            };
+          })
+          .filter((item) => item.teacherId && item.teacherName);
+
+        const conversations = conversationRows.map((item) => {
           const authorProfile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
           const replies = repliesByDiscussionId.get(item.id) || [];
           const latestReply = replies.at(-1);
@@ -209,6 +280,7 @@ export function useChildDashboard(childId?: string | null) {
         setData({
           child,
           subjects,
+          subjectTeachers,
           assignments,
           grades,
           attendance,
@@ -231,11 +303,12 @@ export function useChildDashboard(childId?: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [childId]);
+  }, [childId, reloadToken]);
 
   return {
     data,
     loading,
     errorMessage,
+    reload: () => setReloadToken((current) => current + 1),
   };
 }
