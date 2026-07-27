@@ -5,6 +5,23 @@ export interface ChildAssignmentItem {
   status: string | null;
   subjectId: string | null;
   availableFrom: string | null;
+  submissionStatus?: "submitted" | "graded" | "pending" | "draft" | null;
+  submittedAt?: string | null;
+  grade?: number | null;
+  gradeReleased?: boolean;
+}
+
+export interface ChildQuizItem {
+  id: string;
+  title: string;
+  description?: string | null;
+  subjectId: string | null;
+  status: string | null;
+  endDate?: string | null;
+  submissionStatus?: "completed" | "in-progress" | "need-review" | null;
+  score?: number | null;
+  totalPoints?: number | null;
+  completedAt?: string | null;
 }
 
 export interface ChildGradeItem {
@@ -59,6 +76,7 @@ export interface ChildDashboardData {
   child: ChildProfileItem | null;
   subjects: { id: string; name: string; gradeTier?: string | null; category?: string | null }[];
   assignments: ChildAssignmentItem[];
+  quizzes: ChildQuizItem[];
   grades: ChildGradeItem[];
   attendance: ChildAttendanceItem[];
   announcements: ChildAnnouncementItem[];

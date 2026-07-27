@@ -6,6 +6,7 @@ const emptyDashboard: ChildDashboardData = {
   child: null,
   subjects: [],
   assignments: [],
+  quizzes: [],
   grades: [],
   attendance: [],
   announcements: [],
@@ -64,10 +65,15 @@ export function useChildDashboard(childId?: string | null) {
 
         const subjectIds = (subjectLinksRes.data || []).map((item) => item.subject_id);
 
-        const [subjectsRes, assignmentsRes, gradesRes, attendanceRes, announcementsRes, conversationsRes] = await Promise.all([
+        const [subjectsRes, assignmentsRes, assignmentSubmissionsRes, quizzesRes, quizSubmissionsRes, gradesRes, attendanceRes, announcementsRes, conversationsRes] = await Promise.all([
           subjectIds.length > 0
             ? supabase.from("subjects").select("id, name, grade_tier, category").in("id", subjectIds).order("name", { ascending: true })
             : Promise.resolve({ data: [] as any[], error: null as any }),
+          supabase.from("assignment_submissions").select("assignment_id, status, submitted_at, total_grade, is_released").eq("student_id", childId),
+          subjectIds.length > 0
+            ? supabase.from("quizzes").select("id, title, description, subject_id, status, settings").eq("status", "published").in("subject_id", subjectIds).order("created_at", { ascending: false }).limit(30)
+            : Promise.resolve({ data: [] as any[], error: null as any }),
+          supabase.from("quiz_submissions").select("quiz_id, status, score, total_points, completed_at").eq("student_id", childId),
           subjectIds.length > 0
             ? supabase
                 .from("assignments")
@@ -109,6 +115,12 @@ export function useChildDashboard(childId?: string | null) {
             : Promise.resolve({ data: [] as any[], error: null as any }),
         ]);
 
+        if (subjectsRes.error) throw subjectsRes.error;
+        if (assignmentsRes.error) throw assignmentsRes.error;
+        if (assignmentSubmissionsRes.error) throw assignmentSubmissionsRes.error;
+        if (quizzesRes.error) throw quizzesRes.error;
+        if (quizSubmissionsRes.error) throw quizSubmissionsRes.error;
+
         const conversationIds = (conversationsRes.data || []).map((item) => item.id);
         const repliesRes = conversationIds.length > 0
           ? await supabase
@@ -127,14 +139,31 @@ export function useChildDashboard(childId?: string | null) {
           repliesByDiscussionId.set(reply.discussion_id, bucket);
         }
 
-        const assignments = (assignmentsRes.data || []).map((item) => ({
+        const submissionByAssignment = new Map((assignmentSubmissionsRes.data || []).map((item) => [item.assignment_id, item]));
+        const assignments = (assignmentsRes.data || []).map((item) => {
+          const submission = submissionByAssignment.get(item.id);
+          return {
           id: item.id,
           title: item.title,
           dueDate: item.due_date || null,
           status: item.status || null,
           subjectId: item.subject_id || null,
           availableFrom: item.available_from || null,
-        }));
+          submissionStatus: submission?.status || null,
+          submittedAt: submission?.submitted_at || null,
+          grade: submission?.is_released ? Number(submission.total_grade || 0) : null,
+          gradeReleased: Boolean(submission?.is_released),
+        };});
+
+        const quizSubmissionByQuiz = new Map((quizSubmissionsRes.data || []).map((item) => [item.quiz_id, item]));
+        const quizzes = (quizzesRes.data || []).map((item) => {
+          const submission = quizSubmissionByQuiz.get(item.id);
+          return {
+            id: item.id, title: item.title, description: item.description || null, subjectId: item.subject_id || null, status: item.status || null,
+            endDate: item.settings?.availability?.endDate || null, submissionStatus: submission?.status || null,
+            score: submission?.score ?? null, totalPoints: submission?.total_points ?? null, completedAt: submission?.completed_at || null,
+          };
+        });
 
         const grades = (gradesRes.data || []).map((item) => ({
           id: item.id,
@@ -210,6 +239,7 @@ export function useChildDashboard(childId?: string | null) {
           child,
           subjects,
           assignments,
+          quizzes,
           grades,
           attendance,
           announcements,
