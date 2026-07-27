@@ -14,6 +14,7 @@ import {
   BarChart3,
   CircleHelp,
   CalendarCheck2,
+  BookMarked,
   KeyRound,
 } from "lucide-react"
 
@@ -85,6 +86,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               icon: FileText,
             },
             {
+              title: "Homework",
+              url: "/student/homework",
+              icon: BookMarked,
+            },
+            {
               title: "Register Class",
               url: "/student/register",
               icon: CalendarCheck2,
@@ -140,6 +146,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: "Parent Access",
               url: "/teacher/parent-access",
               icon: KeyRound,
+            },
+            {
+              title: "Homework",
+              url: "/teacher/homework",
+              icon: BookMarked,
             },
             {
               title: "Discussions",

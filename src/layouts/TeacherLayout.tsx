@@ -11,6 +11,7 @@ import { useSchoolData } from "@/hooks/useSchoolData";
 import { MessagingProvider } from "@/context/MessagingContext";
 import { useMessaging } from "@/hooks/useMessaging";
 import { AssignmentsProvider } from "@/context/AssignmentsContext";
+import { HomeworkAlertsProvider } from "@/context/HomeworkAlertsContext";
 import { useAssignments } from "@/hooks/useAssignments";
 import { NotificationsProvider } from "@/context/NotificationsContext";
 import { NotificationsPopup } from "@/components/notifications/NotificationsPopup";
@@ -97,10 +98,12 @@ export default function TeacherLayout() {
                 <SchoolDataProvider>
                     <MessagingProvider>
                         <AssignmentsProvider>
-                            <NotificationsProvider>
-                                <NotificationsPopup />
-                                <TeacherPortalContent />
-                            </NotificationsProvider>
+                            <HomeworkAlertsProvider>
+                                <NotificationsProvider>
+                                    <NotificationsPopup />
+                                    <TeacherPortalContent />
+                                </NotificationsProvider>
+                            </HomeworkAlertsProvider>
                         </AssignmentsProvider>
                     </MessagingProvider>
                 </SchoolDataProvider>

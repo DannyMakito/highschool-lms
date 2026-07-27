@@ -25,6 +25,7 @@ export default function ChildOverviewScreen() {
           {loading ? <ActivityIndicator color="#1d4ed8" /> : null}
           {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
           <Text style={styles.metric}>Assignments: {data.assignments.length}</Text>
+          <Text style={styles.metric}>Homework: {data.homework.length}</Text>
           <Text style={styles.metric}>Grades: {data.grades.length}</Text>
           <Text style={styles.metric}>Attendance: {data.attendance.length}</Text>
           <Text style={styles.metric}>Announcements: {data.announcements.length}</Text>
@@ -37,6 +38,9 @@ export default function ChildOverviewScreen() {
           </Link>
           <Link href={`/child/${params.childId}/assignments`} style={styles.link}>
             View assignments
+          </Link>
+          <Link href={`/child/${params.childId}/homework`} style={styles.link}>
+            View homework
           </Link>
           <Link href={`/child/${params.childId}/announcements`} style={styles.link}>
             View announcements

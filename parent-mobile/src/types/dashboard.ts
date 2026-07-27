@@ -7,6 +7,16 @@ export interface ChildAssignmentItem {
   availableFrom: string | null;
 }
 
+export interface ChildHomeworkItem {
+  id: string;
+  title: string;
+  instructions: string;
+  textbookReference: string | null;
+  dueDate: string;
+  assignedDate: string;
+  subjectId: string;
+}
+
 export interface ChildGradeItem {
   id: string;
   subjectId: string;
@@ -75,6 +85,7 @@ export interface ChildDashboardData {
   subjects: { id: string; name: string; gradeTier?: string | null; category?: string | null }[];
   subjectTeachers: ChildTeacherRecipientItem[];
   assignments: ChildAssignmentItem[];
+  homework: ChildHomeworkItem[];
   grades: ChildGradeItem[];
   attendance: ChildAttendanceItem[];
   announcements: ChildAnnouncementItem[];

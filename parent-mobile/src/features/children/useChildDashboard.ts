@@ -7,6 +7,7 @@ const emptyDashboard: ChildDashboardData = {
   subjects: [],
   subjectTeachers: [],
   assignments: [],
+  homework: [],
   grades: [],
   attendance: [],
   announcements: [],
@@ -66,9 +67,18 @@ export function useChildDashboard(childId?: string | null) {
 
         const subjectIds = (subjectLinksRes.data || []).map((item) => item.subject_id);
 
-        const [subjectsRes, subjectClassesRes, assignmentsRes, gradesRes, attendanceRes, announcementsRes] = await Promise.all([
+        const [subjectsRes, subjectClassesRes, assignmentsRes, homeworkRes, gradesRes, attendanceRes, announcementsRes] = await Promise.all([
           subjectIds.length > 0
             ? supabase.from("subjects").select("id, name, grade_tier, category").in("id", subjectIds).order("name", { ascending: true })
+            : Promise.resolve({ data: [] as any[], error: null as any }),
+          subjectIds.length > 0
+            ? supabase
+                .from("homework_alerts")
+                .select("id, title, instructions, textbook_reference, due_date, assigned_date, subject_id")
+                .eq("status", "published")
+                .in("subject_id", subjectIds)
+                .order("due_date", { ascending: true })
+                .limit(20)
             : Promise.resolve({ data: [] as any[], error: null as any }),
           subjectIds.length > 0
             ? supabase.from("subject_classes").select("id, subject_id, name, teacher_id").in("subject_id", subjectIds).order("name", { ascending: true })
@@ -109,6 +119,7 @@ export function useChildDashboard(childId?: string | null) {
         if (subjectsRes.error) throw subjectsRes.error;
         if (subjectClassesRes.error) throw subjectClassesRes.error;
         if (assignmentsRes.error) throw assignmentsRes.error;
+        if (homeworkRes.error) throw homeworkRes.error;
         if (gradesRes.error) throw gradesRes.error;
         if (attendanceRes.error) throw attendanceRes.error;
         if (announcementsRes.error) throw announcementsRes.error;
@@ -173,6 +184,16 @@ export function useChildDashboard(childId?: string | null) {
           status: item.status || null,
           subjectId: item.subject_id || null,
           availableFrom: item.available_from || null,
+        }));
+
+        const homework = (homeworkRes.data || []).map((item) => ({
+          id: item.id,
+          title: item.title,
+          instructions: item.instructions,
+          textbookReference: item.textbook_reference || null,
+          dueDate: item.due_date,
+          assignedDate: item.assigned_date,
+          subjectId: item.subject_id,
         }));
 
         const grades = (gradesRes.data || []).map((item) => ({
@@ -282,6 +303,7 @@ export function useChildDashboard(childId?: string | null) {
           subjects,
           subjectTeachers,
           assignments,
+          homework,
           grades,
           attendance,
           announcements,
