@@ -7,6 +7,7 @@ const emptyDashboard: ChildDashboardData = {
   subjects: [],
   subjectTeachers: [],
   assignments: [],
+  quizzes: [],
   homework: [],
   grades: [],
   attendance: [],
@@ -67,7 +68,7 @@ export function useChildDashboard(childId?: string | null) {
 
         const subjectIds = (subjectLinksRes.data || []).map((item) => item.subject_id);
 
-        const [subjectsRes, subjectClassesRes, assignmentsRes, homeworkRes, gradesRes, attendanceRes, announcementsRes] = await Promise.all([
+        const [subjectsRes, homeworkRes, subjectClassesRes, assignmentsRes, assignmentSubmissionsRes, quizzesRes, quizSubmissionsRes, gradesRes, attendanceRes, announcementsRes] = await Promise.all([
           subjectIds.length > 0
             ? supabase.from("subjects").select("id, name, grade_tier, category").in("id", subjectIds).order("name", { ascending: true })
             : Promise.resolve({ data: [] as any[], error: null as any }),
@@ -92,6 +93,11 @@ export function useChildDashboard(childId?: string | null) {
                 .order("created_at", { ascending: false })
                 .limit(10)
             : Promise.resolve({ data: [] as any[], error: null as any }),
+          supabase.from("assignment_submissions").select("assignment_id, status, submitted_at, total_grade, is_released").eq("student_id", childId),
+          subjectIds.length > 0
+            ? supabase.from("quizzes").select("id, title, subject_id, settings").eq("status", "published").in("subject_id", subjectIds).order("created_at", { ascending: false }).limit(30)
+            : Promise.resolve({ data: [] as any[], error: null as any }),
+          supabase.from("quiz_submissions").select("quiz_id, status, score, total_points").eq("student_id", childId),
           subjectIds.length > 0
             ? supabase
                 .from("student_gradebook_scores")
@@ -119,7 +125,12 @@ export function useChildDashboard(childId?: string | null) {
         if (subjectsRes.error) throw subjectsRes.error;
         if (subjectClassesRes.error) throw subjectClassesRes.error;
         if (assignmentsRes.error) throw assignmentsRes.error;
-        if (homeworkRes.error) throw homeworkRes.error;
+        // Homework alerts are an optional new table. Its migration should not
+        // prevent the rest of the parent dashboard from loading.
+        if (homeworkRes.error) console.warn("[ParentPortal] homework alerts unavailable", homeworkRes.error.message);
+        if (assignmentSubmissionsRes.error) console.warn("[ParentPortal] assignment submissions unavailable", assignmentSubmissionsRes.error.message);
+        if (quizzesRes.error) console.warn("[ParentPortal] quizzes unavailable", quizzesRes.error.message);
+        if (quizSubmissionsRes.error) console.warn("[ParentPortal] quiz submissions unavailable", quizSubmissionsRes.error.message);
         if (gradesRes.error) throw gradesRes.error;
         if (attendanceRes.error) throw attendanceRes.error;
         if (announcementsRes.error) throw announcementsRes.error;
@@ -177,14 +188,27 @@ export function useChildDashboard(childId?: string | null) {
           repliesByDiscussionId.set(reply.discussion_id, bucket);
         }
 
-        const assignments = (assignmentsRes.data || []).map((item) => ({
+        const submissionsByAssignment = new Map((assignmentSubmissionsRes.data || []).map((item) => [item.assignment_id, item]));
+        const assignments = (assignmentsRes.data || []).map((item) => {
+          const submission = submissionsByAssignment.get(item.id);
+          return {
           id: item.id,
           title: item.title,
           dueDate: item.due_date || null,
           status: item.status || null,
           subjectId: item.subject_id || null,
           availableFrom: item.available_from || null,
-        }));
+          submissionStatus: submission?.status || null,
+          submittedAt: submission?.submitted_at || null,
+          grade: submission?.is_released ? Number(submission.total_grade || 0) : null,
+          gradeReleased: Boolean(submission?.is_released),
+        }; });
+
+        const submissionsByQuiz = new Map((quizSubmissionsRes.data || []).map((item) => [item.quiz_id, item]));
+        const quizzes = (quizzesRes.data || []).map((item) => {
+          const submission = submissionsByQuiz.get(item.id);
+          return { id: item.id, title: item.title, subjectId: item.subject_id || null, endDate: item.settings?.availability?.endDate || null, submissionStatus: submission?.status || null, score: submission?.score ?? null, totalPoints: submission?.total_points ?? null };
+        });
 
         const homework = (homeworkRes.data || []).map((item) => ({
           id: item.id,
@@ -303,6 +327,7 @@ export function useChildDashboard(childId?: string | null) {
           subjects,
           subjectTeachers,
           assignments,
+          quizzes,
           homework,
           grades,
           attendance,

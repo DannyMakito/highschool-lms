@@ -8,7 +8,7 @@ import { supabase } from "./src/lib/supabase";
 import type { ParentAccessStudent } from "./src/lib/parentAccess";
 import { registerParentWithAccessKey, verifyParentAccessKey } from "./src/lib/parentAccess";
 import { authTextInputProps, brandColors } from "./src/theme/brand";
-import type { ChildAssignmentItem, ChildConversationItem, ChildGradeItem, ChildTeacherRecipientItem } from "./src/types/dashboard";
+import type { ChildAssignmentItem, ChildConversationItem, ChildGradeItem, ChildQuizItem, ChildTeacherRecipientItem } from "./src/types/dashboard";
 
 const colors = brandColors;
 const spacing = { sm: 8, md: 12, lg: 16 };
@@ -36,7 +36,7 @@ export default function App() {
 }
 
 function AppShell() {
-  const { loading, session, parent, children, activeChild, logout, setActiveChildId, login } = useAuth();
+  const { loading, session, parent, children, activeChild, logout, forceLogin, setActiveChildId, login } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>("home");
   const [authMode, setAuthMode] = useState<AuthMode>("sign-in");
   const [busy, setBusy] = useState(false);
@@ -120,7 +120,7 @@ function AppShell() {
     }
   };
 
-  if (loading) return <LoadingState />;
+  if (loading) return <LoadingState onForceLogin={forceLogin} />;
   if (!session || !parent) return <AuthScreen mode={authMode} onModeChange={setAuthMode} loginEmail={loginEmail} loginPin={loginPin} onLoginEmailChange={setLoginEmail} onLoginPinChange={setLoginPin} accessKey={accessKey} onAccessKeyChange={setAccessKey} firstName={firstName} surname={surname} cellphone={cellphone} email={email} password={password} onFirstNameChange={setFirstName} onSurnameChange={setSurname} onCellphoneChange={setCellphone} onEmailChange={setEmail} onPasswordChange={setPassword} previewStudent={previewStudent} busy={busy} message={msg} onCheckKey={checkKey} onCreate={createAccount} onSignIn={signIn} />;
 
   if (children.length === 0) return <NoChildren parentName={parent.fullName} onStart={() => { void logout(); setAuthMode("create"); }} />;
@@ -140,7 +140,7 @@ function AppShell() {
         </ScrollView>
         <View style={styles.panel}>
           {activeTab === "home" && <HomeTab childName={activeChild?.fullName || "Learner"} childGrade={activeChild?.gradeLabel || "Grade pending"} averageScore={averageScore} attendanceRate={attendanceRate} assignmentsCount={dashboard.data.assignments.length} conversationsCount={dashboard.data.conversations.length} alerts={alerts} loading={dashboard.loading} errorMessage={dashboard.errorMessage} onQuickAction={setActiveTab} />}
-          {activeTab === "academics" && <AcademicsTab averageScore={averageScore} subjects={subjectAverages} assignments={dashboard.data.assignments} grades={dashboard.data.grades} loading={dashboard.loading} selectedSubjectId={selectedSubjectId} onSelectSubject={setSelectedSubjectId} />}
+          {activeTab === "academics" && <AcademicsTab averageScore={averageScore} subjects={subjectAverages} assignments={dashboard.data.assignments} quizzes={dashboard.data.quizzes} grades={dashboard.data.grades} loading={dashboard.loading} selectedSubjectId={selectedSubjectId} onSelectSubject={setSelectedSubjectId} />}
           {activeTab === "attendance" && <AttendanceTab attendanceRate={attendanceRate} attendance={dashboard.data.attendance} loading={dashboard.loading} />}
           {activeTab === "messages" && <MessagesTab childName={activeChild?.fullName || "Learner"} conversations={threads} subjectTeachers={dashboard.data.subjectTeachers} loading={dashboard.loading} errorMessage={dashboard.errorMessage} sessionUserId={session?.user?.id ?? null} onReload={dashboard.reload} />}
           {activeTab === "more" && <MoreTab parentName={parent.fullName} email={parent.email} children={children} onLogout={logout} />}
@@ -172,6 +172,7 @@ function AcademicsTab(props: {
   averageScore: number | null;
   subjects: Array<{ id: string; name: string; average: number | null; category?: string | null; gradeTier?: string | null }>;
   assignments: ChildAssignmentItem[];
+  quizzes: ChildQuizItem[];
   grades: ChildGradeItem[];
   loading: boolean;
   selectedSubjectId: string | null;
@@ -183,6 +184,15 @@ function AcademicsTab(props: {
   const subjectGrades = selectedSubject ? props.grades.filter((item) => item.subjectId === selectedSubject.id) : [];
   const latestAssignment = subjectAssignments[0] || null;
   const latestGrade = subjectGrades[0] || null;
+  const today = new Date().toISOString().slice(0, 10);
+  const overdue = props.assignments.filter((item) => Boolean(item.dueDate && item.dueDate < today && !item.submissionStatus));
+  const dueSoon = props.assignments.filter((item) => {
+    if (!item.dueDate || item.submissionStatus) return false;
+    const days = (new Date(`${item.dueDate}T12:00:00`).getTime() - Date.now()) / 86400000;
+    return days >= 0 && days <= 3;
+  });
+  const submitted = props.assignments.filter((item) => item.submissionStatus === "submitted" || item.submissionStatus === "graded");
+  const completedQuizzes = props.quizzes.filter((item) => item.submissionStatus === "completed");
 
   useEffect(() => {
     if ((!props.selectedSubjectId || !selectedSubjectExists) && props.subjects[0]) {
@@ -196,6 +206,18 @@ function AcademicsTab(props: {
         <Text style={styles.metricValue}>{props.averageScore != null ? `${props.averageScore}%` : "--"}</Text>
         <Text style={styles.metricLabel}>Overall average</Text>
         <Text style={styles.metricNote}>A quick summary of your child’s current academic progress.</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Academic follow-through</Text>
+        <Text style={styles.sectionBody}>A quiet overview of what is complete and what may need a check-in.</Text>
+        <View style={styles.detailGrid}>
+          <View style={styles.detailCard}><Text style={styles.detailValue}>{overdue.length}</Text><Text style={styles.detailLabel}>Needs attention</Text></View>
+          <View style={styles.detailCard}><Text style={styles.detailValue}>{dueSoon.length}</Text><Text style={styles.detailLabel}>Due soon</Text></View>
+          <View style={styles.detailCard}><Text style={styles.detailValue}>{submitted.length}</Text><Text style={styles.detailLabel}>Submitted</Text></View>
+          <View style={styles.detailCard}><Text style={styles.detailValue}>{completedQuizzes.length}</Text><Text style={styles.detailLabel}>Quizzes done</Text></View>
+        </View>
+        {overdue.slice(0, 3).map((item) => <View key={item.id} style={styles.detailRow}><View style={{ flex: 1 }}><Text style={styles.listTitle}>{item.title}</Text><Text style={styles.listMeta}>Past due{item.dueDate ? ` • Due ${item.dueDate}` : ""} · No submission recorded</Text></View><Text style={styles.detailPill}>Check in</Text></View>)}
       </View>
 
       <View style={styles.card}>
@@ -268,6 +290,12 @@ function AcademicsTab(props: {
           ) : (
             <Text style={styles.sectionBody}>No uploaded work yet for this subject.</Text>
           )}
+        </View>
+
+        <View style={styles.detailSection}>
+          <Text style={styles.sectionSubTitle}>Quizzes and tests</Text>
+          {props.quizzes.filter((item) => item.subjectId === selectedSubject?.id).slice(0, 3).map((quiz) => <View key={quiz.id} style={styles.detailRow}><View style={{ flex: 1 }}><Text style={styles.listTitle}>{quiz.title}</Text><Text style={styles.listMeta}>{quiz.submissionStatus === "completed" ? "Completed" : quiz.endDate ? `Closes ${quiz.endDate}` : "Available"}</Text></View><Text style={styles.detailPill}>{quiz.submissionStatus === "completed" && quiz.totalPoints ? `${quiz.score ?? 0}/${quiz.totalPoints}` : quiz.submissionStatus === "completed" ? "Done" : "Open"}</Text></View>)}
+          {props.quizzes.filter((item) => item.subjectId === selectedSubject?.id).length === 0 ? <Text style={styles.sectionBody}>No quizzes or tests have been posted yet for this subject.</Text> : null}
         </View>
 
         <View style={styles.detailSection}>
@@ -559,7 +587,11 @@ function MoreTab(props: { parentName: string; email: string; children: Array<{ i
   );
 }
 
-function LoadingState() { return <SafeAreaView style={styles.safeArea}><View style={styles.loading}><ActivityIndicator size="large" color={colors.primary} /><Text style={styles.loadingText}>Loading parent portal...</Text></View></SafeAreaView>; }
+function LoadingState({ onForceLogin }: { onForceLogin: () => void }) {
+  const [showRecovery, setShowRecovery] = useState(false);
+  useEffect(() => { const timer = setTimeout(() => setShowRecovery(true), 5000); return () => clearTimeout(timer); }, []);
+  return <SafeAreaView style={styles.safeArea}><View style={styles.loading}><ActivityIndicator size="large" color={colors.primary} /><Text style={styles.loadingText}>Loading parent portal...</Text>{showRecovery ? <><Text style={styles.loadingHelp}>Your session may have expired.</Text><Pressable onPress={onForceLogin} style={styles.recoveryButton}><Text style={styles.recoveryText}>Return to sign in</Text></Pressable></> : null}</View></SafeAreaView>;
+}
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
@@ -653,4 +685,7 @@ const styles = StyleSheet.create({
   tabLabelActive: { color: colors.text },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
   loadingText: { color: colors.muted, fontSize: 14 },
+  loadingHelp: { color: colors.placeholder, fontSize: 13, textAlign: "center", marginTop: 6 },
+  recoveryButton: { backgroundColor: colors.primarySoft, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
+  recoveryText: { color: colors.primary, fontWeight: "800" },
 });

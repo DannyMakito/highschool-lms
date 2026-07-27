@@ -14,6 +14,7 @@ type AuthContextValue = {
   activeChild: ChildSummary | null;
   login: (identifier: string, pin: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
+  forceLogin: () => void;
   setActiveChildId: (childId: string | null) => void;
   updateParentProfile: (updates: { fullName?: string; email?: string; avatarUrl?: string | null }) => Promise<{ success: boolean; message?: string }>;
   updateParentPassword: (password: string) => Promise<{ success: boolean; message?: string }>;
@@ -157,24 +158,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [childrenList, setChildrenList] = useState<ChildSummary[]>([]);
   const [activeChildId, setActiveChildId] = useState<string | null>(null);
 
+  const clearAuthState = () => {
+    setSession(null);
+    setParent(null);
+    setChildrenList([]);
+    setActiveChildId(null);
+  };
+
+  // Clear the UI immediately. Network sign-out is deliberately best-effort so
+  // a stalled refresh request can never leave the portal on its loading screen.
+  const forceLogin = () => {
+    clearAuthState();
+    setLoading(false);
+    void supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+  };
+
   const refreshSession = async (nextSession: Session | null) => {
     try {
       setSession(nextSession);
 
       if (!nextSession?.user) {
-        setParent(null);
-        setChildrenList([]);
-        setActiveChildId(null);
+        clearAuthState();
         return;
       }
 
       const bundle = await withTimeout(loadParentBundle(nextSession), AUTH_BOOTSTRAP_TIMEOUT_MS, "Session verification");
       if (!bundle.parent) {
-        await supabase.auth.signOut();
-        setSession(null);
-        setParent(null);
-        setChildrenList([]);
-        setActiveChildId(null);
+        clearAuthState();
+        void supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
         return;
       }
 
@@ -183,11 +194,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setActiveChildId((current) => current || bundle.children[0]?.id || null);
     } catch (error) {
       console.warn("[Auth] session bootstrap failed", error);
-      await supabase.auth.signOut().catch(() => undefined);
-      setSession(null);
-      setParent(null);
-      setChildrenList([]);
-      setActiveChildId(null);
+      clearAuthState();
+      void supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
     }
   };
 
@@ -202,11 +210,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.warn("[Auth] initial session lookup failed", error);
         if (mounted) {
-          await supabase.auth.signOut().catch(() => undefined);
-          setSession(null);
-          setParent(null);
-          setChildrenList([]);
-          setActiveChildId(null);
+          clearAuthState();
+          void supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
         }
       } finally {
         if (mounted) setLoading(false);
@@ -264,11 +269,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setSession(null);
-    setParent(null);
-    setChildrenList([]);
-    setActiveChildId(null);
+    clearAuthState();
+    await supabase.auth.signOut().catch(() => undefined);
   };
 
   const activeChild = useMemo(
@@ -341,6 +343,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         activeChild,
         login,
         logout,
+        forceLogin,
         setActiveChildId,
         updateParentProfile,
         updateParentPassword,
