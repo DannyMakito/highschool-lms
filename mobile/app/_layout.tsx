@@ -1,16 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Slot, useRouter, usePathname } from "expo-router";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { View, ActivityIndicator } from "react-native";
 
 import { GluestackUIProvider } from '@/components/ui/gluestack-ui-provider';
 import '@/global.css';
+import { registerForPushNotifications, addNotificationTapHandler, initNotifications } from '../src/lib/notifications';
 
 function RootLayoutNav() {
-    const { isAuthenticated, loading } = useAuth();
+    const { isAuthenticated, loading, user } = useAuth();
     const pathname = usePathname();
     const router = useRouter();
     const [isNavigationReady, setIsNavigationReady] = useState(false);
+    const notificationTapCleanup = useRef<(() => void) | null>(null);
 
     useEffect(() => {
         setIsNavigationReady(true);
@@ -19,16 +21,38 @@ function RootLayoutNav() {
     useEffect(() => {
         if (!isNavigationReady || loading) return;
 
-        const inAuthGroup = pathname.startsWith("/(tabs)");
+        const inAuthGroup = ["/", "/subjects", "/assignments", "/tutor"].some((route) => pathname === route || pathname.startsWith(route + "/")) || pathname.startsWith("/(tabs)");
         const inSubjectsRoute = pathname.startsWith("/subjects");
         const inMoreRoute = ["/quiz", "/register", "/notifications", "/discussions", "/announcements", "/settings", "/grades"].some((p) => pathname === p || pathname.startsWith(p + "/"));
 
         if (!isAuthenticated && (inAuthGroup || inMoreRoute)) {
             router.replace("/login");
         } else if (isAuthenticated && !inAuthGroup && !inSubjectsRoute && !inMoreRoute) {
-            router.replace("/(tabs)");
+            router.replace("/");
         }
-    }, [isAuthenticated, loading, pathname, isNavigationReady]);
+    }, [isAuthenticated, loading, pathname, isNavigationReady, router]);
+
+    useEffect(() => {
+        if (!isNavigationReady || loading) return;
+
+        if (user?.id) {
+            initNotifications();
+            notificationTapCleanup.current = addNotificationTapHandler(router);
+            registerForPushNotifications(user.id);
+        } else {
+            if (notificationTapCleanup.current) {
+                notificationTapCleanup.current();
+                notificationTapCleanup.current = null;
+            }
+        }
+
+        return () => {
+            if (notificationTapCleanup.current) {
+                notificationTapCleanup.current();
+                notificationTapCleanup.current = null;
+            }
+        };
+    }, [user?.id, loading, isNavigationReady, router]);
 
     if (loading || !isNavigationReady) {
         return (

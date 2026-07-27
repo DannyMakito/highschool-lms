@@ -7,7 +7,8 @@ import { PlaceholderScreen } from "../../components/ui/placeholder-screen";
 
 export default function GlobalDiscussionsScreen() {
   const router = useRouter();
-  const { discussions, replies, getSubjectDiscussions } = useMessagingContext();
+  const { discussions, getSubjectDiscussions } = useMessagingContext();
+
 
   const allDiscussions = useMemo(() => {
     return getSubjectDiscussions();
@@ -30,9 +31,12 @@ export default function GlobalDiscussionsScreen() {
         </View>
       ) : (
         sorted.map((disc) => {
-          const discReplies = replies.filter((r) => r.discussionId === disc.id);
           return (
-            <View key={disc.id} style={{ marginBottom: 12, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, overflow: "hidden" }}>
+            <TouchableOpacity 
+              key={disc.id} 
+              onPress={() => router.push(`/subjects/${disc.subjectId}/discussions/${disc.id}`)}
+              style={{ marginBottom: 12, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, overflow: "hidden" }}
+            >
               <View style={{ padding: 14 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
                   {disc.isPinned && <Pin color="#f59e0b" size={12} />}
@@ -40,33 +44,15 @@ export default function GlobalDiscussionsScreen() {
                   {disc.isPinned && <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b", textTransform: "uppercase" }}>Pinned</Text>}
                 </View>
                 <Text style={{ fontSize: 15, fontWeight: "700", color: "#0f172a", marginBottom: 4 }}>{disc.title}</Text>
-                <Text style={{ fontSize: 12, color: "#64748b" }}>{disc.content}</Text>
+                <Text style={{ fontSize: 12, color: "#64748b" }} numberOfLines={2}>
+                  {disc.content?.replace(/<[^>]*>/g, '').substring(0, 120)}
+                </Text>
                 <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, gap: 12 }}>
                   <Text style={{ fontSize: 11, color: "#94a3b8" }}>{disc.authorName}</Text>
                   <Text style={{ fontSize: 11, color: "#cbd5e1" }}>{new Date(disc.createdAt).toLocaleDateString()}</Text>
-                  <Text style={{ fontSize: 11, color: "#94a3b8" }}>{discReplies.length} replies</Text>
                 </View>
               </View>
-
-              {discReplies.length > 0 && (
-                <View style={{ borderTopWidth: 1, borderTopColor: "#f1f5f9" }}>
-                  {discReplies.slice(0, 3).map((reply) => (
-                    <View key={reply.id} style={{ padding: 12, paddingLeft: 20, borderBottomWidth: 1, borderBottomColor: "#f8fafc" }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                        <Text style={{ fontSize: 12, fontWeight: "600", color: "#334155" }}>{reply.authorName}</Text>
-                        <Text style={{ fontSize: 10, color: "#cbd5e1" }}>{new Date(reply.createdAt).toLocaleDateString()}</Text>
-                      </View>
-                      <Text style={{ fontSize: 13, color: "#475569", lineHeight: 18 }}>{reply.content}</Text>
-                    </View>
-                  ))}
-                  {discReplies.length > 3 && (
-                    <Text style={{ padding: 12, fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>
-                      +{discReplies.length - 3} more {discReplies.length - 3 === 1 ? "reply" : "replies"}
-                    </Text>
-                  )}
-                </View>
-              )}
-            </View>
+            </TouchableOpacity>
           );
         })
       )}
