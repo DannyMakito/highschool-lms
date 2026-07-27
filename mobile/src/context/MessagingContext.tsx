@@ -1,8 +1,10 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { Announcement, Discussion, DiscussionReply } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { scheduleLocalNotification, buildNotificationPayload } from '../lib/notifications';
+
 
 interface MessagingContextType {
     announcements: Announcement[];
@@ -36,6 +38,10 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     const [discussions, setDiscussions] = useState<Discussion[]>([]);
     const [replies, setReplies] = useState<DiscussionReply[]>([]);
     const [loading, setLoading] = useState(true);
+    // Keep a ref so realtime callbacks can access current state without re-subscribing
+    const discussionsRef = useRef<Discussion[]>([]);
+    useEffect(() => { discussionsRef.current = discussions; }, [discussions]);
+
 
     useEffect(() => {
         if (authLoading) return;
@@ -144,6 +150,22 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
                             if (prev.some(r => r.id === mappedR.id)) return prev;
                             return [...prev, mappedR];
                         });
+
+                        // Notify current user if they are subscribed and didn't write this reply
+                        if (user?.id && mappedR.authorId !== user.id) {
+                            const disc = discussionsRef.current.find(d => d.id === mappedR.discussionId);
+                            if (disc && disc.subscribedUserIds?.includes(user.id)) {
+                                scheduleLocalNotification(
+                                    buildNotificationPayload(
+                                        'discussion',
+                                        `New reply in "${disc.title}"`,
+                                        `${mappedR.authorName}: ${mappedR.content.replace(/<[^>]*>/g, '').substring(0, 80)}`,
+                                        'discussion',
+                                        { subjectId: disc.subjectId || '', discussionId: disc.id }
+                                    )
+                                );
+                            }
+                        }
                     }
                 } else if (payload.eventType === 'UPDATE') {
                     setReplies(prev => prev.map(r => r.id === payload.new.id ? { 
@@ -192,6 +214,19 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
                             if (prev.some(d => d.id === mappedD.id)) return prev;
                             return [mappedD, ...prev];
                         });
+
+                        // Notify current user about new discussion from someone else
+                        if (user?.id && mappedD.authorId !== user.id) {
+                            scheduleLocalNotification(
+                                buildNotificationPayload(
+                                    'discussion',
+                                    'New Discussion',
+                                    `${mappedD.authorName} posted "${mappedD.title}"`,
+                                    'discussion',
+                                    { subjectId: mappedD.subjectId || '', discussionId: mappedD.id }
+                                )
+                            );
+                        }
                     }
                 } else if (payload.eventType === 'UPDATE') {
                     setDiscussions(prev => prev.map(d => {

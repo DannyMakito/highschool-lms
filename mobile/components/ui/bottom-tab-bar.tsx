@@ -2,6 +2,7 @@ import React from "react";
 import { View, TouchableOpacity, Text } from "react-native";
 import { useRouter, useSegments } from "expo-router";
 import { Home, BookOpen, FileText, Sparkles } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const tabs = [
   { name: "(tabs)", label: "Dashboard", icon: Home },
@@ -13,10 +14,16 @@ const tabs = [
 export function BottomTabBar() {
   const router = useRouter();
   const segments = useSegments();
+  const insets = useSafeAreaInsets();
 
   const activeTab = (() => {
     const first = segments[0] || "";
     if (first === "subjects") return "(tabs)/subjects";
+    if (first === "(more)") {
+      const sub = segments[1] || "";
+      if (sub === "discussions") return "(tabs)/subjects";
+      return "(tabs)";
+    }
     if (first === "(tabs)") {
       const sub = segments[1] || "index";
       if (sub === "subjects") return "(tabs)/subjects";
@@ -28,7 +35,7 @@ export function BottomTabBar() {
   })();
 
   return (
-    <View style={{ flexDirection: "row", backgroundColor: "#0f172a", borderTopWidth: 1, borderTopColor: "#1e293b", paddingBottom: 20, paddingTop: 8 }}>
+    <View style={{ flexDirection: "row", backgroundColor: "#0f172a", borderTopWidth: 1, borderTopColor: "#1e293b", paddingBottom: insets.bottom + 8, paddingTop: 8 }}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.name;
         const Icon = tab.icon;
