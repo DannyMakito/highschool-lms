@@ -62,8 +62,10 @@ export default function DashboardScreen() {
 
     const [date, setDate] = useState<Date | undefined>(new Date());
 
-    // Filtered subjects for this student
+    // Filtered subjects for this user
     const subjects = useMemo(() => {
+        if (user?.role === 'principal') return allSubjects;
+
         const directAssignedIds = studentSubjects
             .filter(ss => ss.studentId === user?.id)
             .map(ss => ss.subjectId);
@@ -76,9 +78,13 @@ export default function DashboardScreen() {
             })
             .filter(Boolean) as string[];
 
-        const assignedIds = Array.from(new Set([...directAssignedIds, ...classAssignedIds]));
+        const teacherAssignedIds = user?.role === 'teacher'
+            ? subjectClasses.filter(c => c.teacherId === user?.id).map(c => c.subjectId)
+            : [];
+
+        const assignedIds = Array.from(new Set([...directAssignedIds, ...classAssignedIds, ...teacherAssignedIds]));
         return allSubjects.filter(s => assignedIds.includes(s.id));
-    }, [allSubjects, studentSubjects, studentSubjectClasses, subjectClasses, user?.id]);
+    }, [allSubjects, studentSubjects, studentSubjectClasses, subjectClasses, user?.id, user?.role]);
 
     // Derive last lesson data
     const lastViewed = useMemo(() => {

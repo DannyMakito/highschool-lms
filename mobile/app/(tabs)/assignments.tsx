@@ -6,6 +6,26 @@ import { useAssignmentsContext } from '../../src/context/AssignmentsContext';
 import { useSubjectsContext } from '../../src/context/SubjectsContext';
 import { useAuth } from '../../src/context/AuthContext';
 import { supabase } from '../../src/lib/supabase';
+import { HtmlContent } from '../../components/ui/html-content';
+
+function getPreviewText(htmlOrText: string | undefined, maxWords = 10) {
+  if (!htmlOrText) return 'No description provided.';
+
+  const plainText = htmlOrText
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const words = plainText.split(' ').filter(Boolean);
+  if (words.length <= maxWords) return plainText;
+  return `${words.slice(0, maxWords).join(' ')}…`;
+}
 
 export default function AssignmentsScreen() {
   const router = useRouter();
@@ -32,19 +52,19 @@ export default function AssignmentsScreen() {
   }, [user?.id]);
 
   const enrolledSubjects = useMemo(() => {
-    return subjects.filter(s => enrolledIds.includes(s.id));
+    return subjects.filter((s) => enrolledIds.includes(s.id));
   }, [subjects, enrolledIds]);
 
   const assignmentsBySubject = useMemo(() => {
     const map: Record<string, typeof assignments> = {};
     for (const subject of enrolledSubjects) {
-      map[subject.id] = assignments.filter(a => a.subjectId === subject.id);
+      map[subject.id] = assignments.filter((a) => a.subjectId === subject.id);
     }
     return map;
   }, [assignments, enrolledSubjects]);
 
   const getSubmissionStatus = (assignmentId: string) => {
-    const sub = submissions.find(s => s.assignmentId === assignmentId);
+    const sub = submissions.find((s) => s.assignmentId === assignmentId);
     if (!sub) return null;
     return sub.status;
   };
@@ -62,7 +82,7 @@ export default function AssignmentsScreen() {
     <ScrollView style={{ flex: 1, backgroundColor: '#fff' }} contentContainerStyle={{ padding: 20, paddingBottom: 32 }}>
       <Text style={{ fontSize: 26, fontWeight: '800', color: '#111827', marginBottom: 4 }}>Assignments</Text>
       <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 16, lineHeight: 20 }}>
-        Open each subject to see active tasks. Your gradebook now lives on the dedicated Grades page.
+        Tap an assignment to open the full detail view and submit your work.
       </Text>
 
       <TouchableOpacity
@@ -109,13 +129,7 @@ export default function AssignmentsScreen() {
               </View>
 
               {taskCount === 0 ? (
-                <View style={{
-                  borderWidth: 1,
-                  borderColor: '#e5e7eb',
-                  borderRadius: 12,
-                  padding: 24,
-                  alignItems: 'center',
-                }}>
+                <View style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, padding: 24, alignItems: 'center' }}>
                   <Text style={{ color: '#9ca3af', fontSize: 14, textAlign: 'center' }}>
                     No assignments posted for this subject yet.
                   </Text>
@@ -129,27 +143,18 @@ export default function AssignmentsScreen() {
                   return (
                     <TouchableOpacity
                       key={assignment.id}
-                      onPress={() => router.push(`/subjects/${subject.id}/outline` as any)}
+                      onPress={() => router.push(`/assignments/${assignment.id}` as any)}
                       activeOpacity={0.7}
-                      style={{
-                        borderWidth: 1,
-                        borderColor: '#e5e7eb',
-                        borderRadius: 12,
-                        padding: 16,
-                        marginBottom: 10,
-                        backgroundColor: '#fff',
-                      }}
+                      style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, padding: 16, marginBottom: 10, backgroundColor: '#fff' }}
                     >
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <View style={{ flex: 1, marginRight: 12 }}>
                           <Text style={{ fontSize: 15, fontWeight: '600', color: '#111827' }}>
                             {assignment.title}
                           </Text>
-                          {assignment.description ? (
-                            <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }} numberOfLines={2}>
-                              {assignment.description}
-                            </Text>
-                          ) : null}
+                          <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>
+                            {getPreviewText(assignment.description)}
+                          </Text>
                           {assignment.dueDate ? (
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 }}>
                               <Clock color="#9ca3af" size={12} />
@@ -168,11 +173,7 @@ export default function AssignmentsScreen() {
                           ) : (
                             <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#d1d5db' }} />
                           )}
-                          <Text style={{
-                            fontSize: 10,
-                            color: isSubmitted ? '#22c55e' : isOverdue ? '#ef4444' : '#9ca3af',
-                            fontWeight: '500',
-                          }}>
+                          <Text style={{ fontSize: 10, color: isSubmitted ? '#22c55e' : isOverdue ? '#ef4444' : '#9ca3af', fontWeight: '500' }}>
                             {isSubmitted ? 'Submitted' : isOverdue ? 'Overdue' : 'Pending'}
                           </Text>
                         </View>

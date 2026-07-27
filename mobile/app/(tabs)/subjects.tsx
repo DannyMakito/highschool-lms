@@ -4,44 +4,47 @@ import { useRouter } from 'expo-router';
 import { Search, BookOpen, Layers, ChevronRight } from 'lucide-react-native';
 import { useSubjectsContext } from '../../src/context/SubjectsContext';
 import { useAuth } from '../../src/context/AuthContext';
-import { supabase } from '../../src/lib/supabase';
-import { useEffect } from 'react';
+import { useRegistrationData } from '../../src/hooks/useRegistrationData';
 
 export default function SubjectsScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { subjects, loading: subjectsLoading, getSubjectProgress } = useSubjectsContext();
+  const { studentSubjects, studentSubjectClasses, subjectClasses } = useRegistrationData();
   const [search, setSearch] = useState('');
-  const [enrolledIds, setEnrolledIds] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from('student_subjects')
-        .select('subject_id')
-        .eq('student_id', user.id);
-      if (!cancelled) {
-        setEnrolledIds((data || []).map((r: any) => r.subject_id));
-        setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [user?.id]);
 
   const filteredSubjects = useMemo(() => {
-    const enrolled = subjects.filter(s => enrolledIds.includes(s.id));
+    let enrolled = subjects;
+    if (user?.role !== 'principal') {
+      const directAssignedIds = studentSubjects
+        .filter(ss => ss.studentId === user?.id)
+        .map(ss => ss.subjectId);
+      
+      const classAssignedIds = studentSubjectClasses
+        .filter(ssc => ssc.studentId === user?.id)
+        .map(ssc => {
+          const sc = subjectClasses.find(c => c.id === ssc.subjectClassId);
+          return sc?.subjectId;
+        })
+        .filter(Boolean) as string[];
+
+      const teacherAssignedIds = user?.role === 'teacher'
+        ? subjectClasses.filter(c => c.teacherId === user?.id).map(c => c.subjectId)
+        : [];
+
+      const assignedIds = Array.from(new Set([...directAssignedIds, ...classAssignedIds, ...teacherAssignedIds]));
+      enrolled = subjects.filter(s => assignedIds.includes(s.id));
+    }
+
     if (!search.trim()) return enrolled;
     const q = search.toLowerCase();
     return enrolled.filter(s =>
       s.name.toLowerCase().includes(q) ||
       s.description.toLowerCase().includes(q)
     );
-  }, [subjects, enrolledIds, search]);
+  }, [subjects, search, studentSubjects, studentSubjectClasses, subjectClasses, user?.id, user?.role]);
 
-  if (subjectsLoading || loading) {
+  if (subjectsLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#3b82f6" />
@@ -79,7 +82,7 @@ export default function SubjectsScreen() {
         <View style={{ alignItems: 'center', marginTop: 60 }}>
           <BookOpen color="#d1d5db" size={48} />
           <Text style={{ color: '#6b7280', fontSize: 16, marginTop: 12 }}>
-            {enrolledIds.length === 0 ? 'No subjects assigned yet' : 'No subjects match your search'}
+            {search.trim() ? 'No subjects match your search' : 'No subjects assigned yet'}
           </Text>
         </View>
       ) : (

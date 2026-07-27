@@ -5,7 +5,8 @@ import { useSubjectsContext } from "../../../../src/context/SubjectsContext";
 import { useAuth } from "../../../../src/context/AuthContext";
 import { ChevronLeft, ChevronRight, Clock, CheckCircle2, AlertCircle, X, LayoutGrid, Info } from "lucide-react-native";
 import * as ScreenCapture from 'expo-screen-capture';
-import { CircularProgress } from "../../../../components/ui/circular-progress"; // I need to verify this path
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CircularProgress } from "../../../../components/ui/circular-progress";
 
 const { width } = Dimensions.get('window');
 
@@ -14,6 +15,7 @@ export default function TakeQuizScreen() {
   const router = useRouter();
   const { quizzes, addSubmission, loading } = useSubjectsContext();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const quiz = useMemo(() => quizzes.find(q => q.id === id), [quizzes, id]);
 
@@ -226,7 +228,7 @@ export default function TakeQuizScreen() {
   if (isFinished && quizResult) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-        <ScrollView contentContainerStyle={{ padding: 24, alignItems: "center" }}>
+        <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: insets.bottom + 40, alignItems: "center" }}>
           <View style={{ height: 80, width: 80, backgroundColor: "#ecfdf5", borderRadius: 40, alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
             <CheckCircle2 color="#10b981" size={40} />
           </View>
@@ -368,7 +370,7 @@ export default function TakeQuizScreen() {
       </ScrollView>
 
       {/* Footer Navigation */}
-      <View style={{ flexDirection: "row", alignItems: "center", padding: 20, borderTopWidth: 1, borderTopColor: "#f1f5f9", gap: 12 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", padding: 20, paddingBottom: insets.bottom + 20, borderTopWidth: 1, borderTopColor: "#f1f5f9", gap: 12 }}>
         <TouchableOpacity 
           style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: "#f8fafc", alignItems: "center", justifyContent: "center" }}
           onPress={() => setGridVisible(true)}
