@@ -346,57 +346,7 @@ export default function AssignmentView() {
                                     </Button>
                                 </div>
                             </div>
-                        ) : (
-                            <div className="space-y-6">
-                                {submissionIsPdf ? (
-                                    submission?.content ? (
-                                        <StudentSubmissionView
-                                            submissionId={submission.id}
-                                            pdfUrl={submission.content}
-                                            fileType="pdf"
-                                            fileName={submission.content.split('/').pop()?.split('?')[0] || 'submission.pdf'}
-                                        />
-                                    ) : null
-                                ) : (
-                                    <StudentSubmissionView
-                                        submissionId={submission.id}
-                                        content={submission.content}
-                                        fileType="text"
-                                        fileName="Essay Submission"
-                                    />
-                                )}
-
-                                {isGraded && (
-                                    <Card className="border-primary/20 bg-primary/5 shadow-none overflow-hidden">
-                                        <CardHeader className="bg-primary/10 pb-4">
-                                            <CardTitle className="text-xl font-bold flex items-center gap-2 text-primary">
-                                                <MessageSquare className="h-5 w-5" />
-                                                Instructor Feedback
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="pt-6 space-y-4">
-                                            <p className="text-slate-800 leading-relaxed italic">
-                                                "{submission.overallFeedback}"
-                                            </p>
-
-                                            {rubric && (
-                                                <div className="space-y-3 pt-4">
-                                                    <h4 className="text-sm font-black uppercase tracking-widest text-primary/70">Rubric Breakdown</h4>
-                                                    <div className="space-y-2">
-                                                        {rubric.criteria.map(c => (
-                                                            <div key={c.id} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-sm py-2 border-b border-primary/10">
-                                                                <span className="font-bold">{c.title}</span>
-                                                                <span className="font-black">{(submission.rubricGrades?.[c.id]) || 0} / {c.maxPoints || (c as any).points || 0}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                )}
-                            </div>
-                        )}
+                        ) : null}
                     </CardContent>
                 </Card>
 
@@ -465,6 +415,58 @@ export default function AssignmentView() {
                     )}
                 </div>
             </div>
+
+            {submission && (
+                <div className="mt-8 space-y-6">
+                    {submissionIsPdf ? (
+                        submission?.content ? (
+                            <StudentSubmissionView
+                                submissionId={submission.id}
+                                pdfUrl={submission.content}
+                                fileType="pdf"
+                                fileName={submission.content.split('/').pop()?.split('?')[0] || 'submission.pdf'}
+                            />
+                        ) : null
+                    ) : (
+                        <StudentSubmissionView
+                            submissionId={submission.id}
+                            content={submission.content}
+                            fileType="text"
+                            fileName="Essay Submission"
+                        />
+                    )}
+
+                    {isGraded && (
+                        <Card className="border-primary/20 bg-primary/5 shadow-none overflow-hidden">
+                            <CardHeader className="bg-primary/10 pb-4">
+                                <CardTitle className="text-xl font-bold flex items-center gap-2 text-primary">
+                                    <MessageSquare className="h-5 w-5" />
+                                    Instructor Feedback
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-6 space-y-4">
+                                <p className="text-slate-800 leading-relaxed italic">
+                                    "{submission.overallFeedback}"
+                                </p>
+
+                                {rubric && (
+                                    <div className="space-y-3 pt-4">
+                                        <h4 className="text-sm font-black uppercase tracking-widest text-primary/70">Rubric Breakdown</h4>
+                                        <div className="space-y-2">
+                                            {rubric.criteria.map(c => (
+                                                <div key={c.id} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-sm py-2 border-b border-primary/10">
+                                                    <span className="font-bold">{c.title}</span>
+                                                    <span className="font-black">{(submission.rubricGrades?.[c.id]) || 0} / {c.maxPoints || (c as any).points || 0}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
