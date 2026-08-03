@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { View, ActivityIndicator } from "react-native";
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { queryClient, asyncStoragePersister } from '../src/lib/queryClient';
 
 import { GluestackUIProvider } from '@/components/ui/gluestack-ui-provider';
 import '@/global.css';
@@ -45,8 +47,13 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
     return (
-        <AuthProvider>
-            <RootLayoutNav />
-        </AuthProvider>
+        <PersistQueryClientProvider
+            client={queryClient}
+            persistOptions={{ persister: asyncStoragePersister }}
+        >
+            <AuthProvider>
+                <RootLayoutNav />
+            </AuthProvider>
+        </PersistQueryClientProvider>
     );
 }

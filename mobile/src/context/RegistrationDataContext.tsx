@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useSubjects } from '../hooks/useSubjects';
+import { useRegistrationQuery } from '../hooks/queries/useRegistrationQuery';
 
 type StudentsWithSubjectsRow = Student & {
     full_name?: string;
@@ -78,9 +79,10 @@ export function RegistrationDataProvider({ children }: { children: ReactNode }) 
     const [studentSubjectClasses, setStudentSubjectClasses] = useState<StudentSubjectClass[]>([]);
     const [loading, setLoading] = useState(true);
 
+    const { data: queryData, isLoading: queryLoading, isError } = useRegistrationQuery();
+
     useEffect(() => {
         if (authLoading) return;
-
         if (!user) {
             setGrades([]);
             setRegisterClasses([]);
@@ -92,115 +94,21 @@ export function RegistrationDataProvider({ children }: { children: ReactNode }) 
             return;
         }
 
-        let cancelled = false;
-
-        const fetchRegistrationData = async () => {
+        if (queryData) {
+            setGrades(queryData.grades as any);
+            setRegisterClasses(queryData.registerClasses as any);
+            setSubjectClasses(queryData.subjectClasses as any);
+            setStudents(queryData.students as any);
+            setStudentSubjects(queryData.studentSubjects as any);
+            setStudentSubjectClasses(queryData.studentSubjectClasses as any);
+            setLoading(false);
+        } else if (isError) {
+            console.error("Error fetching Registration data from Query");
+            setLoading(false);
+        } else if (queryLoading) {
             setLoading(true);
-
-            try {
-                // Fire all queries in parallel for maximum speed
-                const [gradesRes, rcRes, scRes, studentsDirectRes, ssRes, sscRes] = await Promise.all([
-                    supabase.from('grades').select('*'),
-                    supabase.from('register_classes').select('*'),
-                    supabase.from('subject_classes').select('*'),
-                    supabase.from('students').select(`*, profiles(*)`),
-                    supabase.from('student_subjects').select(`*, subjects(name)`),
-                    supabase.from('student_subject_classes').select('*'),
-                ]);
-
-                const [studentsRpcRes, studentsViewRes] = await Promise.all([
-                    (async () => { try { return await supabase.rpc('get_students_with_subjects'); } catch { return { data: null, error: null }; } })(),
-                    (async () => { try { return await supabase.from('students_with_subjects').select('*'); } catch { return { data: null, error: null }; } })(),
-                ]);
-
-                if (gradesRes.error) console.error("Grades Error:", gradesRes.error);
-                if (rcRes.error) console.error("RC Error:", rcRes.error);
-                if (scRes.error) console.error("SC Error:", scRes.error);
-                if (ssRes.error) console.error("SS Error:", ssRes.error);
-                if (sscRes.error) console.error("SSC Error:", sscRes.error);
-
-                if (cancelled) return;
-
-                const gradesData = gradesRes.data;
-                const rcData = rcRes.data;
-                const scData = scRes.data;
-
-                const studentsDirectData = Array.isArray(studentsDirectRes.data) ? studentsDirectRes.data : [];
-                const studentsRpcData = Array.isArray(studentsRpcRes.data) ? studentsRpcRes.data : [];
-                const studentsViewData = Array.isArray(studentsViewRes.data) ? studentsViewRes.data : [];
-
-                const studentsData = studentsDirectData.length > 0 ? studentsDirectData :
-                    (studentsRpcData.length > 0 ? studentsRpcData : studentsViewData);
-
-                const ssData = ssRes.data;
-                const sscData = sscRes.data;
-
-                setGrades((gradesData || []).map((g: any) => ({
-                    ...g,
-                    level: g.level ?? g.sort_order ?? (parseInt(String(g.name || '').replace(/\D/g, ''), 10) || 0),
-                })));
-                setRegisterClasses((rcData || []).map(rc => ({
-                    ...rc,
-                    gradeId: rc.grade_id,
-                    classTeacherId: rc.class_teacher_id,
-                    maxStudents: rc.max_students,
-                    createdAt: rc.created_at
-                })));
-                setSubjectClasses((scData || []).map(sc => ({
-                    ...sc,
-                    subjectId: sc.subject_id,
-                    teacherId: sc.teacher_id,
-                    gradeId: sc.grade_id,
-                    createdAt: sc.created_at
-                })));
-                const studentSubjectsByStudentId = (ssData || []).reduce<Record<string, StudentAssignedSubject[]>>((acc, item) => {
-                    if (!item.student_id) return acc;
-                    if (!acc[item.student_id]) acc[item.student_id] = [];
-                    acc[item.student_id].push(normalizeAssignedSubject(item));
-                    return acc;
-                }, {});
-
-                setStudents((studentsData || []).map((s: any) => ({
-                    ...s,
-                    firstName: (s.profiles?.full_name || s.full_name || "").split(' ')[0] || '',
-                    lastName: (s.profiles?.full_name || s.full_name || "").split(' ').slice(1).join(' ') || '',
-                    name: s.profiles?.full_name || s.full_name || '',
-                    email: s.profiles?.email || s.email || '',
-                    pin: s.profiles?.pin || s.pin || '',
-                    avatarUrl: s.profiles?.avatar_url || '',
-                    administrationNumber: s.administration_number,
-                    admissionYear: s.admission_year,
-                    gradeId: s.grade_id,
-                    registerClassId: s.register_class_id,
-                    grade: gradesData?.find(g => g.id === s.grade_id)?.name || '',
-                    studentClass: rcData?.find(rc => rc.id === s.register_class_id)?.name || '',
-                    status: s.status || 'inactive',
-                    createdAt: s.profiles?.created_at || s.created_at,
-                    subjects: (s.subjects && s.subjects.length > 0)
-                        ? s.subjects.map(normalizeAssignedSubject)
-                        : (studentSubjectsByStudentId[s.id] || [])
-                })));
-                setStudentSubjects((ssData || []).map(ss => ({
-                    ...ss,
-                    studentId: ss.student_id,
-                    subjectId: ss.subject_id
-                })));
-                setStudentSubjectClasses((sscData || []).map(ssc => ({
-                    ...ssc,
-                    studentId: ssc.student_id,
-                    subjectClassId: ssc.subject_class_id
-                })));
-            } catch (error) {
-                console.error("Error fetching registration data:", error);
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        };
-
-        fetchRegistrationData();
-
-        return () => { cancelled = true; };
-    }, [user, authLoading]);
+        }
+    }, [queryData, queryLoading, isError, user, authLoading]);
 
     // === Grade CRUD ===
     const addGrade = async (grade: Omit<Grade, 'id'>) => {

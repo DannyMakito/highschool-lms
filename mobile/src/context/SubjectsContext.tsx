@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import type { Subject, Topic, Lesson, Quiz, QuizSubmission } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { useSubjectsQuery } from '../hooks/queries/useSubjectsQuery';
 // import { trackContentInteraction } from '@/lib/analytics'; // Not available on mobile yet
 
 interface LMSData {
@@ -64,110 +65,34 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
     });
     const [loading, setLoading] = useState(true);
 
+    const { data: queryData, isLoading: queryLoading, isError } = useSubjectsQuery();
+
     useEffect(() => {
         if (authLoading) return;
-        
         if (!user) {
             setLoading(false);
             return;
         }
 
-        let cancelled = false;
-
-        const fetchData = async () => {
+        if (queryData) {
+            setData(prev => ({
+                ...prev,
+                subjects: queryData.subjects as any,
+                topics: queryData.topics as any,
+                lessons: queryData.lessons as any,
+                quizzes: queryData.quizzes as any,
+                submissions: queryData.submissions as any,
+                completedLessonIds: queryData.completedLessonIds as any,
+            }));
+            setProgressTrackingAvailable(queryData.progressTrackingAvailable);
+            setLoading(false);
+        } else if (isError) {
+            console.error("Error fetching Subjects from Query");
+            setLoading(false);
+        } else if (queryLoading) {
             setLoading(true);
-            
-            try {
-
-                const [subjectsRes, topicsRes, lessonsRes, quizzesRes, submissionsRes, progressRes] = await Promise.all([
-                    supabase.from('subjects').select('*'),
-                    supabase.from('topics').select('*'),
-                    supabase.from('lessons').select('*'),
-                    supabase.from('quizzes').select('*'),
-                    supabase.from('quiz_submissions').select('*'),
-                    user ? supabase.from('user_lesson_progress').select('lesson_id').eq('user_id', user.id) : Promise.resolve({ data: [] as any[], error: null }),
-                ]);
-
-                const subjects = subjectsRes.data;
-                const topics = topicsRes.data;
-                const lessons = lessonsRes.data;
-                const quizzes = quizzesRes.data;
-                const submissions = submissionsRes.data;
-                const progress = progressRes.data;
-                const progressError = progressRes.error;
-
-                if (progressError) {
-                    if (progressError.code === 'PGRST205') {
-                        setProgressTrackingAvailable(false);
-                    }
-                    console.warn("user_lesson_progress table not found, skipping progress tracking:", progressError.message);
-                } else {
-                    setProgressTrackingAvailable(true);
-                }
-
-                if (cancelled) return;
-
-                const mappedSubjects = (subjects || []).map(s => {
-                    const subjectTopics = (topics || []).filter(t => t.subject_id === s.id);
-                    const topicIds = subjectTopics.map(t => t.id);
-                    const subjectLessons = (lessons || []).filter(l => topicIds.includes(l.topic_id));
-
-                    return {
-                        ...s,
-                        gradeTier: s.grade_tier,
-                        accessType: s.access_type,
-                        modulesCount: subjectTopics.length,
-                        lessonsCount: subjectLessons.length
-                    };
-                });
-
-                setData({
-                    subjects: mappedSubjects,
-                    topics: (topics || []).map(t => ({ ...t, subjectId: t.subject_id })),
-                    lessons: (lessons || []).map(l => ({
-                        ...l,
-                        topicId: l.topic_id,
-                        videoUrl: l.video_url,
-                        videoType: l.video_type,
-                        videoFilePath: l.video_file_path,
-                        videoFileName: l.video_file_name,
-                        videoMimeType: l.video_mime_type,
-                        resourceUrl: l.resource_url,
-                        resourceType: l.resource_type,
-                        resourceFilePath: l.resource_file_path,
-                        resourceFileName: l.resource_file_name,
-                        resourceMimeType: l.resource_mime_type
-                    })),
-                    quizzes: (quizzes || []).map(q => ({ 
-                        ...q, 
-                        subjectId: q.subject_id,
-                        settingsConfigured: q.settings_configured || false,
-                        groupId: q.group_id,
-                        countsTowardsFinal: q.counts_towards_final ?? true,
-                        pointsPossible: q.points_possible ?? (Array.isArray(q.questions) ? q.questions.reduce((sum: number, question: any) => sum + (question.points || 0), 0) : 0)
-                    })),
-                    submissions: (submissions || []).map(sub => ({ 
-                        ...sub, 
-                        quizId: sub.quiz_id, 
-                        studentId: sub.student_id,
-                        studentName: sub.student_name,
-                        totalPoints: sub.total_points,
-                        timeSpent: sub.time_spent,
-                        completedAt: sub.completed_at
-                    })),
-                    completedLessonIds: (progress && !progressError) ? progress.map((p: any) => p.lesson_id) : [],
-                });
-            } catch (error) {
-                console.error("Error fetching LMS data:", error);
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        };
-
-        fetchData();
-
-        return () => { cancelled = true; };
-    }, [user?.id, authLoading]);
+        }
+    }, [queryData, queryLoading, isError, user, authLoading]);
 
     const addSubject = async (subject: Omit<Subject, 'id' | 'modulesCount' | 'lessonsCount' | 'createdAt'>) => {
         const { data: newSubject, error } = await supabase
