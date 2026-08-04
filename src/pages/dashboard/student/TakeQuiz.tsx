@@ -34,6 +34,9 @@ export default function TakeQuiz() {
     const [timeLeft, setTimeLeft] = useState(0);
     const [isFinished, setIsFinished] = useState(false);
     const [showSecurityShield, setShowSecurityShield] = useState(false);
+    const [showExitConfirm, setShowExitConfirm] = useState(false);
+    const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+    const [unansweredCount, setUnansweredCount] = useState(0);
     const [startTime] = useState(Date.now());
     const [quizResult, setQuizResult] = useState<{
         score: number;
@@ -46,7 +49,19 @@ export default function TakeQuiz() {
     // Memoize and shuffle questions if needed
     const questions = useMemo(() => {
         if (!quiz?.questions) return [];
-        let items = [...quiz.questions];
+        
+        let items = quiz.questions.map(q => {
+            if (q.randomizeOrder && q.options) {
+                let shuffledOptions = [...q.options];
+                for (let i = shuffledOptions.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffledOptions[i], shuffledOptions[j]] = [shuffledOptions[j], shuffledOptions[i]];
+                }
+                return { ...q, options: shuffledOptions };
+            }
+            return q;
+        });
+
         if (quiz.settings?.shuffleQuestions) {
             // Fisher-Yates Shuffle
             for (let i = items.length - 1; i > 0; i--) {
@@ -55,7 +70,7 @@ export default function TakeQuiz() {
             }
         }
         return items;
-    }, [quiz?.id]); // Only reshuffle if the quiz ID changes
+    }, [quiz]); // Reshuffle when quiz object updates
 
     // Security & Anti-screenshot logic
     useEffect(() => {
@@ -182,6 +197,23 @@ export default function TakeQuiz() {
                 return { ...prev, [currentQuestion.id]: Array.isArray(optionId) ? optionId : [optionId] };
             }
         });
+    };
+
+    const handlePreSubmit = () => {
+        if (!quiz) return;
+        const count = (questions || []).filter(q => {
+            const ans = selectedAnswers[q.id];
+            if (!ans || ans.length === 0) return true;
+            if (q.type === 'fill-in-the-blank' && ans[0].trim() === "") return true;
+            return false;
+        }).length;
+
+        if (count > 0) {
+            setUnansweredCount(count);
+            setShowSubmitConfirm(true);
+        } else {
+            handleSubmit();
+        }
     };
 
     const handleSubmit = () => {
@@ -355,11 +387,7 @@ export default function TakeQuiz() {
                         variant="ghost"
                         size="icon"
                         className="rounded-xl h-11 w-11 bg-slate-50 text-slate-400"
-                        onClick={() => {
-                            if (window.confirm("Are you sure you want to exit? Your progress will be lost.")) {
-                                navigate(`/student/quizzes/${quiz.id}`);
-                            }
-                        }}
+                        onClick={() => setShowExitConfirm(true)}
                     >
                         <X className="h-5 w-5" />
                     </Button>
@@ -378,7 +406,7 @@ export default function TakeQuiz() {
                     </div>
                     <Button
                         className="bg-slate-900 border-none hover:bg-slate-800 text-white rounded-xl px-6 h-11 font-black transition-all"
-                        onClick={handleSubmit}
+                        onClick={handlePreSubmit}
                     >
                         Submit
                     </Button>
@@ -599,6 +627,72 @@ export default function TakeQuiz() {
                     <div className="mt-12 p-4 bg-white/5 rounded-2xl border border-white/10 flex items-center gap-3 text-slate-300 text-sm italic">
                         <Info className="h-4 w-4" />
                         This event has been recorded for instructor review.
+                    </div>
+                </div>
+            )}
+
+            {/* Exit Confirmation Modal */}
+            {showExitConfirm && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[200] flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100">
+                        <div className="h-16 w-16 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                            <AlertCircle className="h-8 w-8" />
+                        </div>
+                        <h2 className="text-2xl font-black text-slate-900 mb-3">Exit Quiz?</h2>
+                        <p className="text-slate-500 font-medium mb-8">
+                            Exiting the quiz will result in an automatic submission. Are you sure you want to quit?
+                        </p>
+                        <div className="flex gap-3">
+                            <Button 
+                                variant="outline" 
+                                className="flex-1 rounded-xl h-12 font-bold text-slate-600 border-slate-200"
+                                onClick={() => setShowExitConfirm(false)}
+                            >
+                                Continue
+                            </Button>
+                            <Button 
+                                className="flex-1 rounded-xl h-12 font-bold bg-rose-500 hover:bg-rose-600 text-white border-none"
+                                onClick={() => {
+                                    setShowExitConfirm(false);
+                                    handleSubmit();
+                                }}
+                            >
+                                Quit
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Unanswered Questions Confirmation Modal */}
+            {showSubmitConfirm && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[200] flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100">
+                        <div className="h-16 w-16 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                            <AlertCircle className="h-8 w-8" />
+                        </div>
+                        <h2 className="text-2xl font-black text-slate-900 mb-3">Unanswered Questions</h2>
+                        <p className="text-slate-500 font-medium mb-8">
+                            You have {unansweredCount} unanswered {unansweredCount === 1 ? 'question' : 'questions'}. Are you sure you want to submit?
+                        </p>
+                        <div className="flex gap-3">
+                            <Button 
+                                variant="outline" 
+                                className="flex-1 rounded-xl h-12 font-bold text-slate-600 border-slate-200"
+                                onClick={() => setShowSubmitConfirm(false)}
+                            >
+                                Return
+                            </Button>
+                            <Button 
+                                className="flex-1 rounded-xl h-12 font-bold bg-indigo-600 hover:bg-indigo-700 text-white border-none"
+                                onClick={() => {
+                                    setShowSubmitConfirm(false);
+                                    handleSubmit();
+                                }}
+                            >
+                                Submit
+                            </Button>
+                        </div>
                     </div>
                 </div>
             )}

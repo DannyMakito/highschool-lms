@@ -6,6 +6,7 @@ import { SubjectsProvider } from '../../src/context/SubjectsContext';
 import { RegistrationDataProvider } from '../../src/context/RegistrationDataContext';
 import { AssignmentsProvider } from '../../src/context/AssignmentsContext';
 import { MessagingProvider } from '../../src/context/MessagingContext';
+import { HeaderMenu } from '../../components/ui/header-menu';
 
 export default function TabLayout() {
   const { logout } = useAuth();
@@ -22,9 +23,12 @@ export default function TabLayout() {
                 },
                 headerTintColor: '#fff',
                 headerRight: () => (
-                  <TouchableOpacity onPress={logout} style={{ marginRight: 15 }}>
-                    <LogOut color="#ef4444" size={20} />
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <HeaderMenu />
+                    <TouchableOpacity onPress={logout} style={{ marginRight: 15 }}>
+                      <LogOut color="#ef4444" size={20} />
+                    </TouchableOpacity>
+                  </View>
                 ),
                 tabBarStyle: {
                   backgroundColor: '#0f172a',
