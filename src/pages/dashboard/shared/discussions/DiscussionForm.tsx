@@ -41,7 +41,7 @@ const DiscussionForm: React.FC = () => {
     const { user, role } = useAuth();
     const { subjects } = useSubjects();
     const { studentSubjectClasses, subjectClasses } = useRegistrationData();
-    const { classes } = useSchoolData();
+    const { classes, teachers } = useSchoolData();
     const { discussions, addDiscussion, updateDiscussion } = useDiscussions(subjectId);
     const rolePrefix = getRolePathPrefix(role);
 
@@ -162,15 +162,24 @@ const DiscussionForm: React.FC = () => {
     }, [discussionDraftKey, formData, selectedGroupId, selectedSubjectId]);
 
     const availableSubjects = React.useMemo(() => {
-        if (role !== 'learner' || !user) return subjects;
-        const allowedSubjectIds = new Set(
-            studentSubjectClasses
-                .filter((item) => item.studentId === user.id)
-                .map((item) => subjectClasses.find((subjectClass) => subjectClass.id === item.subjectClassId)?.subjectId)
-                .filter(Boolean)
-        );
-        return subjects.filter((subject) => allowedSubjectIds.has(subject.id));
-    }, [role, studentSubjectClasses, subjectClasses, subjects, user]);
+        if (!user) return subjects;
+        if (role === 'learner') {
+            const allowedSubjectIds = new Set(
+                studentSubjectClasses
+                    .filter((item) => item.studentId === user.id)
+                    .map((item) => subjectClasses.find((subjectClass) => subjectClass.id === item.subjectClassId)?.subjectId)
+                    .filter(Boolean)
+            );
+            return subjects.filter((subject) => allowedSubjectIds.has(subject.id));
+        }
+        if (role === 'teacher') {
+            const teacherProfile = teachers.find(t => t.id === user.id);
+            if (teacherProfile && teacherProfile.subjects) {
+                 return subjects.filter(subject => teacherProfile.subjects.includes(subject.id));
+            }
+        }
+        return subjects;
+    }, [role, studentSubjectClasses, subjectClasses, subjects, user, teachers]);
 
     const teacherClassOptions = React.useMemo(() => {
         const targetSubjectId = subjectId || selectedSubjectId;
