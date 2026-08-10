@@ -16,6 +16,7 @@ import { useAssignments } from "@/hooks/useAssignments";
 import { NotificationsProvider } from "@/context/NotificationsContext";
 import { NotificationsPopup } from "@/components/notifications/NotificationsPopup";
 import { RouteHelpIcon } from "@/components/help/HelpIcon";
+import { PortalRefreshButton } from "@/components/PortalRefreshButton";
 import { WeeklyFeedbackPrompt } from "@/components/feedback/WeeklyFeedbackPrompt";
 import {
     SidebarInset,
@@ -69,6 +70,7 @@ function TeacherPortalContent() {
                         </Breadcrumb>
                     </div>
                     <div className="ml-auto pr-4">
+                        <PortalRefreshButton />
                         <RouteHelpIcon />
                     </div>
                 </header>

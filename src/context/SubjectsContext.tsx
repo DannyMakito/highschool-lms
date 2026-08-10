@@ -74,8 +74,8 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
 
         let cancelled = false;
 
-        const fetchData = async () => {
-            setLoading(true);
+        const fetchData = async (showLoading = true) => {
+            if (showLoading) setLoading(true);
             
             try {
 
@@ -166,7 +166,10 @@ export function SubjectsProvider({ children }: { children: ReactNode }) {
 
         fetchData();
 
-        return () => { cancelled = true; };
+        const handleRefresh = () => { void fetchData(false); };
+        window.addEventListener('lms:refresh', handleRefresh);
+
+        return () => { cancelled = true; window.removeEventListener('lms:refresh', handleRefresh); };
     }, [user?.id, authLoading]);
 
     const addSubject = async (subject: Omit<Subject, 'id' | 'modulesCount' | 'lessonsCount' | 'createdAt'>) => {

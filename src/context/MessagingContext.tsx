@@ -51,8 +51,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
         let cancelled = false;
 
-        const fetchMessagingData = async () => {
-            setLoading(true);
+        const fetchMessagingData = async (showLoading = true) => {
+            if (showLoading) setLoading(true);
 
             try {
                 // Fetch all in parallel
@@ -120,6 +120,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         };
 
         fetchMessagingData();
+        const handleRefresh = () => { void fetchMessagingData(false); };
+        window.addEventListener('lms:refresh', handleRefresh);
 
         const subscription = supabase.channel('messaging_realtime')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'discussion_replies' }, async (payload) => {
@@ -227,8 +229,9 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
             })
             .subscribe();
 
-        return () => { 
-            cancelled = true; 
+        return () => {
+            cancelled = true;
+            window.removeEventListener('lms:refresh', handleRefresh);
             supabase.removeChannel(subscription);
         };
     }, [user?.id, authLoading]);
