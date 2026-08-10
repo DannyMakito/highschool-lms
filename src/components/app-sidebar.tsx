@@ -29,9 +29,11 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/context/AuthContext"
+import { useNotifications } from "@/hooks/useNotifications"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth();
+  const { unreadCount } = useNotifications();
 
   const roleData = React.useMemo(() => {
     const common = {
@@ -104,6 +106,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: "Notifications",
               url: "/student/notifications",
               icon: Bell,
+              badge: unreadCount,
             },
             {
               title: "Profile",
@@ -161,6 +164,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: "Notifications",
               url: "/teacher/notifications",
               icon: Bell,
+              badge: unreadCount,
             },
             {
               title: "Profile",
@@ -232,6 +236,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: "Notifications",
               url: "/principal/notifications",
               icon: Bell,
+              badge: unreadCount,
             },
             {
               title: "Profile",
@@ -251,7 +256,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           navMain: [],
         };
     }
-  }, [user]);
+  }, [unreadCount, user]);
 
   return (
     <Sidebar collapsible="icon" {...props}>

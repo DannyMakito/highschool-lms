@@ -1,10 +1,11 @@
-import { Bell, BookOpen, ClipboardCheck, FileCheck2, FileText, MessageSquare, Sparkles } from "lucide-react";
+import { Bell, BookOpen, CheckCheck, ClipboardCheck, FileCheck2, FileText, MessageSquare, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { useNotifications } from "@/hooks/useNotifications";
 import type { NotificationItem } from "@/types/notifications";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 function getIcon(notification: NotificationItem) {
   switch (notification.category) {
@@ -25,21 +26,28 @@ function getIcon(notification: NotificationItem) {
 }
 
 export default function NotificationsPage() {
-  const { notifications } = useNotifications();
+  const { notifications, markAllAsRead, markAsRead } = useNotifications();
 
   return (
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-3xl font-black tracking-tight text-slate-900">Notifications</h1>
-        <p className="text-muted-foreground">Everything is listed from newest to oldest across your dashboard activity.</p>
+        <p className="text-muted-foreground">Unread updates appear here once. Opening an update marks it as read and removes it from your inbox.</p>
       </div>
 
       <Card className="overflow-hidden">
         <CardHeader className="border-b bg-card/70">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Bell className="h-5 w-5 text-primary" />
-            Activity Feed
-          </CardTitle>
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Bell className="h-5 w-5 text-primary" />
+              Unread notifications {notifications.length ? `(${notifications.length})` : ""}
+            </CardTitle>
+            {notifications.length ? (
+              <Button size="sm" variant="outline" onClick={() => void markAllAsRead()}>
+                <CheckCheck className="mr-2 h-4 w-4" /> Mark all read
+              </Button>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {notifications.length === 0 ? (
@@ -52,6 +60,7 @@ export default function NotificationsPage() {
                   <Link
                     key={notification.id}
                     to={notification.href}
+                    onClick={() => void markAsRead(notification)}
                     className="flex items-start gap-4 px-5 py-4 transition hover:bg-primary/5"
                   >
                     <div className="rounded-2xl bg-primary/10 p-3 text-primary">
