@@ -172,7 +172,7 @@ function AppShell() {
         </ScrollView>
         <View style={styles.panel}>
           {activeTab === "home" && <HomeTab childName={activeChild?.fullName || "Learner"} childGrade={activeChild?.gradeLabel || "Grade pending"} averageScore={averageScore} attendanceRate={attendanceRate} assignmentsCount={dashboard.data.assignments.length} conversationsCount={dashboard.data.conversations.length} alerts={alerts} loading={dashboard.loading} errorMessage={dashboard.errorMessage} onQuickAction={setActiveTab} onReportAbsence={() => setShowAbsenceReport(true)} />}
-          {activeTab === "academics" && <AcademicsTab averageScore={averageScore} subjects={subjectAverages} assignments={dashboard.data.assignments} quizzes={dashboard.data.quizzes} grades={dashboard.data.grades} loading={dashboard.loading} selectedSubjectId={selectedSubjectId} onSelectSubject={(subjectId) => { setSelectedSubjectId(subjectId); setSubjectPageId(subjectId); }} />}
+          {activeTab === "academics" && <AcademicsTab averageScore={averageScore} subjects={subjectAverages} assignments={dashboard.data.assignments} quizzes={dashboard.data.quizzes} grades={dashboard.data.grades} loading={dashboard.loading} onSelectSubject={(subjectId) => { setSelectedSubjectId(subjectId); setSubjectPageId(subjectId); }} />}
           {activeTab === "attendance" && <AttendanceTab attendanceRate={attendanceRate} attendance={dashboard.data.attendance} loading={dashboard.loading} />}
           {activeTab === "messages" && <MessagesTab childName={activeChild?.fullName || "Learner"} conversations={threads} subjectTeachers={dashboard.data.subjectTeachers} loading={dashboard.loading} errorMessage={dashboard.errorMessage} sessionUserId={session?.user?.id ?? null} onReload={dashboard.reload} />}
           {activeTab === "more" && <MoreTab parentName={parent.fullName} email={parent.email} children={children} onLogout={logout} />}
@@ -207,14 +207,8 @@ function AcademicsTab(props: {
   quizzes: ChildQuizItem[];
   grades: ChildGradeItem[];
   loading: boolean;
-  selectedSubjectId: string | null;
-  onSelectSubject: (subjectId: string | null) => void;
+  onSelectSubject: (subjectId: string) => void;
 }) {
-  const selectedSubject = props.subjects.find((subject) => subject.id === props.selectedSubjectId) || props.subjects[0] || null;
-  const subjectAssignments = selectedSubject ? props.assignments.filter((item) => item.subjectId === selectedSubject.id) : [];
-  const subjectGrades = selectedSubject ? props.grades.filter((item) => item.subjectId === selectedSubject.id) : [];
-  const latestAssignment = subjectAssignments[0] || null;
-  const latestGrade = subjectGrades[0] || null;
   const today = new Date().toISOString().slice(0, 10);
   const overdue = props.assignments.filter((item) => Boolean(item.dueDate && item.dueDate < today && !item.submissionStatus));
   const dueSoon = props.assignments.filter((item) => {
@@ -252,14 +246,13 @@ function AcademicsTab(props: {
         {props.subjects.length === 0 && !props.loading ? <Text style={styles.sectionBody}>No linked subjects yet.</Text> : null}
         <View style={styles.subjectGrid}>
           {props.subjects.map((subject) => {
-            const active = subject.id === selectedSubject?.id;
             const subjectAssignmentCount = props.assignments.filter((item) => item.subjectId === subject.id).length;
             const subjectGradeCount = props.grades.filter((item) => item.subjectId === subject.id).length;
             return (
               <Pressable
                 key={subject.id}
                 onPress={() => props.onSelectSubject(subject.id)}
-                style={({ pressed }) => [styles.subjectTile, active && styles.subjectTileActive, pressed && styles.subjectTilePressed]}
+                style={({ pressed }) => [styles.subjectTile, pressed && styles.subjectTilePressed]}
               >
                 <View style={styles.subjectTileTop}>
                   <View style={{ flex: 1 }}>
@@ -279,71 +272,12 @@ function AcademicsTab(props: {
         </View>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>{selectedSubject?.name || "Selected subject"}</Text>
-        <Text style={styles.sectionBody}>{selectedSubject ? selectedSubject.category || selectedSubject.gradeTier || "Subject" : "Tap a subject above to open its details."}</Text>
-
-        <View style={styles.detailGrid}>
-          <View style={styles.detailCard}>
-            <Text style={styles.detailValue}>{selectedSubject?.average != null ? `${selectedSubject.average}%` : "--"}</Text>
-            <Text style={styles.detailLabel}>Average</Text>
-          </View>
-          <View style={styles.detailCard}>
-            <Text style={styles.detailValue}>{subjectGrades.length}</Text>
-            <Text style={styles.detailLabel}>Marks</Text>
-          </View>
-          <View style={styles.detailCard}>
-            <Text style={styles.detailValue}>{subjectAssignments.length}</Text>
-            <Text style={styles.detailLabel}>Tasks</Text>
-          </View>
-          <View style={styles.detailCard}>
-            <Text style={styles.detailValue}>{latestAssignment ? "New" : "--"}</Text>
-            <Text style={styles.detailLabel}>Latest upload</Text>
-          </View>
-        </View>
-
-        <View style={styles.detailSection}>
-          <Text style={styles.sectionSubTitle}>Recent work</Text>
-          {latestAssignment ? (
-            <View style={styles.detailRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.listTitle}>{latestAssignment.title}</Text>
-                <Text style={styles.listMeta}>{latestAssignment.status || "Published"}{latestAssignment.dueDate ? ` • Due ${latestAssignment.dueDate}` : ""}</Text>
-              </View>
-              <Text style={styles.detailPill}>Task</Text>
-            </View>
-          ) : (
-            <Text style={styles.sectionBody}>No uploaded work yet for this subject.</Text>
-          )}
-        </View>
-
-        <View style={styles.detailSection}>
-          <Text style={styles.sectionSubTitle}>Quizzes and tests</Text>
-          {props.quizzes.filter((item) => item.subjectId === selectedSubject?.id).slice(0, 3).map((quiz) => <View key={quiz.id} style={styles.detailRow}><View style={{ flex: 1 }}><Text style={styles.listTitle}>{quiz.title}</Text><Text style={styles.listMeta}>{quiz.submissionStatus === "completed" ? "Completed" : quiz.endDate ? `Closes ${quiz.endDate}` : "Available"}</Text></View><Text style={styles.detailPill}>{quiz.submissionStatus === "completed" && quiz.totalPoints ? `${quiz.score ?? 0}/${quiz.totalPoints}` : quiz.submissionStatus === "completed" ? "Done" : "Open"}</Text></View>)}
-          {props.quizzes.filter((item) => item.subjectId === selectedSubject?.id).length === 0 ? <Text style={styles.sectionBody}>No quizzes or tests have been posted yet for this subject.</Text> : null}
-        </View>
-
-        <View style={styles.detailSection}>
-          <Text style={styles.sectionSubTitle}>Recent marks</Text>
-          {latestGrade ? (
-            <View style={styles.detailRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.listTitle}>Latest mark</Text>
-                <Text style={styles.listMeta}>{latestGrade.feedback || "No feedback added yet."}</Text>
-              </View>
-              <Text style={styles.detailPill}>{latestGrade.score}%</Text>
-            </View>
-          ) : (
-            <Text style={styles.sectionBody}>No marks have been posted yet for this subject.</Text>
-          )}
-        </View>
-      </View>
     </View>
   );
 }
 
 function SubjectRelationshipPage(props: { childName: string; subject: { id: string; name: string; average: number | null; category?: string | null; gradeTier?: string | null } | null; assignments: ChildAssignmentItem[]; quizzes: ChildQuizItem[]; lessons: ChildLessonItem[]; grades: ChildGradeItem[]; conversations: ChildConversationItem[]; onBack: () => void; }) {
-  const upcoming = props.assignments.filter((item) => item.dueDate && new Date(item.dueDate) >= new Date()).slice(0, 4);
+  const upcoming = props.assignments.slice(0, 4);
   const releasedGrades = props.grades.filter((item) => item.hasScore);
   const hasActivity = props.assignments.length > 0 || props.quizzes.length > 0 || props.lessons.length > 0 || releasedGrades.length > 0;
   return <SafeAreaView style={styles.safeArea}><StatusBar barStyle="light-content" /><ScrollView contentContainerStyle={styles.page}><Pressable onPress={props.onBack} style={styles.secondaryButton}><Text style={styles.secondaryText}>Back to academics</Text></Pressable><View style={styles.hero}><Text style={styles.kicker}>{props.childName}</Text><Text style={styles.title}>{props.subject?.name || "Subject"}</Text><Text style={styles.subtitle}>{props.subject?.category || props.subject?.gradeTier || "Subject progress and teacher updates."}</Text></View><View style={styles.card}><Text style={styles.sectionTitle}>Progress overview</Text>{props.subject?.average != null ? <><Text style={styles.subjectAverage}>{props.subject.average}%</Text><Text style={styles.sectionBody}>Current average from released assessment results.</Text></> : <Text style={styles.sectionBody}>No assessment results have been released yet. The average will appear when the teacher publishes marks.</Text>}</View><View style={styles.card}><Text style={styles.sectionTitle}>Learning content</Text>{props.lessons.length ? props.lessons.slice(0, 5).map((lesson) => <View key={lesson.id} style={styles.msg}><Text style={styles.listMeta}>{lesson.topicTitle}</Text><Text style={styles.listTitle}>{lesson.title}</Text><Text style={styles.sectionBody}>{lesson.preview}</Text></View>) : <Text style={styles.sectionBody}>No lesson content has been published for this subject yet.</Text>}</View>{hasActivity ? <View style={styles.metrics}>{releasedGrades.length > 0 ? <View style={styles.metric}><Text style={styles.metricValue}>{releasedGrades.length}</Text><Text style={styles.metricLabel}>Released marks</Text></View> : null}{props.assignments.length > 0 ? <View style={styles.metric}><Text style={styles.metricValue}>{props.assignments.length}</Text><Text style={styles.metricLabel}>Work items</Text></View> : null}{props.quizzes.length > 0 ? <View style={styles.metric}><Text style={styles.metricValue}>{props.quizzes.length}</Text><Text style={styles.metricLabel}>Quizzes</Text></View> : null}</View> : null}<View style={styles.card}><Text style={styles.sectionTitle}>Upcoming work</Text>{upcoming.length ? upcoming.map((item) => <View key={item.id} style={styles.detailRow}><View style={{ flex: 1 }}><Text style={styles.listTitle}>{item.title || "Assignment"}</Text><Text style={styles.listMeta}>{item.dueDate ? `Due ${item.dueDate.slice(0, 10)}` : "Date to be confirmed"}</Text></View><Text style={styles.detailPill}>{item.submissionStatus || "Open"}</Text></View>) : <Text style={styles.sectionBody}>There is no upcoming work published for this subject right now.</Text>}</View><View style={styles.card}><Text style={styles.sectionTitle}>Results and feedback</Text>{releasedGrades.slice(0, 5).map((item) => <View key={item.id} style={styles.detailRow}><View style={{ flex: 1 }}><Text style={styles.listTitle}>Assessment result</Text><Text style={styles.listMeta}>{item.feedback || "No feedback has been added yet."}</Text></View><Text style={styles.detailPill}>{item.score.toFixed(1)}</Text></View>)}{releasedGrades.length === 0 ? <Text style={styles.sectionBody}>The teacher has not released any marks or feedback yet.</Text> : null}</View><View style={styles.card}><Text style={styles.sectionTitle}>Teacher conversations</Text>{props.conversations.slice(0, 3).map((item) => <View key={item.id} style={styles.msg}><Text style={styles.listTitle}>{item.title || "Subject conversation"}</Text><Text style={styles.sectionBody}>{plainMessageText(item.preview) || "Open Messages to continue this conversation."}</Text></View>)}{props.conversations.length === 0 ? <Text style={styles.sectionBody}>No teacher conversations have started for this subject yet.</Text> : null}</View></ScrollView></SafeAreaView>;
