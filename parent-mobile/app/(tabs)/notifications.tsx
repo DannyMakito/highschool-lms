@@ -12,7 +12,13 @@ type Alert = {
   description: string;
   subject_name?: string | null;
   created_at: string;
+  read_at?: string | null;
 };
+
+function formatDate(value?: string | null) {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "Recently";
+}
 
 export default function NotificationsScreen() {
   const { parent } = useAuth();
@@ -29,7 +35,9 @@ export default function NotificationsScreen() {
     setLoading(true);
     const { data, error } = await supabase
       .from("user_notifications")
-      .select("id, category, title, description, subject_name, created_at")
+      .select("id, category, title, description, subject_name, created_at, read_at")
+      .eq("recipient_id", parent.id)
+      .is("read_at", null)
       .order("created_at", { ascending: false });
     setLoading(false);
     if (error) {
@@ -47,7 +55,7 @@ export default function NotificationsScreen() {
 
   const markRead = async (id: string) => {
     setAlerts((current) => current.filter((alert) => alert.id !== id));
-    const { error } = await supabase.from("user_notifications").delete().eq("id", id);
+    const { error } = await supabase.from("user_notifications").update({ read_at: new Date().toISOString() }).eq("id", id);
     if (error) void loadAlerts();
   };
 
@@ -55,7 +63,7 @@ export default function NotificationsScreen() {
     const ids = alerts.map((alert) => alert.id);
     setAlerts([]);
     if (ids.length) {
-      const { error } = await supabase.from("user_notifications").delete().in("id", ids);
+      const { error } = await supabase.from("user_notifications").update({ read_at: new Date().toISOString() }).in("id", ids);
       if (error) void loadAlerts();
     }
   };
@@ -63,7 +71,7 @@ export default function NotificationsScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Alerts</Text>
-      <Text style={styles.subtitle}>Updates for your linked learners appear once, then disappear when read.</Text>
+      <Text style={styles.subtitle}>Important updates about your linked learners, kept here until you have read them.</Text>
 
       <SectionCard title={`Unread updates${alerts.length ? ` (${alerts.length})` : ""}`}>
         {alerts.length ? (
@@ -77,10 +85,11 @@ export default function NotificationsScreen() {
         <View style={styles.stack}>
           {alerts.map((alert) => (
             <Pressable key={alert.id} style={styles.card} onPress={() => void markRead(alert.id)}>
-              <Text style={styles.metric}>{alert.category}</Text>
-              <Text style={styles.alertTitle}>{alert.title}</Text>
-              <Text style={styles.body}>{alert.description}</Text>
+              <Text style={styles.metric}>{alert.category || "Update"}</Text>
+              <Text style={styles.alertTitle}>{alert.title || "New update for your child"}</Text>
+              <Text style={styles.body}>{alert.description || "Open the school portal for more information."}</Text>
               {alert.subject_name ? <Text style={styles.subject}>{alert.subject_name}</Text> : null}
+              <Text style={styles.date}>{formatDate(alert.created_at)}</Text>
               <Text style={styles.readHint}>Tap to mark as read</Text>
             </Pressable>
           ))}
@@ -101,6 +110,7 @@ const styles = StyleSheet.create({
   alertTitle: { color: brandColors.text, fontWeight: "800", marginBottom: 4 },
   body: { color: "#334155", lineHeight: 20 },
   subject: { color: brandColors.muted, fontSize: 12, fontWeight: "700", marginTop: 8 },
+  date: { color: brandColors.muted, fontSize: 12, marginTop: 8 },
   readHint: { color: brandColors.primary, fontSize: 12, fontWeight: "700", marginTop: 10 },
   markAll: { alignSelf: "flex-start", backgroundColor: brandColors.primarySoft, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, marginBottom: 12 },
   markAllText: { color: brandColors.primary, fontWeight: "800" },

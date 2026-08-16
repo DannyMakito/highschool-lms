@@ -10,12 +10,15 @@ export default function ChildAttendanceScreen() {
   const { children } = useAuth();
   const child = getChildById(children, params.childId);
   const { data, loading, errorMessage } = useChildDashboard(child?.id);
+  const presentCount = data.attendance.filter((entry) => ["present", "excused"].includes(String(entry.mark).toLowerCase())).length;
+  const rate = data.attendance.length ? Math.round((presentCount / data.attendance.length) * 100) : null;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Attendance</Text>
       <Text style={styles.subtitle}>{child?.fullName || "Child"}’s attendance is pulled from register entries.</Text>
       <SectionCard title="Recent attendance">
+        <Text style={styles.summary}>{rate === null ? "No attendance summary is available yet." : `${rate}% attendance across the latest ${data.attendance.length} register entries.`}</Text>
         {loading ? <Text style={styles.body}>Loading attendance...</Text> : null}
         {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
         {data.attendance.length === 0 ? (
@@ -57,4 +60,5 @@ const styles = StyleSheet.create({
   metric: { color: "#0f172a", fontWeight: "700" },
   status: { color: "#1d4ed8", fontWeight: "800", textTransform: "capitalize" },
   error: { color: "#b91c1c" },
+  summary: { color: "#334155", lineHeight: 20, marginBottom: 12 },
 });

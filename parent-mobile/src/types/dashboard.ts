@@ -36,7 +36,38 @@ export interface ChildGradeItem {
   subjectId: string;
   assignmentGroupId: string;
   score: number;
+  hasScore?: boolean;
   feedback?: string | null;
+}
+
+export interface ChildLessonItem {
+  id: string;
+  subjectId: string;
+  topicId: string;
+  topicTitle: string;
+  title: string;
+  preview: string;
+  order: number;
+}
+
+export interface ChildAlertItem {
+  id: string;
+  category: string;
+  title: string;
+  description: string;
+  subjectName?: string | null;
+  createdAt: string;
+  readAt?: string | null;
+}
+
+export interface ChildProgressSummary {
+  averageScore: number | null;
+  scoreCount: number;
+  attendanceRate: number | null;
+  absenceCount: number;
+  lateCount: number;
+  overdueCount: number;
+  dueSoonCount: number;
 }
 
 export interface ChildAttendanceItem {
@@ -101,8 +132,11 @@ export interface ChildDashboardData {
   assignments: ChildAssignmentItem[];
   quizzes: ChildQuizItem[];
   homework: ChildHomeworkItem[];
+  lessons: ChildLessonItem[];
   grades: ChildGradeItem[];
   attendance: ChildAttendanceItem[];
   announcements: ChildAnnouncementItem[];
   conversations: ChildConversationItem[];
+  alerts: ChildAlertItem[];
+  progress: ChildProgressSummary;
 }

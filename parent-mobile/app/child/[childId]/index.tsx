@@ -11,25 +11,22 @@ export default function ChildOverviewScreen() {
   const { children } = useAuth();
   const child = getChildById(children, params.childId);
   const { data, loading, errorMessage } = useChildDashboard(child?.id);
+  const progress = data.progress;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <ChildDashboardHeader child={child} />
 
-      <SectionCard title="Overview">
+      <SectionCard title="Progress overview" subtitle="A simple summary of the latest available school information.">
         <View style={styles.stack}>
-          <Text style={styles.body}>This screen now reflects live parent-safe dashboard data.</Text>
           {data.child ? <Text style={styles.metric}>Admin number: {data.child.administrationNumber || "-"}</Text> : null}
           {data.child ? <Text style={styles.metric}>Status: {data.child.status || "-"}</Text> : null}
-          {data.child ? <Text style={styles.metric}>Subjects: {data.child.subjectCount || 0}</Text> : null}
+          <Text style={styles.metric}>Subjects: {data.subjects.length}</Text>
           {loading ? <ActivityIndicator color="#1d4ed8" /> : null}
           {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
-          <Text style={styles.metric}>Assignments: {data.assignments.length}</Text>
-          <Text style={styles.metric}>Homework: {data.homework.length}</Text>
-          <Text style={styles.metric}>Grades: {data.grades.length}</Text>
-          <Text style={styles.metric}>Attendance: {data.attendance.length}</Text>
-          <Text style={styles.metric}>Announcements: {data.announcements.length}</Text>
-          <Text style={styles.metric}>Conversations: {data.conversations.length}</Text>
+          {!loading ? <Text style={styles.metric}>{progress.averageScore === null ? "No released marks yet" : `Recent average: ${progress.averageScore.toFixed(1)}`}</Text> : null}
+          {!loading ? <Text style={styles.metric}>{progress.attendanceRate === null ? "Attendance summary unavailable" : `Attendance: ${Math.round(progress.attendanceRate)}%`}</Text> : null}
+          {!loading && progress.overdueCount > 0 ? <Text style={styles.warning}>{progress.overdueCount} overdue assignment{progress.overdueCount === 1 ? "" : "s"} needs attention.</Text> : null}
           <Link href={`/child/${params.childId}/grades`} style={styles.link}>
             View grades
           </Link>
@@ -44,6 +41,9 @@ export default function ChildOverviewScreen() {
           </Link>
           <Link href={`/child/${params.childId}/announcements`} style={styles.link}>
             View announcements
+          </Link>
+          <Link href={`/child/${params.childId}/absence-report`} style={styles.link}>
+            Report an absence
           </Link>
         </View>
       </SectionCard>
@@ -150,5 +150,9 @@ const styles = StyleSheet.create({
   },
   error: {
     color: "#b91c1c",
+  },
+  warning: {
+    color: "#9a3412",
+    fontWeight: "700",
   },
 });

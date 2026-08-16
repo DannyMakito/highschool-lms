@@ -8,7 +8,7 @@ import { supabase } from "./src/lib/supabase";
 import type { ParentAccessStudent } from "./src/lib/parentAccess";
 import { registerParentWithAccessKey, verifyParentAccessKey } from "./src/lib/parentAccess";
 import { authTextInputProps, brandColors } from "./src/theme/brand";
-import type { ChildAssignmentItem, ChildConversationItem, ChildGradeItem, ChildQuizItem, ChildTeacherRecipientItem } from "./src/types/dashboard";
+import type { ChildAssignmentItem, ChildConversationItem, ChildGradeItem, ChildLessonItem, ChildQuizItem, ChildTeacherRecipientItem } from "./src/types/dashboard";
 
 const colors = brandColors;
 const spacing = { sm: 8, md: 12, lg: 16 };
@@ -31,6 +31,19 @@ const quickActions: Array<{ id: TabId; label: string }> = [
   { id: "more", label: "Profile" },
 ];
 
+function plainMessageText(value: string | null | undefined) {
+  return (value || "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>\s*<p[^>]*>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export default function App() {
   return <AuthProvider><AppShell /></AuthProvider>;
 }
@@ -42,6 +55,8 @@ function AppShell() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
+  const [subjectPageId, setSubjectPageId] = useState<string | null>(null);
+  const [showAbsenceReport, setShowAbsenceReport] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPin, setLoginPin] = useState("");
   const [accessKey, setAccessKey] = useState("");
@@ -52,7 +67,7 @@ function AppShell() {
   const [password, setPassword] = useState("");
   const [previewStudent, setPreviewStudent] = useState<ParentAccessStudent | null>(null);
 
-  const dashboard = useChildDashboard(activeChild?.id);
+  const dashboard = useChildDashboard(activeChild?.id, parent?.id);
 
   const averageScore = useMemo(() => {
     const grades = dashboard.data.grades;
@@ -125,6 +140,23 @@ function AppShell() {
 
   if (children.length === 0) return <NoChildren parentName={parent.fullName} onStart={() => { void logout(); setAuthMode("create"); }} />;
 
+  if (subjectPageId) {
+    return <SubjectRelationshipPage
+      childName={activeChild?.fullName || "Learner"}
+      subject={subjectAverages.find((subject) => subject.id === subjectPageId) || null}
+      assignments={dashboard.data.assignments.filter((item) => item.subjectId === subjectPageId)}
+      quizzes={dashboard.data.quizzes.filter((item) => item.subjectId === subjectPageId)}
+      lessons={dashboard.data.lessons.filter((item) => item.subjectId === subjectPageId)}
+      grades={dashboard.data.grades.filter((item) => item.subjectId === subjectPageId)}
+      conversations={dashboard.data.conversations.filter((item) => item.subjectId === subjectPageId)}
+      onBack={() => setSubjectPageId(null)}
+    />;
+  }
+
+  if (showAbsenceReport) {
+    return <AbsenceReportPage childId={activeChild?.id || null} childName={activeChild?.fullName || "your child"} parentId={parent.id} onBack={() => setShowAbsenceReport(false)} />;
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
@@ -139,8 +171,8 @@ function AppShell() {
           })}
         </ScrollView>
         <View style={styles.panel}>
-          {activeTab === "home" && <HomeTab childName={activeChild?.fullName || "Learner"} childGrade={activeChild?.gradeLabel || "Grade pending"} averageScore={averageScore} attendanceRate={attendanceRate} assignmentsCount={dashboard.data.assignments.length} conversationsCount={dashboard.data.conversations.length} alerts={alerts} loading={dashboard.loading} errorMessage={dashboard.errorMessage} onQuickAction={setActiveTab} />}
-          {activeTab === "academics" && <AcademicsTab averageScore={averageScore} subjects={subjectAverages} assignments={dashboard.data.assignments} quizzes={dashboard.data.quizzes} grades={dashboard.data.grades} loading={dashboard.loading} selectedSubjectId={selectedSubjectId} onSelectSubject={setSelectedSubjectId} />}
+          {activeTab === "home" && <HomeTab childName={activeChild?.fullName || "Learner"} childGrade={activeChild?.gradeLabel || "Grade pending"} averageScore={averageScore} attendanceRate={attendanceRate} assignmentsCount={dashboard.data.assignments.length} conversationsCount={dashboard.data.conversations.length} alerts={alerts} loading={dashboard.loading} errorMessage={dashboard.errorMessage} onQuickAction={setActiveTab} onReportAbsence={() => setShowAbsenceReport(true)} />}
+          {activeTab === "academics" && <AcademicsTab averageScore={averageScore} subjects={subjectAverages} assignments={dashboard.data.assignments} quizzes={dashboard.data.quizzes} grades={dashboard.data.grades} loading={dashboard.loading} selectedSubjectId={selectedSubjectId} onSelectSubject={(subjectId) => { setSelectedSubjectId(subjectId); setSubjectPageId(subjectId); }} />}
           {activeTab === "attendance" && <AttendanceTab attendanceRate={attendanceRate} attendance={dashboard.data.attendance} loading={dashboard.loading} />}
           {activeTab === "messages" && <MessagesTab childName={activeChild?.fullName || "Learner"} conversations={threads} subjectTeachers={dashboard.data.subjectTeachers} loading={dashboard.loading} errorMessage={dashboard.errorMessage} sessionUserId={session?.user?.id ?? null} onReload={dashboard.reload} />}
           {activeTab === "more" && <MoreTab parentName={parent.fullName} email={parent.email} children={children} onLogout={logout} />}
@@ -164,8 +196,8 @@ function Hero({ parentName, childCount }: { parentName: string; childCount: numb
   return <View style={styles.hero}><Text style={styles.kicker}>Parent Portal</Text><Text style={styles.title}>Good morning, {parentName.split(" ")[0]}</Text><Text style={styles.subtitle}>{childCount > 0 ? "Child performance, attendance, and messages at a glance." : "No learners linked yet."}</Text></View>;
 }
 
-function HomeTab(props: { childName: string; childGrade: string; averageScore: number | null; attendanceRate: number | null; assignmentsCount: number; conversationsCount: number; alerts: string[]; loading: boolean; errorMessage: string | null; onQuickAction: (tab: TabId) => void; }) {
-  return <View style={styles.stack}><View style={styles.card}><Text style={styles.sectionTitle}>{props.childName}</Text><Text style={styles.sectionBody}>{props.childGrade}</Text></View><View style={styles.alertCard}><Text style={styles.sectionTitle}>Needs attention</Text>{props.loading ? <ActivityIndicator color={colors.primary} /> : null}{props.errorMessage ? <Text style={styles.errorText}>{props.errorMessage}</Text> : null}{!props.loading && props.alerts.length === 0 ? <Text style={styles.sectionBody}>No urgent alerts right now.</Text> : null}{props.alerts.map((alert) => <Text key={alert} style={styles.alertText}>{alert}</Text>)}</View><View style={styles.metrics}>{[{ label: "Average", value: props.averageScore != null ? `${props.averageScore}%` : "--" }, { label: "Attendance", value: props.attendanceRate != null ? `${props.attendanceRate}%` : "--" }, { label: "Assignments", value: String(props.assignmentsCount) }, { label: "Messages", value: String(props.conversationsCount) }].map((item) => <View key={item.label} style={styles.metric}><Text style={styles.metricValue}>{item.value}</Text><Text style={styles.metricLabel}>{item.label}</Text></View>)}</View><View style={styles.quickActions}>{quickActions.map((action) => <Pressable key={action.id} onPress={() => props.onQuickAction(action.id)} style={styles.quickButton}><Text style={styles.quickText}>{action.label}</Text></Pressable>)}</View></View>;
+function HomeTab(props: { childName: string; childGrade: string; averageScore: number | null; attendanceRate: number | null; assignmentsCount: number; conversationsCount: number; alerts: string[]; loading: boolean; errorMessage: string | null; onQuickAction: (tab: TabId) => void; onReportAbsence: () => void; }) {
+  return <View style={styles.stack}><View style={styles.card}><Text style={styles.sectionTitle}>{props.childName}</Text><Text style={styles.sectionBody}>{props.childGrade}</Text></View><View style={styles.alertCard}><Text style={styles.sectionTitle}>Needs attention</Text>{props.loading ? <ActivityIndicator color={colors.primary} /> : null}{props.errorMessage ? <Text style={styles.errorText}>{props.errorMessage}</Text> : null}{!props.loading && props.alerts.length === 0 ? <Text style={styles.sectionBody}>No urgent alerts right now.</Text> : null}{props.alerts.map((alert) => <Text key={alert} style={styles.alertText}>{alert}</Text>)}</View><View style={styles.metrics}>{[{ label: "Average", value: props.averageScore != null ? `${props.averageScore}%` : "--" }, { label: "Attendance", value: props.attendanceRate != null ? `${props.attendanceRate}%` : "--" }, { label: "Assignments", value: String(props.assignmentsCount) }, { label: "Messages", value: String(props.conversationsCount) }].map((item) => <View key={item.label} style={styles.metric}><Text style={styles.metricValue}>{item.value}</Text><Text style={styles.metricLabel}>{item.label}</Text></View>)}</View><View style={styles.quickActions}>{quickActions.map((action) => <Pressable key={action.id} onPress={() => props.onQuickAction(action.id)} style={styles.quickButton}><Text style={styles.quickText}>{action.label}</Text></Pressable>)}<Pressable onPress={props.onReportAbsence} style={styles.quickButton}><Text style={styles.quickText}>Report absence</Text></Pressable></View></View>;
 }
 
 function AcademicsTab(props: {
@@ -178,7 +210,6 @@ function AcademicsTab(props: {
   selectedSubjectId: string | null;
   onSelectSubject: (subjectId: string | null) => void;
 }) {
-  const selectedSubjectExists = props.selectedSubjectId ? props.subjects.some((subject) => subject.id === props.selectedSubjectId) : false;
   const selectedSubject = props.subjects.find((subject) => subject.id === props.selectedSubjectId) || props.subjects[0] || null;
   const subjectAssignments = selectedSubject ? props.assignments.filter((item) => item.subjectId === selectedSubject.id) : [];
   const subjectGrades = selectedSubject ? props.grades.filter((item) => item.subjectId === selectedSubject.id) : [];
@@ -193,12 +224,6 @@ function AcademicsTab(props: {
   });
   const submitted = props.assignments.filter((item) => item.submissionStatus === "submitted" || item.submissionStatus === "graded");
   const completedQuizzes = props.quizzes.filter((item) => item.submissionStatus === "completed");
-
-  useEffect(() => {
-    if ((!props.selectedSubjectId || !selectedSubjectExists) && props.subjects[0]) {
-      props.onSelectSubject(props.subjects[0].id);
-    }
-  }, [props.onSelectSubject, props.selectedSubjectId, props.subjects, selectedSubjectExists]);
 
   return (
     <View style={styles.stack}>
@@ -247,7 +272,7 @@ function AcademicsTab(props: {
                   <Text style={styles.subjectStat}>{subjectAssignmentCount} task{subjectAssignmentCount === 1 ? "" : "s"}</Text>
                   <Text style={styles.subjectStat}>{subjectGradeCount} mark{subjectGradeCount === 1 ? "" : "s"}</Text>
                 </View>
-                <Text style={styles.subjectAction}>{active ? "Showing details below" : "Tap to view details"}</Text>
+                <Text style={styles.subjectAction}>Open subject page</Text>
               </Pressable>
             );
           })}
@@ -317,6 +342,22 @@ function AcademicsTab(props: {
   );
 }
 
+function SubjectRelationshipPage(props: { childName: string; subject: { id: string; name: string; average: number | null; category?: string | null; gradeTier?: string | null } | null; assignments: ChildAssignmentItem[]; quizzes: ChildQuizItem[]; lessons: ChildLessonItem[]; grades: ChildGradeItem[]; conversations: ChildConversationItem[]; onBack: () => void; }) {
+  const upcoming = props.assignments.filter((item) => item.dueDate && new Date(item.dueDate) >= new Date()).slice(0, 4);
+  const releasedGrades = props.grades.filter((item) => item.hasScore);
+  const hasActivity = props.assignments.length > 0 || props.quizzes.length > 0 || props.lessons.length > 0 || releasedGrades.length > 0;
+  return <SafeAreaView style={styles.safeArea}><StatusBar barStyle="light-content" /><ScrollView contentContainerStyle={styles.page}><Pressable onPress={props.onBack} style={styles.secondaryButton}><Text style={styles.secondaryText}>Back to academics</Text></Pressable><View style={styles.hero}><Text style={styles.kicker}>{props.childName}</Text><Text style={styles.title}>{props.subject?.name || "Subject"}</Text><Text style={styles.subtitle}>{props.subject?.category || props.subject?.gradeTier || "Subject progress and teacher updates."}</Text></View><View style={styles.card}><Text style={styles.sectionTitle}>Progress overview</Text>{props.subject?.average != null ? <><Text style={styles.subjectAverage}>{props.subject.average}%</Text><Text style={styles.sectionBody}>Current average from released assessment results.</Text></> : <Text style={styles.sectionBody}>No assessment results have been released yet. The average will appear when the teacher publishes marks.</Text>}</View><View style={styles.card}><Text style={styles.sectionTitle}>Learning content</Text>{props.lessons.length ? props.lessons.slice(0, 5).map((lesson) => <View key={lesson.id} style={styles.msg}><Text style={styles.listMeta}>{lesson.topicTitle}</Text><Text style={styles.listTitle}>{lesson.title}</Text><Text style={styles.sectionBody}>{lesson.preview}</Text></View>) : <Text style={styles.sectionBody}>No lesson content has been published for this subject yet.</Text>}</View>{hasActivity ? <View style={styles.metrics}>{releasedGrades.length > 0 ? <View style={styles.metric}><Text style={styles.metricValue}>{releasedGrades.length}</Text><Text style={styles.metricLabel}>Released marks</Text></View> : null}{props.assignments.length > 0 ? <View style={styles.metric}><Text style={styles.metricValue}>{props.assignments.length}</Text><Text style={styles.metricLabel}>Work items</Text></View> : null}{props.quizzes.length > 0 ? <View style={styles.metric}><Text style={styles.metricValue}>{props.quizzes.length}</Text><Text style={styles.metricLabel}>Quizzes</Text></View> : null}</View> : null}<View style={styles.card}><Text style={styles.sectionTitle}>Upcoming work</Text>{upcoming.length ? upcoming.map((item) => <View key={item.id} style={styles.detailRow}><View style={{ flex: 1 }}><Text style={styles.listTitle}>{item.title || "Assignment"}</Text><Text style={styles.listMeta}>{item.dueDate ? `Due ${item.dueDate.slice(0, 10)}` : "Date to be confirmed"}</Text></View><Text style={styles.detailPill}>{item.submissionStatus || "Open"}</Text></View>) : <Text style={styles.sectionBody}>There is no upcoming work published for this subject right now.</Text>}</View><View style={styles.card}><Text style={styles.sectionTitle}>Results and feedback</Text>{releasedGrades.slice(0, 5).map((item) => <View key={item.id} style={styles.detailRow}><View style={{ flex: 1 }}><Text style={styles.listTitle}>Assessment result</Text><Text style={styles.listMeta}>{item.feedback || "No feedback has been added yet."}</Text></View><Text style={styles.detailPill}>{item.score.toFixed(1)}</Text></View>)}{releasedGrades.length === 0 ? <Text style={styles.sectionBody}>The teacher has not released any marks or feedback yet.</Text> : null}</View><View style={styles.card}><Text style={styles.sectionTitle}>Teacher conversations</Text>{props.conversations.slice(0, 3).map((item) => <View key={item.id} style={styles.msg}><Text style={styles.listTitle}>{item.title || "Subject conversation"}</Text><Text style={styles.sectionBody}>{plainMessageText(item.preview) || "Open Messages to continue this conversation."}</Text></View>)}{props.conversations.length === 0 ? <Text style={styles.sectionBody}>No teacher conversations have started for this subject yet.</Text> : null}</View></ScrollView></SafeAreaView>;
+}
+
+function AbsenceReportPage(props: { childId: string | null; childName: string; parentId: string; onBack: () => void }) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [reason, setReason] = useState("");
+  const [sending, setSending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const send = async () => { if (!props.childId || reason.trim().length < 3) return setMessage("Enter a date and a short reason for the absence."); setSending(true); setMessage(null); const { error } = await supabase.from("parent_absence_reports").insert({ parent_id: props.parentId, student_id: props.childId, absence_date: date, reason: reason.trim() }); setSending(false); setMessage(error ? (error.code === "23505" ? "An absence report has already been sent for this date." : error.message) : "Absence report sent. The school has been notified."); if (!error) setReason(""); };
+  return <SafeAreaView style={styles.safeArea}><StatusBar barStyle="light-content" /><ScrollView contentContainerStyle={styles.page}><Pressable onPress={props.onBack} style={styles.secondaryButton}><Text style={styles.secondaryText}>Back to dashboard</Text></Pressable><View style={styles.hero}><Text style={styles.kicker}>Attendance</Text><Text style={styles.title}>Report an absence</Text><Text style={styles.subtitle}>Let the school know if {props.childName} will be absent.</Text></View><View style={styles.card}><Text style={styles.sectionTitle}>Absence details</Text><Text style={styles.listMeta}>Date (YYYY-MM-DD)</Text><TextInput style={styles.toolInput} value={date} onChangeText={setDate} keyboardType="numbers-and-punctuation" /><Text style={styles.listMeta}>Reason</Text><TextInput style={styles.messageInput} value={reason} onChangeText={setReason} placeholder="For example: medical appointment" placeholderTextColor={colors.placeholder} multiline /><Pressable onPress={send} disabled={sending} style={[styles.primaryButton, sending && styles.primaryButtonDisabled]}><Text style={styles.primaryText}>{sending ? "Sending..." : "Send absence report"}</Text></Pressable>{message ? <Text style={styles.errorText}>{message}</Text> : null}</View></ScrollView></SafeAreaView>;
+}
+
 function AttendanceTab(props: { attendanceRate: number | null; attendance: Array<{ id: string; date: string; mark: string; note?: string | null }>; loading: boolean; }) {
   return <View style={styles.stack}><View style={styles.metric}><Text style={styles.metricValue}>{props.attendanceRate != null ? `${props.attendanceRate}%` : "--"}</Text><Text style={styles.metricLabel}>Current rate</Text></View><View style={styles.card}><Text style={styles.sectionTitle}>Recent records</Text>{props.loading ? <ActivityIndicator color={colors.primary} /> : null}{props.attendance.length === 0 && !props.loading ? <Text style={styles.sectionBody}>No attendance records yet.</Text> : null}{props.attendance.slice(0, 6).map((item) => <View key={item.id} style={styles.row}><View style={{ flex: 1 }}><Text style={styles.listTitle}>{item.date}</Text><Text style={styles.listMeta}>{item.note || "School attendance entry"}</Text></View><Text style={styles.listScore}>{item.mark}</Text></View>)}</View></View>;
 }
@@ -330,68 +371,12 @@ function MessagesTab(props: {
   sessionUserId: string | null;
   onReload: () => void;
 }) {
-  const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const selectedRecipientExists = selectedRecipientId ? props.subjectTeachers.some((item) => item.id === selectedRecipientId) : false;
+  const [openRecipientId, setOpenRecipientId] = useState<string | null>(null);
+  const openRecipient = props.subjectTeachers.find((item) => item.id === openRecipientId) || null;
 
-  useEffect(() => {
-    if ((!selectedRecipientId || !selectedRecipientExists) && props.subjectTeachers.length > 0) {
-      setSelectedRecipientId(props.subjectTeachers[0].id);
-    }
-  }, [props.subjectTeachers, selectedRecipientId, selectedRecipientExists]);
-
-  const selectedRecipient = props.subjectTeachers.find((item) => item.id === selectedRecipientId) || null;
-
-  const sendMessage = async () => {
-    const content = draft.trim();
-    if (!content || !selectedRecipient || !props.sessionUserId || sending) return;
-
-    setSending(true);
-    setStatusMessage(null);
-
-    try {
-      let discussionId = selectedRecipient.discussionId;
-
-      if (!discussionId) {
-        const { data, error } = await supabase
-          .from("discussions")
-          .insert({
-            subject_id: selectedRecipient.subjectId,
-            subject_class_id: selectedRecipient.subjectClassId,
-            author_id: props.sessionUserId,
-            title: `${selectedRecipient.subjectName || "Subject"} message`,
-            content,
-            read_by_users: [props.sessionUserId],
-            subscribed_user_ids: [props.sessionUserId, selectedRecipient.teacherId].filter(Boolean),
-          })
-          .select("id")
-          .single();
-
-        if (error) throw error;
-        discussionId = data?.id || null;
-      } else {
-        const { error } = await supabase.from("discussion_replies").insert({
-          discussion_id: discussionId,
-          author_id: props.sessionUserId,
-          content,
-          read_by_users: [props.sessionUserId],
-        });
-
-        if (error) throw error;
-      }
-
-      setDraft("");
-      setStatusMessage("Message sent.");
-      props.onReload();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to send message";
-      setStatusMessage(message);
-    } finally {
-      setSending(false);
-    }
-  };
+  if (openRecipient) {
+    return <ParentConversation recipient={openRecipient} sessionUserId={props.sessionUserId} onBack={() => setOpenRecipientId(null)} onReload={props.onReload} />;
+  }
 
   return (
     <View style={styles.stack}>
@@ -408,54 +393,20 @@ function MessagesTab(props: {
         {!props.loading && props.subjectTeachers.length === 0 ? <Text style={styles.sectionBody}>No subject teachers are linked yet.</Text> : null}
         <View style={styles.recipientStack}>
           {props.subjectTeachers.map((teacher) => {
-            const active = teacher.id === selectedRecipientId;
             return (
               <Pressable
                 key={teacher.id}
-                onPress={() => {
-                  setSelectedRecipientId(teacher.id);
-                  setStatusMessage(null);
-                }}
-                style={[styles.recipientCard, active && styles.recipientCardActive]}
+                onPress={() => setOpenRecipientId(teacher.id)}
+                style={styles.recipientCard}
               >
                 <Text style={styles.msgSubject}>{teacher.subjectName || "Subject"}</Text>
                 <Text style={styles.listTitle}>{teacher.teacherName || "Teacher"}</Text>
                 <Text style={styles.sectionBody}>{teacher.teacherRole || "Subject teacher"}</Text>
-                <Text style={styles.listMeta}>{teacher.discussionId ? `${teacher.replyCount} replies` : "Start a new message"}</Text>
+                <Text style={styles.listMeta}>{teacher.discussionId ? `${teacher.replyCount} replies - tap to open conversation` : "Tap to start a conversation"}</Text>
               </Pressable>
             );
           })}
         </View>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Compose message</Text>
-        <Text style={styles.sectionBody}>
-          {selectedRecipient
-            ? `Message ${selectedRecipient.teacherName || "this teacher"} about ${selectedRecipient.subjectName || "their subject"}.`
-            : "Select a teacher to start."}
-        </Text>
-        <TextInput
-          style={styles.messageInput}
-          placeholder="Type your message"
-          placeholderTextColor={colors.placeholder}
-          value={draft}
-          onChangeText={setDraft}
-          multiline
-          editable={Boolean(selectedRecipient)}
-        />
-        <Pressable
-          onPress={sendMessage}
-          disabled={!selectedRecipient || !draft.trim() || sending}
-          style={({ pressed }) => [
-            styles.primaryButton,
-            (!selectedRecipient || !draft.trim() || sending) && styles.primaryButtonDisabled,
-            pressed && selectedRecipient && draft.trim() && !sending ? styles.primaryButtonPressed : null,
-          ]}
-        >
-          <Text style={styles.primaryText}>{sending ? "Sending..." : "Send message"}</Text>
-        </Pressable>
-        {statusMessage ? <Text style={styles.errorText}>{statusMessage}</Text> : null}
       </View>
 
       <View style={styles.card}>
@@ -466,13 +417,46 @@ function MessagesTab(props: {
           <View key={thread.id} style={styles.msg}>
             <Text style={styles.msgSubject}>{thread.subjectName || "School"}</Text>
             <Text style={styles.listTitle}>{thread.title}</Text>
-            <Text style={styles.sectionBody}>{thread.preview}</Text>
+            <Text style={styles.sectionBody}>{plainMessageText(thread.preview) || "Message unavailable"}</Text>
             <Text style={styles.listMeta}>{thread.replyCount} replies • {thread.authorName || thread.authorRole || "Teacher"}</Text>
           </View>
         ))}
       </View>
     </View>
   );
+}
+
+function ParentConversation(props: { recipient: ChildTeacherRecipientItem; sessionUserId: string | null; onBack: () => void; onReload: () => void }) {
+  const [replies, setReplies] = useState<Array<{ id: string; content: string; author_id: string; created_at: string }>>([]);
+  const [discussionId, setDiscussionId] = useState<string | null>(props.recipient.discussionId);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!discussionId) { setReplies([]); return; }
+    void supabase.from("discussion_replies").select("id, content, author_id, created_at").eq("discussion_id", discussionId).order("created_at", { ascending: true }).then(({ data, error: loadError }) => { if (loadError) setError(loadError.message); else setReplies((data || []) as Array<{ id: string; content: string; author_id: string; created_at: string }>); });
+  }, [discussionId]);
+
+  const send = async () => {
+    const content = draft.trim();
+    if (!content || !props.sessionUserId || sending) return;
+    setSending(true); setError(null);
+    let currentId = discussionId;
+    if (!currentId) {
+      const { data, error: createError } = await supabase.from("discussions").insert({ subject_id: props.recipient.subjectId, subject_class_id: props.recipient.subjectClassId, author_id: props.sessionUserId, title: `${props.recipient.subjectName || "Subject"} message`, content, read_by_users: [props.sessionUserId], subscribed_user_ids: [props.sessionUserId, props.recipient.teacherId].filter(Boolean) }).select("id").single();
+      if (createError || !data) { setError(createError?.message || "Could not start this conversation."); setSending(false); return; }
+      currentId = data.id; setDiscussionId(data.id);
+    } else {
+      const { data, error: replyError } = await supabase.from("discussion_replies").insert({ discussion_id: currentId, author_id: props.sessionUserId, content, read_by_users: [props.sessionUserId] }).select("id, content, author_id, created_at").single();
+      if (replyError) { setError(replyError.message); setSending(false); return; }
+      if (data) setReplies((current) => [...current, data as { id: string; content: string; author_id: string; created_at: string }]);
+    }
+    setDraft(""); setSending(false); props.onReload();
+  };
+
+  const bubble = (id: string, content: string, authorId: string, createdAt?: string) => { const own = authorId === props.sessionUserId; const message = plainMessageText(content) || "Message unavailable"; return <View key={id} style={[styles.chatBubbleWrap, own ? styles.chatOwn : styles.chatOther]}><View style={[styles.chatBubble, own ? styles.chatBubbleOwn : styles.chatBubbleOther]}><Text style={[styles.chatBubbleText, own && styles.chatBubbleTextOwn]}>{message}</Text></View><Text style={styles.listMeta}>{own ? "You" : props.recipient.teacherName || "Teacher"}{createdAt ? ` • ${new Date(createdAt).toLocaleString()}` : ""}</Text></View>; };
+  return <View style={styles.stack}><Pressable onPress={props.onBack} style={styles.secondaryButton}><Text style={styles.secondaryText}>Back to teachers</Text></Pressable><View style={styles.card}><Text style={styles.msgSubject}>{props.recipient.subjectName || "Subject"}</Text><Text style={styles.sectionTitle}>{props.recipient.teacherName || "Teacher"}</Text><Text style={styles.sectionBody}>Private messages about your linked learner.</Text></View><View style={styles.card}>{discussionId && props.recipient.preview ? bubble("opening", props.recipient.preview, props.recipient.teacherId || "teacher") : <Text style={styles.sectionBody}>Start the conversation with a message below.</Text>}{replies.map((reply) => bubble(reply.id, reply.content, reply.author_id, reply.created_at))}</View><View style={styles.card}><TextInput style={styles.messageInput} placeholder="Write a message" placeholderTextColor={colors.placeholder} value={draft} onChangeText={setDraft} multiline /><Pressable onPress={send} disabled={!draft.trim() || sending} style={[styles.primaryButton, (!draft.trim() || sending) && styles.primaryButtonDisabled]}><Text style={styles.primaryText}>{sending ? "Sending..." : "Send"}</Text></Pressable>{error ? <Text style={styles.errorText}>{error}</Text> : null}</View></View>;
 }
 
 function MoreTab(props: { parentName: string; email: string; children: Array<{ id: string; fullName: string; gradeLabel?: string | null; classLabel?: string | null }>; onLogout: () => Promise<void>; }) {
@@ -643,6 +627,7 @@ const styles = StyleSheet.create({
   metric: { flexBasis: "48%", padding: 14, borderRadius: 20, backgroundColor: colors.field, borderWidth: 1, borderColor: colors.border, gap: 4 },
   heroMetric: { padding: 16, borderRadius: 20, backgroundColor: colors.field, borderWidth: 1, borderColor: colors.border, gap: 4 },
   metricValue: { color: colors.text, fontSize: 22, fontWeight: "800" },
+  subjectAverage: { color: colors.primary, fontSize: 36, fontWeight: "800", lineHeight: 42 },
   metricLabel: { color: colors.placeholder, fontSize: 12 },
   metricNote: { color: colors.placeholder, fontSize: 13, lineHeight: 18 },
   quickActions: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
@@ -678,6 +663,14 @@ const styles = StyleSheet.create({
   listScore: { color: colors.primary, fontSize: 14, fontWeight: "800" },
   msg: { paddingVertical: 10, gap: 6, borderBottomWidth: 1, borderBottomColor: "rgba(203, 213, 225, 0.45)" },
   msgSubject: { color: colors.primary, fontSize: 11, textTransform: "uppercase", letterSpacing: 1, fontWeight: "700" },
+  chatBubbleWrap: { maxWidth: "86%", gap: 4 },
+  chatOwn: { alignSelf: "flex-end", alignItems: "flex-end" },
+  chatOther: { alignSelf: "flex-start", alignItems: "flex-start" },
+  chatBubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 11 },
+  chatBubbleOwn: { backgroundColor: colors.primary, borderBottomRightRadius: 4 },
+  chatBubbleOther: { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderBottomLeftRadius: 4 },
+  chatBubbleText: { color: colors.text, lineHeight: 20 },
+  chatBubbleTextOwn: { color: colors.white },
   tabBar: { position: "absolute", left: spacing.lg, right: spacing.lg, bottom: 12, flexDirection: "row", gap: 4, padding: 8, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.98)", borderWidth: 1, borderColor: colors.border },
   tabButton: { flex: 1, minWidth: 0, paddingVertical: 10, alignItems: "center", justifyContent: "center", borderRadius: 16, gap: 4 },
   tabButtonActive: { backgroundColor: colors.primarySoft },

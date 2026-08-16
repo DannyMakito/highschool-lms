@@ -10,12 +10,15 @@ export default function ChildGradesScreen() {
   const { children } = useAuth();
   const child = getChildById(children, params.childId);
   const { data, loading, errorMessage } = useChildDashboard(child?.id);
+  const scoredGrades = data.grades.filter((grade) => grade.hasScore);
+  const average = scoredGrades.length ? scoredGrades.reduce((sum, grade) => sum + (grade.score || 0), 0) / scoredGrades.length : null;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Grades</Text>
       <Text style={styles.subtitle}>{child?.fullName || "Child"}’s marks and feedback are pulled from Supabase.</Text>
       <SectionCard title="Recent scores">
+        <Text style={styles.summary}>{average === null ? "No released scores are available yet." : `Recent average: ${average.toFixed(1)} across ${scoredGrades.length} marked item${scoredGrades.length === 1 ? "" : "s"}.`}</Text>
         {loading ? <Text style={styles.body}>Loading grades...</Text> : null}
         {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
         {data.grades.length === 0 ? (
@@ -30,7 +33,7 @@ export default function ChildGradesScreen() {
                     <Text style={styles.metric}>{subjectName}</Text>
                     <Text style={styles.body}>{grade.feedback || "No feedback yet"}</Text>
                   </View>
-                  <Text style={styles.score}>{grade.score.toFixed(1)}</Text>
+                  <Text style={styles.score}>{grade.hasScore ? grade.score.toFixed(1) : "Pending"}</Text>
                 </View>
               );
             })}
@@ -66,4 +69,5 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   error: { color: "#b91c1c" },
+  summary: { color: "#334155", lineHeight: 20, marginBottom: 12 },
 });
