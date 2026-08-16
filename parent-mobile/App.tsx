@@ -18,7 +18,7 @@ type AuthMode = "sign-in" | "create";
 
 const tabs: Array<{ id: TabId; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: "home", label: "Home", icon: "home-outline" },
-  { id: "academics", label: "Academics", icon: "school-outline" },
+  { id: "academics", label: "Subjects", icon: "school-outline" },
   { id: "attendance", label: "Attendance", icon: "calendar-outline" },
   { id: "messages", label: "Messages", icon: "chatbubbles-outline" },
   { id: "more", label: "More", icon: "ellipsis-horizontal-circle-outline" },
@@ -163,7 +163,8 @@ function AppShell() {
       <View style={styles.glowOne} />
       <View style={styles.glowTwo} />
       <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
-        <Hero parentName={parent.fullName} childCount={children.length} />
+        <ParentTopBar activeTab={activeTab} onMore={() => setActiveTab("more")} />
+        {activeTab === "home" ? <Hero parentName={parent.fullName} childCount={children.length} /> : <View style={styles.pageHeading}><Text style={styles.pageHeadingTitle}>{activeTab === "academics" ? "Subjects" : activeTab === "attendance" ? "Attendance" : activeTab === "messages" ? "Messages" : "More"}</Text><Text style={styles.pageHeadingBody}>{activeTab === "academics" ? "Open a subject to see your child’s learning and progress." : activeTab === "attendance" ? "Review attendance and notify the school about an absence." : activeTab === "messages" ? "Stay in touch with your child’s teachers." : "Your family and account settings."}</Text></View>}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.childStrip}>
           {children.map((child) => {
             const active = child.id === activeChild?.id;
@@ -194,6 +195,11 @@ function NoChildren({ parentName, onStart }: { parentName: string; onStart: () =
 
 function Hero({ parentName, childCount }: { parentName: string; childCount: number }) {
   return <View style={styles.hero}><Text style={styles.kicker}>Parent Portal</Text><Text style={styles.title}>Good morning, {parentName.split(" ")[0]}</Text><Text style={styles.subtitle}>{childCount > 0 ? "Child performance, attendance, and messages at a glance." : "No learners linked yet."}</Text></View>;
+}
+
+function ParentTopBar({ activeTab, onMore }: { activeTab: TabId; onMore: () => void }) {
+  const title = activeTab === "home" ? "Parent Portal" : activeTab === "academics" ? "Subjects" : activeTab === "attendance" ? "Attendance" : activeTab === "messages" ? "Messages" : "More";
+  return <View style={styles.topBar}><Text style={styles.topBarTitle}>{title}</Text><Pressable onPress={onMore} accessibilityLabel="Open more options" style={styles.topBarAction}><Ionicons name="ellipsis-vertical" color={colors.white} size={22} /></Pressable></View>;
 }
 
 function HomeTab(props: { childName: string; childGrade: string; averageScore: number | null; attendanceRate: number | null; assignmentsCount: number; conversationsCount: number; alerts: string[]; loading: boolean; errorMessage: string | null; onQuickAction: (tab: TabId) => void; onReportAbsence: () => void; }) {
@@ -515,6 +521,12 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   page: { padding: spacing.lg, paddingBottom: 140, gap: spacing.lg },
+  topBar: { minHeight: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4 },
+  topBarTitle: { color: colors.white, fontSize: 24, fontWeight: "800" },
+  topBarAction: { width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(255,255,255,0.12)" },
+  pageHeading: { gap: 6, paddingTop: 4 },
+  pageHeadingTitle: { color: colors.white, fontSize: 30, fontWeight: "800" },
+  pageHeadingBody: { color: "#cbd5e1", fontSize: 14, lineHeight: 20 },
   authPage: { flexGrow: 1, padding: spacing.lg, justifyContent: "center", gap: spacing.lg },
   glowOne: { position: "absolute", top: -120, right: -80, width: 240, height: 240, borderRadius: 240, backgroundColor: "rgba(29, 78, 216, 0.10)" },
   glowTwo: { position: "absolute", top: 260, left: -100, width: 200, height: 200, borderRadius: 200, backgroundColor: "rgba(29, 78, 216, 0.06)" },
