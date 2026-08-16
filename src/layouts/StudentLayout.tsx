@@ -33,6 +33,7 @@ import {
     BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { PortalLoadingScreen } from "@/components/PortalLoadingScreen";
+import { StudentBottomNav } from "@/components/student/StudentBottomNav";
 
 function StudentPortalContent() {
     // Collect loading states from all critical data contexts
@@ -75,10 +76,11 @@ function StudentPortalContent() {
                         <RouteHelpIcon />
                     </div>
                 </header>
-                <div className="flex flex-1 flex-col gap-4 p-4 pt-0 mt-4">
+                <div className="flex flex-1 flex-col gap-4 p-4 pt-0 mt-4 pb-24">
                     <WeeklyFeedbackPrompt />
                     <Outlet />
                 </div>
+                <StudentBottomNav />
             </SidebarInset>
         </SidebarProvider>
     );
