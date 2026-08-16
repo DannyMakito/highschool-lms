@@ -28,7 +28,7 @@ function getIcon(notification: NotificationItem) {
 
 export function NotificationsPopup() {
   const { role } = useAuth();
-  const { popupNotifications, popupVisible, dismissPopup } = useNotifications();
+  const { popupNotifications, popupVisible, dismissPopup, markAsRead } = useNotifications();
   const rolePrefix = getRolePathPrefix(role);
 
   if (!popupVisible || popupNotifications.length === 0) return null;
@@ -57,7 +57,10 @@ export function NotificationsPopup() {
               <Link
                 key={notification.id}
                 to={notification.href}
-                onClick={dismissPopup}
+                onClick={() => {
+                  void markAsRead(notification);
+                  dismissPopup();
+                }}
                 className="flex items-start gap-3 rounded-2xl border border-border/60 bg-background/80 p-3 transition hover:border-primary/30 hover:bg-primary/5"
               >
                 <div className="rounded-xl bg-primary/10 p-2 text-primary">

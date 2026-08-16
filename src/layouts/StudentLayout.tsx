@@ -11,10 +11,12 @@ import { useSchoolData } from "@/hooks/useSchoolData";
 import { MessagingProvider } from "@/context/MessagingContext";
 import { useMessaging } from "@/hooks/useMessaging";
 import { AssignmentsProvider } from "@/context/AssignmentsContext";
+import { HomeworkAlertsProvider } from "@/context/HomeworkAlertsContext";
 import { useAssignments } from "@/hooks/useAssignments";
 import { NotificationsProvider } from "@/context/NotificationsContext";
 import { NotificationsPopup } from "@/components/notifications/NotificationsPopup";
 import { RouteHelpIcon } from "@/components/help/HelpIcon";
+import { PortalRefreshButton } from "@/components/PortalRefreshButton";
 import { WeeklyFeedbackPrompt } from "@/components/feedback/WeeklyFeedbackPrompt";
 import {
     SidebarInset,
@@ -70,6 +72,7 @@ function StudentPortalContent() {
                         </Breadcrumb>
                     </div>
                     <div className="ml-auto pr-4">
+                        <PortalRefreshButton />
                         <RouteHelpIcon />
                     </div>
                 </header>
@@ -103,10 +106,12 @@ export default function StudentLayout() {
                 <SchoolDataProvider>
                     <MessagingProvider>
                         <AssignmentsProvider>
-                            <NotificationsProvider>
-                                <NotificationsPopup />
-                                <StudentPortalContent />
-                            </NotificationsProvider>
+                            <HomeworkAlertsProvider>
+                                <NotificationsProvider>
+                                    <NotificationsPopup />
+                                    <StudentPortalContent />
+                                </NotificationsProvider>
+                            </HomeworkAlertsProvider>
                         </AssignmentsProvider>
                     </MessagingProvider>
                 </SchoolDataProvider>

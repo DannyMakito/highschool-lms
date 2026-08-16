@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "Parent Portal",
+    "slug": "parent-portal",
+    "scheme": "parentportal",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": ["expo-secure-store"],
+    "ios": {
+      "bundleIdentifier": "com.afrinexel.parentportal"
+    },
+    "android": {
+      "package": "com.afrinexel.parentportal"
+    }
+  }
+}

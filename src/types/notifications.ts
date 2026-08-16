@@ -12,6 +12,7 @@ export type NotificationCategory =
 
 export interface NotificationItem {
   id: string;
+  inboxId?: string;
   audience: NotificationAudience;
   category: NotificationCategory;
   title: string;

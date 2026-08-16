@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { NotificationItem } from "@/types/notifications";
 import { useAuth } from "@/context/AuthContext";
@@ -8,11 +8,15 @@ import { useRegistrationData } from "@/hooks/useRegistrationData";
 import { useSchoolData } from "@/hooks/useSchoolData";
 import { useSubjects } from "@/hooks/useSubjects";
 import { getRolePathPrefix } from "@/lib/role-path";
+import supabase from "@/lib/supabase";
 
 interface NotificationsContextType {
   notifications: NotificationItem[];
   popupNotifications: NotificationItem[];
   popupVisible: boolean;
+  unreadCount: number;
+  markAsRead: (notification: NotificationItem) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
   dismissPopup: () => void;
 }
 
@@ -35,6 +39,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { teachers } = useSchoolData();
   const { studentSubjects, studentSubjectClasses, subjectClasses } = useRegistrationData();
   const [popupVisible, setPopupVisible] = useState(false);
+  const [inboxNotifications, setInboxNotifications] = useState<NotificationItem[] | null>(null);
+  const [locallyReadIds, setLocallyReadIds] = useState<string[]>([]);
 
   const rolePrefix = getRolePathPrefix(role);
   const subjectNameById = useMemo(
@@ -84,7 +90,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     return items;
   }, [getSubjectTopics, getTopicLessons, learnerSubjectIds, subjectNameById]);
 
-  const notifications = useMemo(() => {
+  const derivedNotifications = useMemo(() => {
     if (!user || !rolePrefix || !role) return [];
 
     if (role === "learner") {
@@ -281,6 +287,86 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     user,
   ]);
 
+  // The durable inbox is the source of truth.  The activity-derived list remains a
+  // graceful fallback for schools that have not yet applied the inbox migration.
+  useEffect(() => {
+    if (!user) {
+      setInboxNotifications(null);
+      setLocallyReadIds([]);
+      return;
+    }
+
+    const fallbackKey = `readNotificationIds_${user.id}`;
+    try {
+      setLocallyReadIds(JSON.parse(localStorage.getItem(fallbackKey) || "[]"));
+    } catch {
+      setLocallyReadIds([]);
+    }
+
+    let active = true;
+    const loadInbox = async () => {
+      const { data, error } = await supabase
+        .from("user_notifications")
+        .select("id, source_id, category, title, description, href, subject_name, created_at")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        // A missing table means the migration has not been deployed yet; do not
+        // hide the existing activity feed in that case.
+        if (active) setInboxNotifications(null);
+        return;
+      }
+
+      if (active) {
+        setInboxNotifications((data || []).map((item) => ({
+          id: item.source_id || item.id,
+          inboxId: item.id,
+          audience: role || "learner",
+          category: item.category as NotificationItem["category"],
+          title: item.title,
+          description: item.description,
+          href: item.href || `${rolePrefix}/notifications`,
+          subjectName: item.subject_name || undefined,
+          createdAt: item.created_at,
+        })));
+      }
+    };
+
+    void loadInbox();
+    const channel = supabase
+      .channel(`notification-inbox-${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_notifications", filter: `recipient_id=eq.${user.id}` }, loadInbox)
+      .subscribe();
+
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [role, rolePrefix, user?.id]);
+
+  const notifications = useMemo(
+    () => inboxNotifications ?? derivedNotifications.filter((item) => !locallyReadIds.includes(item.id)),
+    [derivedNotifications, inboxNotifications, locallyReadIds]
+  );
+
+  const markAsRead = useCallback(async (notification: NotificationItem) => {
+    if (notification.inboxId) {
+      const { error } = await supabase.from("user_notifications").delete().eq("id", notification.inboxId);
+      if (error) throw error;
+      setInboxNotifications((current) => current?.filter((item) => item.inboxId !== notification.inboxId) ?? current);
+      return;
+    }
+
+    if (!user) return;
+    const next = Array.from(new Set([...locallyReadIds, notification.id]));
+    localStorage.setItem(`readNotificationIds_${user.id}`, JSON.stringify(next));
+    setLocallyReadIds(next);
+  }, [locallyReadIds, user]);
+
+  const markAllAsRead = useCallback(async () => {
+    await Promise.all(notifications.map((notification) => markAsRead(notification)));
+  }, [markAsRead, notifications]);
+
   useEffect(() => {
     if (!user || notifications.length === 0) {
       setPopupVisible(false);
@@ -305,6 +391,9 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     notifications,
     popupNotifications: notifications.slice(0, 3),
     popupVisible,
+    unreadCount: notifications.length,
+    markAsRead,
+    markAllAsRead,
     dismissPopup: () => setPopupVisible(false),
   };
 

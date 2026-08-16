@@ -14,6 +14,8 @@ import {
   BarChart3,
   CircleHelp,
   CalendarCheck2,
+  BookMarked,
+  KeyRound,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -27,9 +29,11 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/context/AuthContext"
+import { useNotifications } from "@/hooks/useNotifications"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth();
+  const { unreadCount } = useNotifications();
 
   const roleData = React.useMemo(() => {
     const common = {
@@ -84,6 +88,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               icon: FileText,
             },
             {
+              title: "Homework",
+              url: "/student/homework",
+              icon: BookMarked,
+            },
+            {
               title: "Register Class",
               url: "/student/register",
               icon: CalendarCheck2,
@@ -97,6 +106,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: "Notifications",
               url: "/student/notifications",
               icon: Bell,
+              badge: unreadCount,
             },
             {
               title: "Profile",
@@ -136,6 +146,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               icon: CalendarCheck2,
             },
             {
+              title: "Parent Access",
+              url: "/teacher/parent-access",
+              icon: KeyRound,
+            },
+            {
+              title: "Homework",
+              url: "/teacher/homework",
+              icon: BookMarked,
+            },
+            {
               title: "Discussions",
               url: "/teacher/discussions",
               icon: MessageSquare,
@@ -144,6 +164,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: "Notifications",
               url: "/teacher/notifications",
               icon: Bell,
+              badge: unreadCount,
             },
             {
               title: "Profile",
@@ -200,6 +221,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               items: [
                 { title: "Student Registration", url: "/principal/students" },
                 { title: "Student Directory", url: "/principal/directory" },
+                { title: "Parent Access", url: "/principal/parent-access" },
                 { title: "Register Classes", url: "/principal/register-classes" },
                 { title: "Subject Classes", url: "/principal/subject-classes" },
                 { title: "Grade Management", url: "/principal/grades" },
@@ -214,6 +236,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: "Notifications",
               url: "/principal/notifications",
               icon: Bell,
+              badge: unreadCount,
             },
             {
               title: "Profile",
@@ -233,7 +256,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           navMain: [],
         };
     }
-  }, [user]);
+  }, [unreadCount, user]);
 
   return (
     <Sidebar collapsible="icon" {...props}>

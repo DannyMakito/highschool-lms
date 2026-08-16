@@ -37,6 +37,7 @@ import DiscussionForm from "@/pages/dashboard/shared/discussions/DiscussionForm"
 import DiscussionView from "@/pages/dashboard/shared/discussions/DiscussionView";
 import NotificationsPage from "@/pages/dashboard/shared/NotificationsPage";
 import ProfilePage from "@/pages/dashboard/shared/ProfilePage";
+import ParentAccessManagement from "@/pages/dashboard/shared/ParentAccessManagement";
 import StudentRegistration from "@/pages/dashboard/principal/StudentRegistration";
 import RegisterClassManagement from "@/pages/dashboard/principal/RegisterClassManagement";
 import SubjectClassManagement from "@/pages/dashboard/principal/SubjectClassManagement";
@@ -45,6 +46,8 @@ import StudentDirectory from "@/pages/dashboard/principal/StudentDirectory";
 import GradingQueue from "@/pages/dashboard/teacher/GradingQueue";
 import RegisterManagement from "@/pages/dashboard/teacher/RegisterManagement";
 import HelpPage from "@/pages/dashboard/shared/HelpPage";
+import HomeworkAlerts from "@/pages/dashboard/teacher/HomeworkAlerts";
+import StudentHomework from "@/pages/dashboard/student/StudentHomework";
 
 
 
@@ -110,6 +113,7 @@ export function App() {
             <Route path="announcements" element={<StudentAnnouncements />} />
             <Route path="grades" element={<StudentGrades />} />
             <Route path="assignments" element={<StudentAssignments />} />
+            <Route path="homework" element={<StudentHomework />} />
             <Route path="tutor" element={<StudentTutorPage />} />
             <Route path="assignments/:id" element={<AssignmentView />} />
             <Route path="register" element={<StudentRegisterPage />} />
@@ -136,10 +140,12 @@ export function App() {
             <Route path="assignments/quizzes" element={<Quizzes />} />
             <Route path="assignments/quizzes/:id/analytics" element={<QuizAnalytics />} />
             <Route path="assignments/essays" element={<AssignmentManagement />} />
+            <Route path="homework" element={<HomeworkAlerts />} />
             <Route path="assignments/queue" element={<GradingQueue />} />
             <Route path="assignments/:id/grade" element={<SpeedGraderV2 />} />
             <Route path="classes" element={<SchoolClassManagement />} />
             <Route path="register-admin" element={<RegisterManagement />} />
+            <Route path="parent-access" element={<ParentAccessManagement />} />
             <Route path="subjects/:id/discussions" element={<Discussions />} />
             <Route path="subjects/:id/discussions/create" element={<DiscussionForm />} />
             <Route path="subjects/:id/discussions/edit/:discussionId" element={<DiscussionForm />} />
@@ -169,6 +175,7 @@ export function App() {
             <Route path="subject-classes" element={<SubjectClassManagement />} />
             <Route path="grades" element={<GradeManagement />} />
             <Route path="directory" element={<StudentDirectory />} />
+            <Route path="parent-access" element={<ParentAccessManagement />} />
             <Route path="subjects/:id/discussions" element={<Discussions />} />
             <Route path="subjects/:id/discussions/create" element={<DiscussionForm />} />
             <Route path="subjects/:id/discussions/edit/:discussionId" element={<DiscussionForm />} />
