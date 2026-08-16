@@ -24,18 +24,19 @@ function RootLayoutNav() {
         if (!isNavigationReady || loading) return;
 
         const inParentPortal = pathname === "/parent" || pathname.startsWith("/parent/");
-        const inAuthGroup = ["/", "/subjects", "/assignments", "/tutor"].some((route) => pathname === route || pathname.startsWith(route + "/")) || pathname.startsWith("/(tabs)");
+        const isPublicEntry = pathname === "/" || pathname === "/login" || pathname === "/parent-login";
+        const inStudentPortal = ["/(tabs)", "/subjects", "/assignments", "/tutor"].some((route) => pathname === route || pathname.startsWith(route + "/"));
         const inSubjectsRoute = pathname.startsWith("/subjects");
         const inMoreRoute = ["/quiz", "/register", "/notifications", "/discussions", "/announcements", "/settings", "/grades"].some((p) => pathname === p || pathname.startsWith(p + "/"));
 
-        if (!isAuthenticated && (inAuthGroup || inMoreRoute || inParentPortal)) {
-            router.replace("/login");
+        if (!isAuthenticated && !isPublicEntry) {
+            router.replace("/");
         } else if (isAuthenticated && user?.role === "parent" && !inParentPortal) {
             router.replace("/parent");
         } else if (isAuthenticated && user?.role !== "parent" && inParentPortal) {
-            router.replace("/");
-        } else if (isAuthenticated && user?.role !== "parent" && !inAuthGroup && !inSubjectsRoute && !inMoreRoute) {
-            router.replace("/");
+            router.replace("/(tabs)");
+        } else if (isAuthenticated && user?.role !== "parent" && (!inStudentPortal && !inSubjectsRoute && !inMoreRoute)) {
+            router.replace("/(tabs)");
         }
     }, [isAuthenticated, loading, pathname, isNavigationReady, router]);
 
