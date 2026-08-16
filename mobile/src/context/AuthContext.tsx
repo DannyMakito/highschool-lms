@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 
-export type UserRole = "learner" | "teacher" | "principal" | null;
+export type UserRole = "learner" | "parent" | "teacher" | "principal" | null;
 
 interface User {
     id: string;

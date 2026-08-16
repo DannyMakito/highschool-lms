@@ -23,13 +23,18 @@ function RootLayoutNav() {
     useEffect(() => {
         if (!isNavigationReady || loading) return;
 
+        const inParentPortal = pathname === "/parent" || pathname.startsWith("/parent/");
         const inAuthGroup = ["/", "/subjects", "/assignments", "/tutor"].some((route) => pathname === route || pathname.startsWith(route + "/")) || pathname.startsWith("/(tabs)");
         const inSubjectsRoute = pathname.startsWith("/subjects");
         const inMoreRoute = ["/quiz", "/register", "/notifications", "/discussions", "/announcements", "/settings", "/grades"].some((p) => pathname === p || pathname.startsWith(p + "/"));
 
-        if (!isAuthenticated && (inAuthGroup || inMoreRoute)) {
+        if (!isAuthenticated && (inAuthGroup || inMoreRoute || inParentPortal)) {
             router.replace("/login");
-        } else if (isAuthenticated && !inAuthGroup && !inSubjectsRoute && !inMoreRoute) {
+        } else if (isAuthenticated && user?.role === "parent" && !inParentPortal) {
+            router.replace("/parent");
+        } else if (isAuthenticated && user?.role !== "parent" && inParentPortal) {
+            router.replace("/");
+        } else if (isAuthenticated && user?.role !== "parent" && !inAuthGroup && !inSubjectsRoute && !inMoreRoute) {
             router.replace("/");
         }
     }, [isAuthenticated, loading, pathname, isNavigationReady, router]);
