@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSubjects } from "../../../../src/hooks/useSubjects";
 import { HtmlContent } from "../../../../components/ui/html-content";
+import { VideoPlayer } from "../../../../src/components/VideoPlayer";
 import { ChevronLeft, Play, FileText, CheckCircle, Circle } from "lucide-react-native";
 
 export default function LessonScreen() {
@@ -86,21 +87,14 @@ export default function LessonScreen() {
           <Text style={{ fontSize: 14, color: "#1e293b", marginLeft: 4 }}>{subject.name}</Text>
         </TouchableOpacity>
 
-        {/* Video placeholder */}
-        {lesson.videoUrl && (
-          <View
-            style={{
-              backgroundColor: "#0f172a",
-              borderRadius: 12,
-              height: 200,
-              alignItems: "center",
-              justifyContent: "center",
-              marginBottom: 20,
-            }}
-          >
-            <Play color="#fff" size={48} />
-            <Text style={{ color: "#94a3b8", fontSize: 12, marginTop: 8 }}>Video Lesson</Text>
-          </View>
+        {/* Video Player */}
+        {Boolean(lesson.videoUrl) && (
+          <VideoPlayer
+            videoUrl={lesson.videoUrl!}
+            lessonId={lesson.id}
+            videoType={lesson.videoType}
+            videoMimeType={lesson.videoMimeType}
+          />
         )}
 
         <Text style={{ fontSize: 22, fontWeight: "800", color: "#0f172a", marginBottom: 8 }}>{lesson.title}</Text>
