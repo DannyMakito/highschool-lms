@@ -44,6 +44,7 @@ import SubjectClassManagement from "@/pages/dashboard/principal/SubjectClassMana
 import GradeManagement from "@/pages/dashboard/principal/GradeManagement";
 import StudentDirectory from "@/pages/dashboard/principal/StudentDirectory";
 import GradingQueue from "@/pages/dashboard/teacher/GradingQueue";
+import Submissions from "@/pages/dashboard/teacher/Submissions";
 import RegisterManagement from "@/pages/dashboard/teacher/RegisterManagement";
 import HelpPage from "@/pages/dashboard/shared/HelpPage";
 import HomeworkAlerts from "@/pages/dashboard/teacher/HomeworkAlerts";
@@ -142,6 +143,7 @@ export function App() {
             <Route path="assignments/essays" element={<AssignmentManagement />} />
             <Route path="homework" element={<HomeworkAlerts />} />
             <Route path="assignments/queue" element={<GradingQueue />} />
+            <Route path="assignments/submissions" element={<Submissions />} />
             <Route path="assignments/:id/grade" element={<SpeedGraderV2 />} />
             <Route path="classes" element={<SchoolClassManagement />} />
             <Route path="register-admin" element={<RegisterManagement />} />

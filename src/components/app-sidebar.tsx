@@ -183,6 +183,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               items: [
                 { title: "Quizzes", url: "/teacher/assignments/quizzes" },
                 { title: "Essays & Research", url: "/teacher/assignments/essays" },
+                { title: "Submissions", url: "/teacher/assignments/submissions" },
                 { title: "Grading Queue", url: "/teacher/assignments/queue" },
               ]
             }

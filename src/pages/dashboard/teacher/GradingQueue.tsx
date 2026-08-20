@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useAssignments } from "@/hooks/useAssignments";
 import { useSubjects } from "@/hooks/useSubjects";
 import { useSchoolData } from "@/hooks/useSchoolData";
 import { useRegistrationData } from "@/hooks/useRegistrationData";
@@ -9,9 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { useNavigate } from "react-router-dom";
-import { Calculator, ClipboardCheck, Clock3, FileText, Plus, Save, Settings2, Trash2, Users } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ListChecks, Plus, Save, Settings2, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import supabase from "@/lib/supabase";
 import { buildGradebookScoreMap, calculateWeightedGradebookTotal, clampGradebookScore, normalizeMaxPoints } from "@/lib/gradebook";
@@ -26,10 +24,8 @@ const DEFAULT_GRADEBOOK_COLUMNS = [
 type ScoreDraftMap = Record<string, string>;
 
 export default function GradingQueue() {
-    const navigate = useNavigate();
     const { user } = useAuth();
-    const { assignments, submissions } = useAssignments();
-    const { subjects, submissions: quizSubmissions } = useSubjects();
+    const { subjects } = useSubjects();
     const { teachers } = useSchoolData();
     const { subjectClasses, studentSubjectClasses, students } = useRegistrationData();
 
@@ -41,7 +37,7 @@ export default function GradingQueue() {
     const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
 
     const teacherProfile = useMemo(() => teachers.find((teacher) => teacher.id === user?.id), [teachers, user?.id]);
-    const teacherSubjectIds = teacherProfile?.subjects || [];
+    const teacherSubjectIds = useMemo(() => teacherProfile?.subjects || [], [teacherProfile]);
     const teacherSubjects = subjects.filter((subject) => teacherSubjectIds.includes(subject.id));
     const teacherSubjectClasses = subjectClasses.filter((subjectClass) => teacherSubjectIds.includes(subjectClass.subjectId));
     const scoreMap = useMemo(() => buildGradebookScoreMap(gradebookScores), [gradebookScores]);
@@ -107,7 +103,7 @@ export default function GradingQueue() {
         return () => {
             cancelled = true;
         };
-    }, [teacherSubjectIds.join(",")]);
+    }, [teacherSubjectIds]);
 
     const getGroupsForSubject = (subjectId: string) => (
         assignmentGroups
@@ -387,29 +383,9 @@ export default function GradingQueue() {
                 .filter((student) => classStudentIds.has(student.id))
                 .sort((a, b) => a.name.localeCompare(b.name));
 
-            const pendingAssignments = submissions.filter((submission) => (
-                classStudentIds.has(submission.studentId) && submission.status !== "graded"
-            ));
-
-            const gradedAssignments = submissions.filter((submission) => (
-                classStudentIds.has(submission.studentId) && submission.status === "graded"
-            ));
-
-            const pendingQuizSubmissions = quizSubmissions.filter((submission) => (
-                classStudentIds.has(submission.studentId) && submission.status !== "completed"
-            ));
-
-            const completedQuizSubmissions = quizSubmissions.filter((submission) => (
-                classStudentIds.has(submission.studentId) && submission.status === "completed"
-            ));
-
             return {
                 subjectClass,
                 classStudents,
-                pendingAssignments,
-                gradedAssignments,
-                pendingQuizSubmissions,
-                completedQuizSubmissions,
             };
         });
 
@@ -433,11 +409,19 @@ export default function GradingQueue() {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight">Grading Queue & Gradebook</h1>
-                <p className="text-muted-foreground">
-                    Each subject has one gradebook setup. Add the columns you want learners tracked against, set the yearly weight of each column, and score learners class by class.
-                </p>
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">Grading Queue & Gradebook</h1>
+                    <p className="max-w-3xl text-muted-foreground">
+                        Manage each subject's gradebook setup and learner year marks. Submission marking and status tracking now live on their own page.
+                    </p>
+                </div>
+                <Button asChild>
+                    <Link to="/teacher/assignments/submissions">
+                        <ListChecks />
+                        View submissions
+                    </Link>
+                </Button>
             </div>
 
             <div className="space-y-8">
@@ -557,7 +541,7 @@ export default function GradingQueue() {
                         </Card>
 
                         <div className="grid gap-4">
-                            {classQueue.map(({ subjectClass, classStudents, pendingAssignments, gradedAssignments, pendingQuizSubmissions, completedQuizSubmissions }) => (
+                            {classQueue.map(({ subjectClass, classStudents }) => (
                                 <Card key={subjectClass.id} className="border-muted/20 bg-card/70">
                                     <CardHeader>
                                         <CardTitle className="flex items-center gap-2 text-lg">
@@ -566,29 +550,9 @@ export default function GradingQueue() {
                                         </CardTitle>
                                         <CardDescription className="flex flex-wrap gap-3">
                                             <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {classStudents.length} learners</span>
-                                            <span className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> {pendingAssignments.length + pendingQuizSubmissions.length} pending for marking</span>
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="space-y-4">
-                                        <div className="grid gap-3 md:grid-cols-4 text-sm">
-                                            <div className="rounded-xl border bg-background/70 p-4">
-                                                <p className="font-bold flex items-center gap-2"><FileText className="h-4 w-4 text-primary" /> Pending Assessments</p>
-                                                <p className="mt-2 text-2xl font-black">{pendingAssignments.length}</p>
-                                            </div>
-                                            <div className="rounded-xl border bg-background/70 p-4">
-                                                <p className="font-bold flex items-center gap-2"><ClipboardCheck className="h-4 w-4 text-primary" /> Historical Assessment Grades</p>
-                                                <p className="mt-2 text-2xl font-black">{gradedAssignments.length}</p>
-                                            </div>
-                                            <div className="rounded-xl border bg-background/70 p-4">
-                                                <p className="font-bold flex items-center gap-2"><ClipboardCheck className="h-4 w-4 text-primary" /> Pending Quizzes</p>
-                                                <p className="mt-2 text-2xl font-black">{pendingQuizSubmissions.length}</p>
-                                            </div>
-                                            <div className="rounded-xl border bg-background/70 p-4">
-                                                <p className="font-bold flex items-center gap-2"><Calculator className="h-4 w-4 text-green-600" /> Historical Quiz Grades</p>
-                                                <p className="mt-2 text-2xl font-black">{completedQuizSubmissions.length}</p>
-                                            </div>
-                                        </div>
-
                                         {groups.length > 0 ? (
                                             <ScrollArea className="w-full whitespace-nowrap rounded-xl border">
                                                 <table className="w-full min-w-[900px] text-sm">
@@ -658,25 +622,6 @@ export default function GradingQueue() {
                                             </div>
                                         )}
 
-                                        <Separator />
-
-                                        {pendingAssignments.length > 0 && (
-                                            <div className="space-y-2">
-                                                <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Ready to mark assessments</p>
-                                                {pendingAssignments.slice(0, 4).map((submission) => (
-                                                    <div key={submission.id} className="flex items-center justify-between rounded-xl border bg-background/70 p-3">
-                                                        <div>
-                                                            <p className="font-bold">{assignments.find((item) => item.id === submission.assignmentId)?.title || "Assessment"}</p>
-                                                            <p className="text-xs text-muted-foreground">{submission.studentName}</p>
-                                                        </div>
-                                                        <Button size="sm" onClick={() => navigate(`/teacher/assignments/${submission.assignmentId}/grade`)}>
-                                                            <ClipboardCheck className="mr-2 h-4 w-4" />
-                                                            Mark
-                                                        </Button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
                                     </CardContent>
                                 </Card>
                             ))}
